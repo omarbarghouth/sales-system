@@ -16,8 +16,8 @@ def get_db():
         url = DATABASE_URL
         if url.startswith('postgres://'):
             url = url.replace('postgres://', 'postgresql://', 1)
-        db = g._database = psycopg.connect(url, cursor_factory=psycopg.extras.RealDictCursor)
-    return db
+cursor = conn.cursor()
+return db
 
 @app.teardown_appcontext
 def close_connection(exception):
