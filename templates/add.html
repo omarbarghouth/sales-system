@@ -106,14 +106,14 @@
         <h3 style="color:var(--navy);margin-bottom:16px;font-size:15px">💰 Pricing</h3>
         <div class="form-grid">
           <div class="form-group">
-            <label>Net Cost (USD) *</label>
+            <label>Net Cost (JOD) *</label>
             <input type="number" name="net" id="net" step="0.01" min="0" required
                    placeholder="0.00"
                    value="{{ sale.net if sale else '' }}"
                    oninput="calcProfit()">
           </div>
           <div class="form-group">
-            <label>Sell Price (USD) *</label>
+            <label>Sell Price (JOD) *</label>
             <input type="number" name="sell" id="sell" step="0.01" min="0" required
                    placeholder="0.00"
                    value="{{ sale.sell if sale else '' }}"
