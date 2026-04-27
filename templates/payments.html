@@ -71,7 +71,7 @@
                 <a href="{{ url_for('statement', company=p.company) }}"
                    style="color:var(--navy);font-weight:600">{{ p.company }}</a>
               </td>
-              <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+              <td class="text-right text-green"><strong>JOD {{ "%.2f"|format(p.amount) }}</strong></td>
               <td class="text-muted">{{ p.notes }}</td>
             </tr>
             {% else %}
