@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Deliver Tomorrow — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <h1>🚨 Deliver Tomorrow</h1>
+  <p>All tickets with travel date tomorrow — must be delivered today</p>
+</div>
+
+{% if tickets %}
+<div class="deliver-banner">
+  <div class="deliver-icon">🚨</div>
+  <div>
+    <div class="deliver-title">Tickets to Deliver Tomorrow</div>
+    <div class="deliver-sub">{{ tomorrow }} — Deliver these tickets TODAY</div>
+  </div>
+  <div class="deliver-count">{{ tickets|length }}</div>
+</div>
+
+<div class="no-print" style="margin-bottom:16px;display:flex;gap:12px">
+  <button onclick="window.print()" class="btn btn-primary">🖨 Print Delivery List</button>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Company</th>
+        <th>Customer Name</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Travel Date</th>
+        <th class="text-center">Tickets</th>
+        <th>Buy From</th>
+        <th>Status</th>
+        <th class="no-print">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tickets %}
+      <tr>
+        <td><strong>{{ loop.index }}</strong></td>
+        <td><strong style="color:var(--navy)">{{ t.company }}</strong></td>
+        <td>{{ t.customer }}</td>
+        <td><strong>{{ t.from_loc }}</strong></td>
+        <td><strong>{{ t.to_loc }}</strong></td>
+        <td><strong style="color:var(--red)">{{ t.travel_date }}</strong></td>
+        <td class="text-center">{{ t.tickets }}</td>
+        <td class="text-muted">{{ t.buy_from }}</td>
+        <td>
+          <span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span>
+        </td>
+        <td class="no-print">
+          <a href="{{ url_for('edit_sale', sale_id=t.id) }}" class="btn btn-edit">✏️ Edit</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6">TOTAL TICKETS TO DELIVER TOMORROW</td>
+        <td class="text-center">{{ tickets|sum(attribute='tickets') }}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+{% else %}
+
+<div class="card" style="text-align:center;padding:60px">
+  <div style="font-size:56px;margin-bottom:16px">✅</div>
+  <h2 style="color:var(--green);margin-bottom:8px">No Tickets Tomorrow</h2>
+  <p class="text-muted">There are no tickets with travel date tomorrow.</p>
+  <p class="text-muted" style="margin-top:4px">Enjoy your day — check back later!</p>
+  {% if tomorrow %}
+  <p style="margin-top:16px;color:var(--muted);font-size:13px">Checking for: <strong>{{ tomorrow }}</strong></p>
+  {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}

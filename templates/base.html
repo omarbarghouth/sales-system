@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}ALSONDOS TRAVEL{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  {% block extra_css %}{% endblock %}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="{{ url_for('index') }}" class="nav-brand">✈ ALSONDOS TRAVEL</a>
+  <div class="nav-links">
+    <a href="{{ url_for('index') }}"         class="{% if request.endpoint=='index' %}active{% endif %}">
+      📊 <span>Dashboard</span>
+    </a>
+    <a href="{{ url_for('sales_report') }}"  class="{% if request.endpoint=='sales_report' %}active{% endif %}">
+      📋 <span>Sales Report</span>
+    </a>
+    <a href="{{ url_for('statement') }}"     class="{% if request.endpoint=='statement' %}active{% endif %}">
+      🏢 <span>Statement</span>
+    </a>
+    <a href="{{ url_for('payments') }}"      class="{% if request.endpoint=='payments' %}active{% endif %}">
+      💳 <span>Payments</span>
+    </a>
+    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
+      🚨 <span>Deliver Tomorrow</span>
+    </a>
+    <a href="{{ url_for('add_sale') }}" class="btn-add">
+      ➕ <span>New Sale</span>
+    </a>
+  </div>
+</nav>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+<script>
+{% block extra_js %}{% endblock %}
+</script>
+</body>
+</html>

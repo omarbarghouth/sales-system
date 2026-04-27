@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Statement{% if company %} — {{ company }}{% endif %} — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<!-- Selector (hidden on print) -->
+<div class="no-print" style="margin-bottom:20px">
+  <div class="page-header">
+    <h1>🏢 Company Statement</h1>
+    <p>Official account statement per company — professional format for clients</p>
+  </div>
+
+  <form method="GET" class="filter-bar">
+    <div class="form-group" style="min-width:220px">
+      <label>Select Company *</label>
+      <select name="company" required onchange="this.form.submit()">
+        <option value="">— Choose Company —</option>
+        {% for co in companies %}
+        <option value="{{ co }}" {% if company==co %}selected{% endif %}>{{ co }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Date From</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="form-group">
+      <label>Date To</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <button type="submit" class="btn btn-primary">🔍 Generate</button>
+  </form>
+</div>
+
+{% if company %}
+
+<!-- PRINTABLE STATEMENT -->
+<div class="card" id="statement-doc">
+
+  <!-- Header -->
+  <div class="stmt-header">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between">
+      <div>
+        <div style="font-size:13px;opacity:0.7;margin-bottom:4px">✈ ALSONDOS TRAVEL</div>
+        <div class="stmt-title">ACCOUNT STATEMENT</div>
+        <div class="stmt-sub">{{ company }}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;opacity:0.7">Statement Date</div>
+        <div style="font-size:16px;font-weight:700">{{ today }}</div>
+        {% if filters.date_from or filters.date_to %}
+        <div style="font-size:12px;opacity:0.7;margin-top:8px">
+          Period: {{ filters.date_from or 'Start' }} → {{ filters.date_to or 'Today' }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Summary -->
+  <div class="stmt-kpis">
+    <div class="stmt-kpi">
+      <div class="stmt-kpi-label">Total Invoiced</div>
+      <div class="stmt-kpi-value">$ {{ "%.2f"|format(total_invoiced) }}</div>
+    </div>
+    <div class="stmt-kpi">
+      <div class="stmt-kpi-label">Total Paid</div>
+      <div class="stmt-kpi-value paid">$ {{ "%.2f"|format(total_paid) }}</div>
+    </div>
+    <div class="stmt-kpi">
+      <div class="stmt-kpi-label">Balance Due</div>
+      <div class="stmt-kpi-value balance">$ {{ "%.2f"|format(balance) }}</div>
+    </div>
+  </div>
+
+  <!-- Print/Actions bar -->
+  <div class="stmt-actions no-print">
+    <button onclick="window.print()" class="btn btn-primary">🖨 Print / Save PDF</button>
+    <a href="{{ url_for('statement', company=company, date_from=filters.date_from, date_to=filters.date_to) }}"
+       class="btn btn-print">🔄 Refresh</a>
+  </div>
+
+  <!-- Transactions Table (NO NET, NO PROFIT — client view) -->
+  <div style="padding:0 0 0 0">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Invoice</th>
+          <th>Sale Date</th>
+          <th>Customer Name</th>
+          <th>Route</th>
+          <th>Travel Date</th>
+          <th class="text-center">Tickets</th>
+          <th class="text-right">Amount (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sales %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td class="text-muted" style="font-size:11px">INV-{{ '%04d'|format(s.id) }}</td>
+          <td>{{ s.sale_date }}</td>
+          <td><strong>{{ s.customer }}</strong></td>
+          <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong>
+            {% if s.via %}<span class="text-muted"> via {{ s.via }}</span>{% endif %}
+          </td>
+          <td>{{ s.travel_date }}</td>
+          <td class="text-center">{{ s.tickets }}</td>
+          <td class="text-right text-gold"><strong>$ {{ "%.2f"|format(s.sell) }}</strong></td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted" style="padding:30px">
+            No transactions found for this period.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if sales %}
+      <tfoot>
+        <tr>
+          <td colspan="7">TOTAL TRANSACTIONS: {{ sales|length }}</td>
+          <td class="text-right">$ {{ "%.2f"|format(total_invoiced) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  <!-- Payments Section -->
+  {% if payments %}
+  <div style="padding:20px;background:var(--light);border-top:2px solid var(--border)">
+    <h3 style="color:var(--navy);margin-bottom:12px;font-size:14px">💳 PAYMENTS RECEIVED</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Amount (USD)</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ p.pay_date }}</td>
+          <td class="text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+          <td class="text-muted">{{ p.notes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">TOTAL PAID</td>
+          <td class="text-right">$ {{ "%.2f"|format(total_paid) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Balance Due Box -->
+  <div style="padding:24px 28px;background:{% if balance > 0 %}var(--red-lt){% else %}var(--green-lt){% endif %};border-top:2px solid {% if balance > 0 %}var(--red){% else %}var(--green){% endif %}">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--grey)">
+          Outstanding Balance
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">
+          Total Invoiced - Total Paid
+        </div>
+      </div>
+      <div style="font-size:28px;font-weight:900;color:{% if balance > 0 %}var(--red){% else %}var(--green){% endif %}">
+        $ {{ "%.2f"|format(balance) }}
+        {% if balance <= 0 %} ✅{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer (print only) -->
+  <div style="padding:16px 28px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:11px;color:var(--muted)">
+      ALSONDOS TRAVEL — B2B Block Seat Management System
+    </div>
+    <div style="font-size:11px;color:var(--muted)">
+      Generated: {{ today }} | CONFIDENTIAL
+    </div>
+  </div>
+
+</div><!-- end #statement-doc -->
+
+{% else %}
+
+<!-- No company selected -->
+<div class="card" style="text-align:center;padding:60px">
+  <div style="font-size:48px;margin-bottom:16px">🏢</div>
+  <h2 style="color:var(--navy);margin-bottom:8px">Select a Company</h2>
+  <p class="text-muted">Choose a company from the dropdown above to generate their official statement.</p>
+  <p class="text-muted" style="margin-top:8px">The statement shows all transactions and balance due — without cost or profit details.</p>
+</div>
+
+{% endif %}
+{% endblock %}
