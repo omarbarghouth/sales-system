@@ -348,3 +348,11 @@ if __name__ == '__main__':
     init_db()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
+
+from flask import send_file
+
+@app.route('/download-db')
+def download_db():
+    return send_file("/data/alsondos.db", as_attachment=True)
