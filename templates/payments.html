@@ -1,80 +1,110 @@
 {% extends "base.html" %}
-{% block title %}Edit Payment — ALSONDOS TRAVEL{% endblock %}
+{% block title %}Payments — ALSONDOS TRAVEL{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>✏️ Edit Payment</h1>
-  <p>Correct the payment details and save</p>
+  <h1>💳 Payments</h1>
+  <p>Record payments received from companies — updates balances automatically</p>
 </div>
 
-<div class="card" style="max-width:600px;margin:0 auto">
-  <div class="card-header">✏️ Edit Payment #{{ payment.id }}</div>
-  <div class="card-body">
-    <form method="POST">
+<div class="grid-2" style="align-items:start">
 
-      <div class="form-grid" style="grid-template-columns:1fr;gap:18px">
+  <!-- Add Payment Form -->
+  <div class="card">
+    <div class="card-header">➕ Record New Payment</div>
+    <div class="card-body">
+      <form method="POST">
+        <div class="form-grid" style="grid-template-columns:1fr;gap:14px">
+          <div class="form-group">
+            <label>Company *</label>
+            <select name="company" required>
+              <option value="">— Select Company —</option>
+              {% for co in companies %}
+              <option value="{{ co }}">{{ co }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Amount (USD) *</label>
+            <input type="number" name="amount" step="0.01" min="0.01"
+                   placeholder="0.00" required>
+          </div>
+          <div class="form-group">
+            <label>Payment Date *</label>
+            <input type="date" name="pay_date" value="{{ today }}" required>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" name="notes" placeholder="e.g. Bank transfer, Cash...">
+          </div>
+          <button type="submit" class="btn btn-success">✓ Record Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-        <div class="form-group">
-          <label>Company *</label>
-          <select name="company" required>
-            <option value="">— Select Company —</option>
-            {% for co in companies %}
-            <option value="{{ co }}" {% if payment.company == co %}selected{% endif %}>{{ co }}</option>
+  <!-- Summary -->
+  <div>
+    <div class="kpi-box green" style="margin-bottom:16px">
+      <div class="kpi-label">Total Payments Received</div>
+      <div class="kpi-value green">$ {{ "%.2f"|format(total_paid) }}</div>
+      <div class="kpi-sub">All time</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📋 Payment History</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Company</th>
+              <th class="text-right">Amount</th>
+              <th>Notes</th>
+              <th class="no-print">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td>{{ p.pay_date }}</td>
+              <td>
+                <a href="{{ url_for('statement', company=p.company) }}"
+                   style="color:var(--navy);font-weight:600">{{ p.company }}</a>
+              </td>
+              <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+              <td class="text-muted">{{ p.notes }}</td>
+              <td class="no-print">
+                <div class="gap-8">
+                  <a href="{{ url_for('edit_payment', pay_id=p.id) }}" class="btn btn-edit">✏️ Edit</a>
+                  <form method="POST" action="{{ url_for('delete_payment_page', pay_id=p.id) }}"
+                        onsubmit="return confirm('Delete this payment of ${{ p.amount }} from {{ p.company }}?')">
+                    <button type="submit" class="btn btn-danger">🗑</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted" style="padding:20px">
+                No payments recorded yet
+              </td>
+            </tr>
             {% endfor %}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Amount (JOD) *</label>
-          <input type="number" name="amount" step="0.01" min="0.01"
-                 value="{{ payment.amount }}" required
-                 style="font-size:18px;font-weight:700;color:var(--green)">
-        </div>
-
-        <div class="form-group">
-          <label>Payment Date *</label>
-          <input type="date" name="pay_date"
-                 value="{{ payment.pay_date }}" required>
-        </div>
-
-        <div class="form-group">
-          <label>Notes</label>
-          <input type="text" name="notes"
-                 value="{{ payment.notes }}"
-                 placeholder="e.g. Bank transfer, Cash...">
-        </div>
-
-        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
-          <a href="{{ url_for('payments') }}" class="btn btn-print">✕ Cancel</a>
-          <button type="submit" class="btn btn-success">✓ Save Changes</button>
-        </div>
-
+          </tbody>
+          {% if payments %}
+          <tfoot>
+            <tr>
+              <td colspan="2">TOTAL</td>
+              <td class="text-right">$ {{ "%.2f"|format(total_paid) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- Current values reminder -->
-<div class="card" style="max-width:600px;margin:16px auto 0">
-  <div class="card-header" style="background:var(--grey)">📋 Current Values (before edit)</div>
-  <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div>
-      <div class="kpi-label">Company</div>
-      <div style="font-weight:700;color:var(--navy)">{{ payment.company }}</div>
-    </div>
-    <div>
-      <div class="kpi-label">Amount</div>
-      <div style="font-weight:700;color:var(--green);font-size:18px">$ {{ "%.2f"|format(payment.amount) }}</div>
-    </div>
-    <div>
-      <div class="kpi-label">Date</div>
-      <div style="font-weight:600">{{ payment.pay_date }}</div>
-    </div>
-    <div>
-      <div class="kpi-label">Notes</div>
-      <div style="color:var(--muted)">{{ payment.notes or '—' }}</div>
     </div>
   </div>
-</div>
 
+</div>
 {% endblock %}
