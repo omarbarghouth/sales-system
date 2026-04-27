@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Admin / Data Viewer — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🗄️ Admin — Database Viewer</h1>
+  <p>View and manage all raw data in the PostgreSQL database &nbsp;|&nbsp; {{ today }}</p>
+</div>
+
+<!-- DB Summary KPIs -->
+<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:24px">
+  <div class="kpi-box">
+    <div class="kpi-label">Sales Records</div>
+    <div class="kpi-value">{{ db_stats.sales_count }}</div>
+    <div class="kpi-sub">Total in DB</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-label">Payment Records</div>
+    <div class="kpi-value">{{ db_stats.payments_count }}</div>
+    <div class="kpi-sub">Total in DB</div>
+  </div>
+  <div class="kpi-box gold">
+    <div class="kpi-label">Total Revenue</div>
+    <div class="kpi-value gold">$ {{ "%.2f"|format(db_stats.total_sell or 0) }}</div>
+    <div class="kpi-sub">All sales</div>
+  </div>
+  <div class="kpi-box green">
+    <div class="kpi-label">Total Profit</div>
+    <div class="kpi-value green">$ {{ "%.2f"|format(db_stats.total_profit or 0) }}</div>
+    <div class="kpi-sub">All sales</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-label">Total Collected</div>
+    <div class="kpi-value">$ {{ "%.2f"|format(db_stats.total_paid or 0) }}</div>
+    <div class="kpi-sub">All payments</div>
+  </div>
+</div>
+
+<!-- Table switcher + Filters -->
+<div class="filter-bar" style="margin-bottom:16px">
+  <div class="form-group">
+    <label>Table</label>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('admin', table='sales') }}"
+         class="btn {% if table=='sales' %}btn-primary{% else %}btn-print{% endif %}">
+        📋 Sales ({{ db_stats.sales_count }})
+      </a>
+      <a href="{{ url_for('admin', table='payments') }}"
+         class="btn {% if table=='payments' %}btn-primary{% else %}btn-print{% endif %}">
+        💳 Payments ({{ db_stats.payments_count }})
+      </a>
+    </div>
+  </div>
+</div>
+
+<form method="GET" class="filter-bar">
+  <input type="hidden" name="table" value="{{ table }}">
+  <div class="form-group">
+    <label>Company</label>
+    <select name="company">
+      <option value="">All Companies</option>
+      {% for co in companies %}
+      <option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% if table == 'sales' %}
+  <div class="form-group">
+    <label>Status</label>
+    <select name="status">
+      <option value="">All Status</option>
+      <option value="DONE"      {% if filters.status=='DONE'      %}selected{% endif %}>Done</option>
+      <option value="STILL"     {% if filters.status=='STILL'     %}selected{% endif %}>Still</option>
+      <option value="CANCELLED" {% if filters.status=='CANCELLED' %}selected{% endif %}>Cancelled</option>
+    </select>
+  </div>
+  {% endif %}
+  <div class="form-group">
+    <label>Date From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from }}">
+  </div>
+  <div class="form-group">
+    <label>Date To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to }}">
+  </div>
+  <button type="submit" class="btn btn-primary">🔍 Filter</button>
+  <a href="{{ url_for('admin', table=table) }}" class="btn btn-print">✕ Clear</a>
+  <button type="button" onclick="window.print()" class="btn btn-gold">🖨 Print</button>
+</form>
+
+<!-- ── SALES TABLE ─────────────────────────────────────────────────────────── -->
+{% if table == 'sales' %}
+<div style="margin-bottom:8px;color:var(--muted);font-size:13px">
+  Showing <strong>{{ sales|length }}</strong> records
+  {% if sales %}
+  — Total Sell: <strong class="text-gold">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</strong>
+  &nbsp;|&nbsp; Total Profit: <strong class="text-green">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</strong>
+  {% endif %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Sale Date</th>
+        <th>Company</th>
+        <th>Customer</th>
+        <th>Route</th>
+        <th>Via</th>
+        <th>Type</th>
+        <th>Buy From</th>
+        <th class="text-center">Tkts</th>
+        <th>Travel Date</th>
+        <th class="text-right">Net</th>
+        <th class="text-right">Sell</th>
+        <th class="text-right">Profit</th>
+        <th>Status</th>
+        <th>Remarks</th>
+        <th class="no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td class="text-muted" style="font-size:11px">{{ s.id }}</td>
+        <td>{{ s.sale_date }}</td>
+        <td><strong style="color:var(--navy)">{{ s.company }}</strong></td>
+        <td>{{ s.customer }}</td>
+        <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong></td>
+        <td class="text-muted">{{ s.via }}</td>
+        <td class="text-muted">{{ s.trip_type }}</td>
+        <td class="text-muted">{{ s.buy_from }}</td>
+        <td class="text-center">{{ s.tickets }}</td>
+        <td class="text-muted">{{ s.travel_date }}</td>
+        <td class="text-right">{{ "%.2f"|format(s.net) }}</td>
+        <td class="text-right text-gold"><strong>{{ "%.2f"|format(s.sell) }}</strong></td>
+        <td class="text-right text-green"><strong>{{ "%.2f"|format(s.profit) }}</strong></td>
+        <td>
+          <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+        </td>
+        <td class="text-muted" style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.remarks }}</td>
+        <td class="no-print">
+          <div class="gap-8">
+            <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit">✏️</a>
+            <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
+                  onsubmit="return confirm('Delete sale #{{ s.id }} for {{ s.customer }}?')">
+              <button type="submit" class="btn btn-danger">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="16" class="text-center text-muted" style="padding:40px">
+          No sales records found.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% if sales %}
+    <tfoot>
+      <tr>
+        <td colspan="10">TOTALS — {{ sales|length }} records</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='net')) }}</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+
+<!-- ── PAYMENTS TABLE ──────────────────────────────────────────────────────── -->
+{% else %}
+<div style="margin-bottom:8px;color:var(--muted);font-size:13px">
+  Showing <strong>{{ payments|length }}</strong> payment records
+  {% if payments %}
+  — Total: <strong class="text-green">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</strong>
+  {% endif %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Pay Date</th>
+        <th>Company</th>
+        <th class="text-right">Amount (USD)</th>
+        <th>Notes</th>
+        <th>Created At</th>
+        <th class="no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payments %}
+      <tr>
+        <td class="text-muted" style="font-size:11px">{{ p.id }}</td>
+        <td><strong>{{ p.pay_date }}</strong></td>
+        <td><strong style="color:var(--navy)">{{ p.company }}</strong></td>
+        <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+        <td class="text-muted">{{ p.notes }}</td>
+        <td class="text-muted" style="font-size:11px">{{ p.created_at }}</td>
+        <td class="no-print">
+          <form method="POST" action="{{ url_for('delete_payment', pay_id=p.id) }}"
+                onsubmit="return confirm('Delete payment #{{ p.id }} of ${{ p.amount }} from {{ p.company }}?')">
+            <button type="submit" class="btn btn-danger">🗑 Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-center text-muted" style="padding:40px">
+          No payment records found.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% if payments %}
+    <tfoot>
+      <tr>
+        <td colspan="3">TOTAL PAYMENTS — {{ payments|length }} records</td>
+        <td class="text-right">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}
