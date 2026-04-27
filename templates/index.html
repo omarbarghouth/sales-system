@@ -21,17 +21,17 @@
   </div>
   <div class="kpi-box green">
     <div class="kpi-label">Total Profit</div>
-    <div class="kpi-value green">$ {{ "%.2f"|format(stats.total_profit or 0) }}</div>
+    <div class="kpi-value green">JOD {{ "%.2f"|format(stats.total_profit or 0) }}</div>
     <div class="kpi-sub">Sell minus cost</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-label">Total Collected</div>
-    <div class="kpi-value">$ {{ "%.2f"|format(total_paid or 0) }}</div>
+    <div class="kpi-value">JOD {{ "%.2f"|format(total_paid or 0) }}</div>
     <div class="kpi-sub">Payments received</div>
   </div>
   <div class="kpi-box red">
     <div class="kpi-label">Outstanding Balance</div>
-    <div class="kpi-value red">$ {{ "%.2f"|format(balance or 0) }}</div>
+    <div class="kpi-value red">JOD {{ "%.2f"|format(balance or 0) }}</div>
     <div class="kpi-sub">Total - Collected</div>
   </div>
   <div class="kpi-box orange">
@@ -64,8 +64,8 @@
           <tr>
             <td><strong>{{ month_names[m.month|int] }}</strong></td>
             <td class="text-right">{{ m.count }}</td>
-            <td class="text-right text-gold">$ {{ "%.2f"|format(m.total_sell or 0) }}</td>
-            <td class="text-right text-green">$ {{ "%.2f"|format(m.total_profit or 0) }}</td>
+            <td class="text-right text-gold">JOD {{"%.2f"|format(m.total_sell or 0) }}</td>
+            <td class="text-right text-green">JOD {{ "%.2f"|format(m.total_profit or 0) }}</td>
           </tr>
           {% else %}
           <tr><td colspan="4" class="text-center text-muted" style="padding:20px">No data yet</td></tr>
@@ -99,7 +99,7 @@
               </a>
             </td>
             <td class="text-right text-muted">{{ co.cnt }}</td>
-            <td class="text-right text-gold">$ {{ "%.2f"|format(co.total or 0) }}</td>
+            <td class="text-right text-gold">JOD {{ "%.2f"|format(co.total or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
