@@ -5,7 +5,7 @@ from datetime import date, datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, g
 
 app = Flask(__name__)
-DATABASE = "/data/alsondos.db"
+DATABASE = os.path.join(os.path.dirname(__file__), 'alsondos.db')
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
     db = getattr(g, '_database', None)
