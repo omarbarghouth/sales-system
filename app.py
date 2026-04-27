@@ -6,7 +6,8 @@ from datetime import date, datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response
 import io
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Response
+from openpyxl.styles import Font, PatternFill, Alignment
+from flask import Response
 import io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
