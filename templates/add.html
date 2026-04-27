@@ -147,7 +147,7 @@ function calcProfit() {
   const sell = parseFloat(document.getElementById('sell').value) || 0;
   const profit = sell - net;
   const el = document.getElementById('profit-display');
-  el.textContent = '$ ' + profit.toFixed(2);
+  el.textContent = 'JOD ' + profit.toFixed(2);
   el.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
   el.style.borderColor = profit >= 0 ? 'var(--green)' : 'var(--red)';
   el.style.background = profit >= 0 ? 'var(--green-lt)' : 'var(--red-lt)';
