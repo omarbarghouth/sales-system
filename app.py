@@ -8,6 +8,7 @@ app = Flask(__name__)
 DATABASE = os.path.join(os.path.dirname(__file__), 'alsondos.db')
 
 # ── Database helpers ──────────────────────────────────────────────────────────
+
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
