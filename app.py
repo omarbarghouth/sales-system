@@ -8,8 +8,10 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, g
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'alsondos-travel-secret-2024')
 
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
+if not DATABASE_URL:
+    raise Exception("❌ DATABASE_URL not set in environment")
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
     db = getattr(g, '_database', None)
