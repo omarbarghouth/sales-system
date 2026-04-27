@@ -1,16 +1,12 @@
 import os
 import json
+import io
 import psycopg2
 import psycopg2.extras
-from datetime import date, datetime, timedelta
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response
-import io
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from flask import Response
-import io
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
 
 app = Flask(__name__)
 
@@ -44,7 +40,6 @@ def execute_db(query, args=()):
     cur = db.cursor()
     cur.execute(query, args)
     db.commit()
-    # Return last inserted id if available
     try:
         cur.execute("SELECT lastval()")
         return cur.fetchone()['lastval']
@@ -53,10 +48,8 @@ def execute_db(query, args=()):
         return None
 
 def init_db():
-    """Create tables if they don't exist. Called at startup."""
     db = psycopg2.connect(os.environ.get("DATABASE_URL"))
     cur = db.cursor()
-
     cur.execute('''
         CREATE TABLE IF NOT EXISTS sales (
             id          SERIAL PRIMARY KEY,
@@ -78,7 +71,6 @@ def init_db():
             created_at  TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
         )
     ''')
-
     cur.execute('''
         CREATE TABLE IF NOT EXISTS payments (
             id          SERIAL PRIMARY KEY,
@@ -89,10 +81,8 @@ def init_db():
             created_at  TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
         )
     ''')
-
     db.commit()
 
-    # Seed from JSON if DB is empty
     cur.execute('SELECT COUNT(*) FROM sales')
     count = cur.fetchone()[0]
     if count == 0:
@@ -113,12 +103,10 @@ def init_db():
                     row['profit'], row['status'], row['remarks']
                 ))
             db.commit()
-            print(f"✅ Seeded {len(rows)} records from JSON")
-
+            print(f"Seeded {len(rows)} records")
     cur.close()
     db.close()
 
-# ── Run init at module load (works with gunicorn) ─────────────────────────────
 init_db()
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -126,44 +114,34 @@ init_db()
 @app.route('/')
 def index():
     stats = query_db('''
-        SELECT
-            COUNT(*) as total_transactions,
-            SUM(sell) as total_sell,
-            SUM(net) as total_net,
-            SUM(profit) as total_profit
+        SELECT COUNT(*) as total_transactions,
+               SUM(sell) as total_sell,
+               SUM(net) as total_net,
+               SUM(profit) as total_profit
         FROM sales
     ''', one=True)
-    total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as paid FROM payments', one=True
-    )['paid']
+    total_paid = query_db('SELECT COALESCE(SUM(amount),0) as paid FROM payments', one=True)['paid']
     balance = (stats['total_sell'] or 0) - total_paid
 
     monthly = query_db('''
-        SELECT
-            to_char(to_date(sale_date, 'YYYY-MM-DD'), 'MM') as month,
-            SUM(sell) as total_sell,
-            SUM(profit) as total_profit,
-            COUNT(*) as count
+        SELECT to_char(to_date(sale_date,'YYYY-MM-DD'),'MM') as month,
+               SUM(sell) as total_sell,
+               SUM(profit) as total_profit,
+               COUNT(*) as count
         FROM sales
-        WHERE to_char(to_date(sale_date, 'YYYY-MM-DD'), 'YYYY') = to_char(NOW(), 'YYYY')
-        GROUP BY month
-        ORDER BY month
+        WHERE to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY') = to_char(NOW(),'YYYY')
+        GROUP BY month ORDER BY month
     ''')
 
     top_companies = query_db('''
         SELECT company, SUM(sell) as total, COUNT(*) as cnt
-        FROM sales
-        GROUP BY company
-        ORDER BY total DESC
-        LIMIT 10
+        FROM sales GROUP BY company ORDER BY total DESC LIMIT 10
     ''')
 
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     tomorrow = query_db('''
         SELECT company, customer, from_loc, to_loc, travel_date, tickets, status
-        FROM sales
-        WHERE travel_date = %s
-        ORDER BY company
+        FROM sales WHERE travel_date = %s ORDER BY company
     ''', [tomorrow_date])
 
     companies = [r['company'] for r in query_db(
@@ -171,13 +149,9 @@ def index():
     )]
 
     return render_template('index.html',
-        stats=stats,
-        total_paid=total_paid,
-        balance=balance,
-        monthly=monthly,
-        top_companies=top_companies,
-        tomorrow=tomorrow,
-        companies=companies,
+        stats=stats, total_paid=total_paid, balance=balance,
+        monthly=monthly, top_companies=top_companies,
+        tomorrow=tomorrow, companies=companies,
         today=date.today().strftime('%d %B %Y')
     )
 
@@ -262,29 +236,22 @@ def sales_report():
 
     query  = 'SELECT * FROM sales WHERE 1=1'
     params = []
-    if company:
-        query += ' AND company=%s'; params.append(company)
-    if status:
-        query += ' AND status=%s'; params.append(status)
-    if date_from:
-        query += ' AND sale_date>=%s'; params.append(date_from)
-    if date_to:
-        query += ' AND sale_date<=%s'; params.append(date_to)
+    if company:   query += ' AND company=%s';    params.append(company)
+    if status:    query += ' AND status=%s';     params.append(status)
+    if date_from: query += ' AND sale_date>=%s'; params.append(date_from)
+    if date_to:   query += ' AND sale_date<=%s'; params.append(date_to)
     query += ' ORDER BY sale_date DESC, id DESC'
 
     sales = query_db(query, params)
-
     totals = {
         'sell':   sum(r['sell'] for r in sales),
         'net':    sum(r['net'] for r in sales),
         'profit': sum(r['profit'] for r in sales),
         'count':  len(sales)
     }
-
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
     )]
-
     return render_template('report.html',
         sales=sales, totals=totals, companies=companies,
         filters={'company':company,'status':status,'date_from':date_from,'date_to':date_to}
@@ -295,27 +262,24 @@ def statement():
     company   = request.args.get('company', '')
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
-
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
     )]
-
     sales, payments, total_invoiced, total_paid, balance = [], [], 0, 0, 0
-
     if company:
-        query  = 'SELECT * FROM sales WHERE company=%s'
-        params = [company]
-        if date_from: query += ' AND sale_date>=%s'; params.append(date_from)
-        if date_to:   query += ' AND sale_date<=%s'; params.append(date_to)
-        query += ' ORDER BY sale_date ASC'
-        sales = query_db(query, params)
+        q = 'SELECT * FROM sales WHERE company=%s'
+        p = [company]
+        if date_from: q += ' AND sale_date>=%s'; p.append(date_from)
+        if date_to:   q += ' AND sale_date<=%s'; p.append(date_to)
+        q += ' ORDER BY sale_date ASC'
+        sales = query_db(q, p)
 
-        pay_query  = 'SELECT * FROM payments WHERE company=%s'
-        pay_params = [company]
-        if date_from: pay_query += ' AND pay_date>=%s'; pay_params.append(date_from)
-        if date_to:   pay_query += ' AND pay_date<=%s'; pay_params.append(date_to)
-        pay_query += ' ORDER BY pay_date ASC'
-        payments = query_db(pay_query, pay_params)
+        pq = 'SELECT * FROM payments WHERE company=%s'
+        pp = [company]
+        if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
+        if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
+        pq += ' ORDER BY pay_date ASC'
+        payments = query_db(pq, pp)
 
         total_invoiced = sum(r['sell'] for r in sales)
         total_paid     = sum(r['amount'] for r in payments)
@@ -328,6 +292,8 @@ def statement():
         filters={'date_from':date_from,'date_to':date_to},
         today=date.today().strftime('%d %B %Y')
     )
+
+# ── Payments ──────────────────────────────────────────────────────────────────
 
 @app.route('/payments', methods=['GET', 'POST'])
 def payments():
@@ -353,28 +319,55 @@ def payments():
         total_paid=total_paid, today=str(date.today())
     )
 
+@app.route('/payments/edit/<int:pay_id>', methods=['GET', 'POST'])
+def edit_payment(pay_id):
+    payment = query_db('SELECT * FROM payments WHERE id=%s', [pay_id], one=True)
+    if not payment:
+        return redirect(url_for('payments'))
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales ORDER BY company'
+    )]
+    if request.method == 'POST':
+        execute_db('''
+            UPDATE payments SET company=%s, amount=%s, pay_date=%s, notes=%s
+            WHERE id=%s
+        ''', (
+            request.form.get('company','').upper(),
+            float(request.form.get('amount', 0)),
+            request.form.get('pay_date', str(date.today())),
+            request.form.get('notes',''),
+            pay_id
+        ))
+        return redirect(url_for('payments'))
+    return render_template('edit_payment.html',
+        payment=payment, companies=companies, today=str(date.today())
+    )
+
+@app.route('/payments/delete/<int:pay_id>', methods=['POST'])
+def delete_payment_page(pay_id):
+    execute_db('DELETE FROM payments WHERE id=%s', [pay_id])
+    return redirect(url_for('payments'))
+
+# ── Deliver Tomorrow ──────────────────────────────────────────────────────────
+
 @app.route('/deliver-tomorrow')
 def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     tickets = query_db('''
-        SELECT * FROM sales
-        WHERE travel_date = %s
-        ORDER BY company, customer
+        SELECT * FROM sales WHERE travel_date = %s ORDER BY company, customer
     ''', [tomorrow_date])
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
     return render_template('deliver.html', tickets=tickets, tomorrow=tomorrow_str)
 
-# ── Admin / Data Viewer ───────────────────────────────────────────────────────
+# ── Admin ─────────────────────────────────────────────────────────────────────
 
 @app.route('/admin')
 def admin():
-    """Admin panel — view all raw data in both tables."""
-    # Sales data with optional filters
     company   = request.args.get('company', '')
     status    = request.args.get('status', '')
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
-    table     = request.args.get('table', 'sales')  # 'sales' or 'payments'
+    table     = request.args.get('table', 'sales')
 
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
@@ -382,11 +375,12 @@ def admin():
 
     sales_data = []
     payments_data = []
+    total_payments = 0
 
     if table == 'payments':
         pq = 'SELECT * FROM payments WHERE 1=1'
         pp = []
-        if company:  pq += ' AND company=%s'; pp.append(company)
+        if company:   pq += ' AND company=%s';  pp.append(company)
         if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
         if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
         pq += ' ORDER BY pay_date DESC, id DESC'
@@ -395,15 +389,13 @@ def admin():
     else:
         sq = 'SELECT * FROM sales WHERE 1=1'
         sp = []
-        if company:   sq += ' AND company=%s'; sp.append(company)
-        if status:    sq += ' AND status=%s'; sp.append(status)
+        if company:   sq += ' AND company=%s';    sp.append(company)
+        if status:    sq += ' AND status=%s';     sp.append(status)
         if date_from: sq += ' AND sale_date>=%s'; sp.append(date_from)
         if date_to:   sq += ' AND sale_date<=%s'; sp.append(date_to)
         sq += ' ORDER BY sale_date DESC, id DESC'
         sales_data = query_db(sq, sp)
-        total_payments = 0
 
-    # DB summary stats
     db_stats = query_db('''
         SELECT
             (SELECT COUNT(*) FROM sales) as sales_count,
@@ -414,13 +406,10 @@ def admin():
     ''', one=True)
 
     return render_template('admin.html',
-        sales=sales_data,
-        payments=payments_data,
-        companies=companies,
-        db_stats=db_stats,
-        table=table,
+        sales=sales_data, payments=payments_data,
+        companies=companies, db_stats=db_stats, table=table,
         filters={'company':company,'status':status,'date_from':date_from,'date_to':date_to},
-        total_payments=total_payments if table=='payments' else 0,
+        total_payments=total_payments,
         today=date.today().strftime('%d %B %Y')
     )
 
@@ -429,29 +418,18 @@ def delete_payment(pay_id):
     execute_db('DELETE FROM payments WHERE id=%s', [pay_id])
     return redirect(url_for('admin', table='payments'))
 
-@app.route('/api/companies')
-def api_companies():
-    companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales ORDER BY company'
-    )]
-    return jsonify(companies)
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+# ── Excel Export ──────────────────────────────────────────────────────────────
 
 @app.route('/export/excel')
 def export_excel():
-    """Export all sales and payments to Excel with 2 sheets."""
     wb = openpyxl.Workbook()
-
     header_font  = Font(bold=True, color="FFFFFF", size=11)
     header_fill  = PatternFill("solid", fgColor="1B3A6B")
     gold_fill    = PatternFill("solid", fgColor="C8A84B")
     center       = Alignment(horizontal="center")
     currency_fmt = '#,##0.00'
 
-    # ── Sheet 1: Sales ──────────────────────────────────────────────────────
+    # Sheet 1: Sales
     ws1 = wb.active
     ws1.title = "Sales"
     sales_headers = ["ID","Sale Date","Company","Customer","From","To","Via",
@@ -476,11 +454,10 @@ def export_excel():
     for col, attr in [(12,'net'),(13,'sell'),(14,'profit')]:
         c = ws1.cell(row=tr, column=col, value=sum(s[attr] for s in sales))
         c.font = Font(bold=True); c.fill = gold_fill; c.number_format = currency_fmt
-
     for i, w in enumerate([6,12,20,25,8,8,8,10,10,8,12,13,13,13,10,20], 1):
         ws1.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
-    # ── Sheet 2: Payments ───────────────────────────────────────────────────
+    # Sheet 2: Payments
     ws2 = wb.create_sheet("Payments")
     pay_headers = ["ID","Pay Date","Company","Amount (USD)","Notes"]
     ws2.append(pay_headers)
@@ -498,11 +475,9 @@ def export_excel():
     ws2.cell(row=tr2, column=3, value="TOTAL").font = Font(bold=True)
     c = ws2.cell(row=tr2, column=4, value=sum(p['amount'] for p in payments))
     c.font = Font(bold=True); c.fill = gold_fill; c.number_format = currency_fmt
-
     for i, w in enumerate([6,12,22,14,30], 1):
         ws2.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
-    # ── Send ────────────────────────────────────────────────────────────────
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
@@ -512,3 +487,14 @@ def export_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@app.route('/api/companies')
+def api_companies():
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales ORDER BY company'
+    )]
+    return jsonify(companies)
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
