@@ -439,4 +439,4 @@ tfoot td {
 .mt-4 { margin-top: 16px; }
 .mb-4 { margin-bottom: 16px; }
 .gap-8 { display: flex; gap: 8px; }
-.money::before { content: '$ '; font-size: 11px; opacity: 0.7; }
+.money::before { content: 'JOD '; font-size: 11px; opacity: 0.7; }
