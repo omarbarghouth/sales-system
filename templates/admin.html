@@ -86,6 +86,7 @@
   <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('admin', table=table) }}" class="btn btn-print">✕ Clear</a>
   <button type="button" onclick="window.print()" class="btn btn-gold">🖨 Print</button>
+  <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export All to Excel</a>
 </form>
 
 <!-- ── SALES TABLE ─────────────────────────────────────────────────────────── -->
