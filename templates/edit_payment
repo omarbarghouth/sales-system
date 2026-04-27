@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Edit Payment — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>✏️ Edit Payment</h1>
+  <p>Correct the payment details and save</p>
+</div>
+
+<div class="card" style="max-width:600px;margin:0 auto">
+  <div class="card-header">✏️ Edit Payment #{{ payment.id }}</div>
+  <div class="card-body">
+    <form method="POST">
+
+      <div class="form-grid" style="grid-template-columns:1fr;gap:18px">
+
+        <div class="form-group">
+          <label>Company *</label>
+          <select name="company" required>
+            <option value="">— Select Company —</option>
+            {% for co in companies %}
+            <option value="{{ co }}" {% if payment.company == co %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Amount (JOD) *</label>
+          <input type="number" name="amount" step="0.01" min="0.01"
+                 value="{{ payment.amount }}" required
+                 style="font-size:18px;font-weight:700;color:var(--green)">
+        </div>
+
+        <div class="form-group">
+          <label>Payment Date *</label>
+          <input type="date" name="pay_date"
+                 value="{{ payment.pay_date }}" required>
+        </div>
+
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" name="notes"
+                 value="{{ payment.notes }}"
+                 placeholder="e.g. Bank transfer, Cash...">
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+          <a href="{{ url_for('payments') }}" class="btn btn-print">✕ Cancel</a>
+          <button type="submit" class="btn btn-success">✓ Save Changes</button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Current values reminder -->
+<div class="card" style="max-width:600px;margin:16px auto 0">
+  <div class="card-header" style="background:var(--grey)">📋 Current Values (before edit)</div>
+  <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div>
+      <div class="kpi-label">Company</div>
+      <div style="font-weight:700;color:var(--navy)">{{ payment.company }}</div>
+    </div>
+    <div>
+      <div class="kpi-label">Amount</div>
+      <div style="font-weight:700;color:var(--green);font-size:18px">$ {{ "%.2f"|format(payment.amount) }}</div>
+    </div>
+    <div>
+      <div class="kpi-label">Date</div>
+      <div style="font-weight:600">{{ payment.pay_date }}</div>
+    </div>
+    <div>
+      <div class="kpi-label">Notes</div>
+      <div style="color:var(--muted)">{{ payment.notes or '—' }}</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
