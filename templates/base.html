@@ -29,6 +29,10 @@
     <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
       🚨 <span>Deliver Tomorrow</span>
     </a>
+    <a href="{{ url_for('admin') }}" class="{% if request.endpoint=='admin' %}active{% endif %}"
+       style="margin-left:auto">
+      🗄️ <span>Admin DB</span>
+    </a>
     <a href="{{ url_for('add_sale') }}" class="btn-add">
       ➕ <span>New Sale</span>
     </a>
