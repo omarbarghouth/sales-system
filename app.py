@@ -1,6 +1,6 @@
 import os
 import json
-import psycopg2
+import psycopg
 import psycopg2.extras
 from datetime import date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify, g, flash
@@ -17,7 +17,7 @@ def get_db():
         url = DATABASE_URL
         if url.startswith('postgres://'):
             url = url.replace('postgres://', 'postgresql://', 1)
-        db = g._database = psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
+        db = g._database = psycopg.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
     return db
 
 @app.teardown_appcontext
@@ -46,7 +46,7 @@ def init_db():
     url = DATABASE_URL
     if url.startswith('postgres://'):
         url = url.replace('postgres://', 'postgresql://', 1)
-    conn = psycopg2.connect(url)
+    conn = psycopg.connect(url)
     cur = conn.cursor()
 
     cur.execute('''
