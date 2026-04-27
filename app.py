@@ -3,7 +3,13 @@ import json
 import psycopg2
 import psycopg2.extras
 from datetime import date, datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, jsonify, g
+from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response
+import io
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Response
+import io
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
 
 app = Flask(__name__)
 
@@ -432,3 +438,76 @@ def api_companies():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+@app.route('/export/excel')
+def export_excel():
+    """Export all sales and payments to Excel with 2 sheets."""
+    wb = openpyxl.Workbook()
+
+    header_font  = Font(bold=True, color="FFFFFF", size=11)
+    header_fill  = PatternFill("solid", fgColor="1B3A6B")
+    gold_fill    = PatternFill("solid", fgColor="C8A84B")
+    center       = Alignment(horizontal="center")
+    currency_fmt = '#,##0.00'
+
+    # ── Sheet 1: Sales ──────────────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Sales"
+    sales_headers = ["ID","Sale Date","Company","Customer","From","To","Via",
+                     "Trip Type","Buy From","Tickets","Travel Date",
+                     "Net (USD)","Sell (USD)","Profit (USD)","Status","Remarks"]
+    ws1.append(sales_headers)
+    for col in range(1, len(sales_headers)+1):
+        c = ws1.cell(row=1, column=col)
+        c.font = header_font; c.fill = header_fill; c.alignment = center
+
+    sales = query_db('SELECT * FROM sales ORDER BY sale_date DESC, id DESC')
+    for s in sales:
+        ws1.append([s['id'],s['sale_date'],s['company'],s['customer'],
+                    s['from_loc'],s['to_loc'],s['via'],s['trip_type'],
+                    s['buy_from'],s['tickets'],s['travel_date'],
+                    s['net'],s['sell'],s['profit'],s['status'],s['remarks']])
+    for row in ws1.iter_rows(min_row=2, min_col=12, max_col=14):
+        for cell in row: cell.number_format = currency_fmt
+
+    tr = ws1.max_row + 1
+    ws1.cell(row=tr, column=1, value="TOTAL").font = Font(bold=True)
+    for col, attr in [(12,'net'),(13,'sell'),(14,'profit')]:
+        c = ws1.cell(row=tr, column=col, value=sum(s[attr] for s in sales))
+        c.font = Font(bold=True); c.fill = gold_fill; c.number_format = currency_fmt
+
+    for i, w in enumerate([6,12,20,25,8,8,8,10,10,8,12,13,13,13,10,20], 1):
+        ws1.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # ── Sheet 2: Payments ───────────────────────────────────────────────────
+    ws2 = wb.create_sheet("Payments")
+    pay_headers = ["ID","Pay Date","Company","Amount (USD)","Notes"]
+    ws2.append(pay_headers)
+    for col in range(1, len(pay_headers)+1):
+        c = ws2.cell(row=1, column=col)
+        c.font = header_font; c.fill = header_fill; c.alignment = center
+
+    payments = query_db('SELECT * FROM payments ORDER BY pay_date DESC')
+    for p in payments:
+        ws2.append([p['id'],p['pay_date'],p['company'],p['amount'],p['notes']])
+    for row in ws2.iter_rows(min_row=2, min_col=4, max_col=4):
+        for cell in row: cell.number_format = currency_fmt
+
+    tr2 = ws2.max_row + 1
+    ws2.cell(row=tr2, column=3, value="TOTAL").font = Font(bold=True)
+    c = ws2.cell(row=tr2, column=4, value=sum(p['amount'] for p in payments))
+    c.font = Font(bold=True); c.fill = gold_fill; c.number_format = currency_fmt
+
+    for i, w in enumerate([6,12,22,14,30], 1):
+        ws2.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # ── Send ────────────────────────────────────────────────────────────────
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"alsondos_{date.today().strftime('%Y%m%d')}.xlsx"
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
