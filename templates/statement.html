@@ -60,15 +60,15 @@
   <div class="stmt-kpis">
     <div class="stmt-kpi">
       <div class="stmt-kpi-label">Total Invoiced</div>
-      <div class="stmt-kpi-value">$ {{ "%.2f"|format(total_invoiced) }}</div>
+      <div class="stmt-kpi-value">JOD {{ "%.2f"|format(total_invoiced) }}</div>
     </div>
     <div class="stmt-kpi">
       <div class="stmt-kpi-label">Total Paid</div>
-      <div class="stmt-kpi-value paid">$ {{ "%.2f"|format(total_paid) }}</div>
+      <div class="stmt-kpi-value paid">JOD {{ "%.2f"|format(total_paid) }}</div>
     </div>
     <div class="stmt-kpi">
       <div class="stmt-kpi-label">Balance Due</div>
-      <div class="stmt-kpi-value balance">$ {{ "%.2f"|format(balance) }}</div>
+      <div class="stmt-kpi-value balance">JOD {{ "%.2f"|format(balance) }}</div>
     </div>
   </div>
 
@@ -106,7 +106,7 @@
           </td>
           <td>{{ s.travel_date }}</td>
           <td class="text-center">{{ s.tickets }}</td>
-          <td class="text-right text-gold"><strong>$ {{ "%.2f"|format(s.sell) }}</strong></td>
+          <td class="text-right text-gold"><strong>JOD {{ "%.2f"|format(s.sell) }}</strong></td>
         </tr>
         {% else %}
         <tr>
@@ -120,7 +120,7 @@
       <tfoot>
         <tr>
           <td colspan="7">TOTAL TRANSACTIONS: {{ sales|length }}</td>
-          <td class="text-right">$ {{ "%.2f"|format(total_invoiced) }}</td>
+          <td class="text-right">JOD {{ "%.2f"|format(total_invoiced) }}</td>
         </tr>
       </tfoot>
       {% endif %}
@@ -145,7 +145,7 @@
         <tr>
           <td>{{ loop.index }}</td>
           <td>{{ p.pay_date }}</td>
-          <td class="text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+          <td class="text-green"><strong>JOD {{ "%.2f"|format(p.amount) }}</strong></td>
           <td class="text-muted">{{ p.notes }}</td>
         </tr>
         {% endfor %}
@@ -153,7 +153,7 @@
       <tfoot>
         <tr>
           <td colspan="2">TOTAL PAID</td>
-          <td class="text-right">$ {{ "%.2f"|format(total_paid) }}</td>
+          <td class="text-right">JOD {{ "%.2f"|format(total_paid) }}</td>
           <td></td>
         </tr>
       </tfoot>
@@ -173,7 +173,7 @@
         </div>
       </div>
       <div style="font-size:28px;font-weight:900;color:{% if balance > 0 %}var(--red){% else %}var(--green){% endif %}">
-        $ {{ "%.2f"|format(balance) }}
+        JOD {{"%.2f"|format(balance) }}
         {% if balance <= 0 %} ✅{% endif %}
       </div>
     </div>
