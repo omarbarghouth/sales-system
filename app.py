@@ -351,8 +351,3 @@ if __name__ == '__main__':
 
 
 
-from flask import send_file
-
-@app.route('/download-db')
-def download_db():
-    return send_file("/data/alsondos.db", as_attachment=True)
