@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — ALSONDOS TRAVEL</title>
+<style>
+  :root {
+    --navy:   #1B3A6B;
+    --gold:   #C8A84B;
+    --green:  #1E7B34;
+    --red:    #C0392B;
+    --bg:     #F4F7FC;
+    --border: #DDE3EF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #1B3A6B 0%, #122850 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-wrap {
+    width: 100%;
+    max-width: 420px;
+    padding: 24px;
+  }
+  .login-brand {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .login-brand .icon { font-size: 48px; }
+  .login-brand h1 {
+    color: #C8A84B;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-top: 8px;
+  }
+  .login-brand p {
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .login-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 36px 32px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-card h2 {
+    color: #1B3A6B;
+    font-size: 20px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .alert {
+    padding: 12px 16px;
+    border-radius: 7px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .alert-danger  { background: #FAD7D3; color: #C0392B; border: 1px solid #f5c6c2; }
+  .alert-warning { background: #FDEBD0; color: #E67E22; border: 1px solid #fdd9b5; }
+  .alert-info    { background: #D6EAF8; color: #2980B9; border: 1px solid #c5dff5; }
+  .alert-success { background: #D5F0DD; color: #1E7B34; border: 1px solid #c3e8cf; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2C3E50;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #DDE3EF;
+    border-radius: 7px;
+    font-size: 14px;
+    color: #1A1A2E;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus {
+    outline: none;
+    border-color: #1B3A6B;
+    box-shadow: 0 0 0 3px rgba(27,58,107,0.1);
+  }
+  .btn-login {
+    width: 100%;
+    padding: 13px;
+    background: #1B3A6B;
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+    margin-top: 8px;
+  }
+  .btn-login:hover { background: #122850; }
+  .login-footer {
+    text-align: center;
+    margin-top: 20px;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-brand">
+    <div class="icon">✈</div>
+    <h1>ALSONDOS TRAVEL</h1>
+    <p>B2B Sales Management System</p>
+  </div>
+
+  <div class="login-card">
+    <h2>🔐 Sign In</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST">
+      <input type="hidden" name="next" value="{{ next }}">
+
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Enter your username"
+               autocomplete="username" required autofocus>
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter your password"
+               autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn-login">→ Sign In</button>
+    </form>
+  </div>
+
+  <div class="login-footer">
+    ALSONDOS TRAVEL &copy; {{ 2024 }} — Secure Access Only
+  </div>
+</div>
+
+</body>
+</html>
