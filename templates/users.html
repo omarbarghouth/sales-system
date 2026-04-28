@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}User Management — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>👥 User Management</h1>
+  <p>Add, remove, and manage system users and their roles</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div style="padding:12px 16px;border-radius:7px;margin-bottom:16px;font-weight:500;font-size:13px;
+      {% if category=='success' %}background:#D5F0DD;color:#1E7B34;border:1px solid #c3e8cf;
+      {% elif category=='danger' %}background:#FAD7D3;color:#C0392B;border:1px solid #f5c6c2;
+      {% else %}background:#D6EAF8;color:#2980B9;border:1px solid #c5dff5;{% endif %}">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="grid-2" style="align-items:start;margin-bottom:24px">
+
+  <!-- Add User Form -->
+  <div class="card">
+    <div class="card-header">➕ Add New User</div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('add_user') }}">
+        <div class="form-grid" style="grid-template-columns:1fr;gap:14px">
+          <div class="form-group">
+            <label>Username *</label>
+            <input type="text" name="username" placeholder="e.g. omar" required
+                   style="text-transform:lowercase">
+          </div>
+          <div class="form-group">
+            <label>Password *</label>
+            <input type="password" name="password" placeholder="Min 6 characters" required>
+          </div>
+          <div class="form-group">
+            <label>Role *</label>
+            <select name="role">
+              <option value="user">👤 User — View Only</option>
+              <option value="admin">👑 Admin — Full Access</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-success">✓ Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Change Password Form -->
+  <div class="card">
+    <div class="card-header">🔑 Change My Password</div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('change_password') }}">
+        <div class="form-grid" style="grid-template-columns:1fr;gap:14px">
+          <div class="form-group">
+            <label>Current Password *</label>
+            <input type="password" name="current_password" required>
+          </div>
+          <div class="form-group">
+            <label>New Password *</label>
+            <input type="password" name="new_password" placeholder="Min 6 characters" required>
+          </div>
+          <div class="form-group">
+            <label>Confirm New Password *</label>
+            <input type="password" name="confirm_password" required>
+          </div>
+          <button type="submit" class="btn btn-primary">🔑 Change Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<!-- Users Table -->
+<div class="card">
+  <div class="card-header">👥 All Users ({{ users|length }})</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="text-muted">{{ u.id }}</td>
+          <td>
+            <strong>{{ u.username }}</strong>
+            {% if u.id == current_user.id %}
+              <span style="background:#D6EAF8;color:#2980B9;padding:2px 8px;border-radius:20px;font-size:11px;margin-left:6px">You</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="badge" style="background:#1B3A6B;color:#fff">👑 Admin</span>
+            {% else %}
+              <span class="badge badge-still">👤 User</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ u.created_at }}</td>
+          <td>
+            {% if u.id != current_user.id %}
+            <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
+                  onsubmit="return confirm('Delete user {{ u.username }}?')">
+              <button type="submit" class="btn btn-danger">🗑 Delete</button>
+            </form>
+            {% else %}
+            <span class="text-muted" style="font-size:12px">Current session</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Role explanation -->
+<div class="grid-2" style="margin-top:20px">
+  <div class="card">
+    <div class="card-header" style="background:#1E7B34">👑 Admin — Full Access</div>
+    <div class="card-body" style="font-size:13px;line-height:2">
+      ✅ View all pages<br>
+      ✅ Add new sales<br>
+      ✅ Edit & delete sales<br>
+      ✅ Record & edit payments<br>
+      ✅ Export to Excel<br>
+      ✅ Access Admin DB page<br>
+      ✅ Manage users
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header" style="background:#6B7A99">👤 User — View Only</div>
+    <div class="card-body" style="font-size:13px;line-height:2">
+      ✅ View dashboard<br>
+      ✅ View sales report<br>
+      ✅ View statements<br>
+      ✅ View payments<br>
+      ✅ View deliver tomorrow<br>
+      ❌ Cannot add/edit/delete<br>
+      ❌ Cannot access Admin DB
+    </div>
+  </div>
+</div>
+
+{% endblock %}
