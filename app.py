@@ -6,9 +6,13 @@ import psycopg2.extras
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from datetime import date, timedelta
-from flask import Flask, render_template, request, redirect, url_for, jsonify, g, Response
+from functools import wraps
+from flask import (Flask, render_template, request, redirect,
+                   url_for, jsonify, g, Response, session, flash)
+import bcrypt
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'alsondos-secret-change-in-production-2024')
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
@@ -50,6 +54,7 @@ def execute_db(query, args=()):
 def init_db():
     db = psycopg2.connect(os.environ.get("DATABASE_URL"))
     cur = db.cursor()
+
     cur.execute('''
         CREATE TABLE IF NOT EXISTS sales (
             id          SERIAL PRIMARY KEY,
@@ -81,11 +86,31 @@ def init_db():
             created_at  TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
         )
     ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id            SERIAL PRIMARY KEY,
+            username      TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role          TEXT NOT NULL DEFAULT 'user',
+            created_at    TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    ''')
     db.commit()
 
+    # Create default admin if no users exist
+    cur.execute('SELECT COUNT(*) FROM users')
+    if cur.fetchone()[0] == 0:
+        pw_hash = bcrypt.hashpw('admin123'.encode(), bcrypt.gensalt()).decode()
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+            ('admin', pw_hash, 'admin')
+        )
+        db.commit()
+        print("✅ Default admin created: username=admin password=admin123")
+
+    # Seed sales data if empty
     cur.execute('SELECT COUNT(*) FROM sales')
-    count = cur.fetchone()[0]
-    if count == 0:
+    if cur.fetchone()[0] == 0:
         seed_file = os.path.join(os.path.dirname(__file__), 'seed_data.json')
         if os.path.exists(seed_file):
             with open(seed_file) as f:
@@ -103,15 +128,134 @@ def init_db():
                     row['profit'], row['status'], row['remarks']
                 ))
             db.commit()
-            print(f"Seeded {len(rows)} records")
+            print(f"✅ Seeded {len(rows)} records")
+
     cur.close()
     db.close()
 
 init_db()
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+def get_current_user():
+    if 'user_id' not in session:
+        return None
+    return query_db('SELECT * FROM users WHERE id=%s', [session['user_id']], one=True)
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('login'))
+        if session.get('user_role') != 'admin':
+            flash('Admin access required.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated
+
+# Inject current user into all templates
+@app.context_processor
+def inject_user():
+    return {
+        'current_user': get_current_user(),
+        'is_admin': session.get('user_role') == 'admin',
+        'logged_in': 'user_id' in session
+    }
+
+# ── Auth Routes ───────────────────────────────────────────────────────────────
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'user_id' in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip().lower()
+        password = request.form.get('password', '').encode()
+        user = query_db('SELECT * FROM users WHERE username=%s', [username], one=True)
+        if user and bcrypt.checkpw(password, user['password_hash'].encode()):
+            session.clear()
+            session['user_id']   = user['id']
+            session['username']  = user['username']
+            session['user_role'] = user['role']
+            session.permanent    = True
+            next_page = request.form.get('next') or url_for('index')
+            return redirect(next_page)
+        flash('Invalid username or password.', 'danger')
+    return render_template('login.html', next=request.args.get('next', ''))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+# ── User Management (Admin only) ──────────────────────────────────────────────
+@app.route('/users')
+@admin_required
+def manage_users():
+    users = query_db('SELECT id, username, role, created_at FROM users ORDER BY id')
+    return render_template('users.html', users=users)
+
+@app.route('/users/add', methods=['POST'])
+@admin_required
+def add_user():
+    username = request.form.get('username', '').strip().lower()
+    password = request.form.get('password', '')
+    role     = request.form.get('role', 'user')
+    if not username or not password:
+        flash('Username and password are required.', 'danger')
+        return redirect(url_for('manage_users'))
+    existing = query_db('SELECT id FROM users WHERE username=%s', [username], one=True)
+    if existing:
+        flash(f'Username "{username}" already exists.', 'danger')
+        return redirect(url_for('manage_users'))
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    execute_db('INSERT INTO users (username, password_hash, role) VALUES (%s,%s,%s)',
+               (username, pw_hash, role))
+    flash(f'User "{username}" created successfully.', 'success')
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/delete/<int:user_id>', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    if user_id == session.get('user_id'):
+        flash('You cannot delete your own account.', 'danger')
+        return redirect(url_for('manage_users'))
+    execute_db('DELETE FROM users WHERE id=%s', [user_id])
+    flash('User deleted.', 'success')
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current  = request.form.get('current_password', '').encode()
+    new_pw   = request.form.get('new_password', '')
+    confirm  = request.form.get('confirm_password', '')
+    user = query_db('SELECT * FROM users WHERE id=%s', [session['user_id']], one=True)
+    if not bcrypt.checkpw(current, user['password_hash'].encode()):
+        flash('Current password is incorrect.', 'danger')
+    elif new_pw != confirm:
+        flash('New passwords do not match.', 'danger')
+    elif len(new_pw) < 6:
+        flash('Password must be at least 6 characters.', 'danger')
+    else:
+        pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
+        execute_db('UPDATE users SET password_hash=%s WHERE id=%s',
+                   (pw_hash, session['user_id']))
+        flash('Password changed successfully.', 'success')
+    return redirect(url_for('manage_users'))
+
+# ── Main Routes ───────────────────────────────────────────────────────────────
 @app.route('/')
+@login_required
 def index():
     stats = query_db('''
         SELECT COUNT(*) as total_transactions,
@@ -156,6 +300,7 @@ def index():
     )
 
 @app.route('/add', methods=['GET', 'POST'])
+@admin_required
 def add_sale():
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
@@ -187,6 +332,7 @@ def add_sale():
     return render_template('add.html', companies=companies, today=str(date.today()))
 
 @app.route('/edit/<int:sale_id>', methods=['GET', 'POST'])
+@admin_required
 def edit_sale(sale_id):
     sale = query_db('SELECT * FROM sales WHERE id=%s', [sale_id], one=True)
     if not sale:
@@ -223,11 +369,13 @@ def edit_sale(sale_id):
     return render_template('add.html', sale=sale, companies=companies, edit=True)
 
 @app.route('/delete/<int:sale_id>', methods=['POST'])
+@admin_required
 def delete_sale(sale_id):
     execute_db('DELETE FROM sales WHERE id=%s', [sale_id])
     return redirect(url_for('sales_report'))
 
 @app.route('/report')
+@login_required
 def sales_report():
     company   = request.args.get('company', '')
     status    = request.args.get('status', '')
@@ -258,6 +406,7 @@ def sales_report():
     )
 
 @app.route('/statement')
+@login_required
 def statement():
     company   = request.args.get('company', '')
     date_from = request.args.get('date_from', '')
@@ -293,14 +442,16 @@ def statement():
         today=date.today().strftime('%d %B %Y')
     )
 
-# ── Payments ──────────────────────────────────────────────────────────────────
-
 @app.route('/payments', methods=['GET', 'POST'])
+@login_required
 def payments():
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
     )]
     if request.method == 'POST':
+        if session.get('user_role') != 'admin':
+            flash('Admin access required to record payments.', 'danger')
+            return redirect(url_for('payments'))
         execute_db('''
             INSERT INTO payments (company, amount, pay_date, notes)
             VALUES (%s,%s,%s,%s)
@@ -320,6 +471,7 @@ def payments():
     )
 
 @app.route('/payments/edit/<int:pay_id>', methods=['GET', 'POST'])
+@admin_required
 def edit_payment(pay_id):
     payment = query_db('SELECT * FROM payments WHERE id=%s', [pay_id], one=True)
     if not payment:
@@ -344,13 +496,13 @@ def edit_payment(pay_id):
     )
 
 @app.route('/payments/delete/<int:pay_id>', methods=['POST'])
+@admin_required
 def delete_payment_page(pay_id):
     execute_db('DELETE FROM payments WHERE id=%s', [pay_id])
     return redirect(url_for('payments'))
 
-# ── Deliver Tomorrow ──────────────────────────────────────────────────────────
-
 @app.route('/deliver-tomorrow')
+@login_required
 def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     tickets = query_db('''
@@ -359,9 +511,8 @@ def deliver_tomorrow():
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
     return render_template('deliver.html', tickets=tickets, tomorrow=tomorrow_str)
 
-# ── Admin ─────────────────────────────────────────────────────────────────────
-
 @app.route('/admin')
+@admin_required
 def admin():
     company   = request.args.get('company', '')
     status    = request.args.get('status', '')
@@ -380,7 +531,7 @@ def admin():
     if table == 'payments':
         pq = 'SELECT * FROM payments WHERE 1=1'
         pp = []
-        if company:   pq += ' AND company=%s';  pp.append(company)
+        if company:   pq += ' AND company=%s';   pp.append(company)
         if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
         if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
         pq += ' ORDER BY pay_date DESC, id DESC'
@@ -414,13 +565,13 @@ def admin():
     )
 
 @app.route('/admin/delete-payment/<int:pay_id>', methods=['POST'])
+@admin_required
 def delete_payment(pay_id):
     execute_db('DELETE FROM payments WHERE id=%s', [pay_id])
     return redirect(url_for('admin', table='payments'))
 
-# ── Excel Export ──────────────────────────────────────────────────────────────
-
 @app.route('/export/excel')
+@login_required
 def export_excel():
     wb = openpyxl.Workbook()
     header_font  = Font(bold=True, color="FFFFFF", size=11)
@@ -429,7 +580,6 @@ def export_excel():
     center       = Alignment(horizontal="center")
     currency_fmt = '#,##0.00'
 
-    # Sheet 1: Sales
     ws1 = wb.active
     ws1.title = "Sales"
     sales_headers = ["ID","Sale Date","Company","Customer","From","To","Via",
@@ -457,7 +607,6 @@ def export_excel():
     for i, w in enumerate([6,12,20,25,8,8,8,10,10,8,12,13,13,13,10,20], 1):
         ws1.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
-    # Sheet 2: Payments
     ws2 = wb.create_sheet("Payments")
     pay_headers = ["ID","Pay Date","Company","Amount (USD)","Notes"]
     ws2.append(pay_headers)
@@ -489,6 +638,7 @@ def export_excel():
     )
 
 @app.route('/api/companies')
+@login_required
 def api_companies():
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales ORDER BY company'
