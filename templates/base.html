@@ -7,6 +7,37 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <style>
   {% block extra_css %}{% endblock %}
+  .user-badge {
+    display: flex; align-items: center; gap: 8px;
+    margin-left: auto; color: rgba(255,255,255,0.8); font-size: 13px;
+  }
+  .role-tag {
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+  }
+  .role-tag.admin { background: rgba(200,168,75,0.3); color: #C8A84B; }
+  .role-tag.user  { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); }
+  .btn-logout {
+    background: rgba(192,57,43,0.7); color: #fff;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    text-decoration: none; transition: background 0.2s;
+  }
+  .btn-logout:hover { background: rgba(192,57,43,1); color: #fff; }
+  .flash-container {
+    position: fixed; top: 70px; right: 20px;
+    z-index: 999; display: flex; flex-direction: column;
+    gap: 8px; max-width: 340px;
+  }
+  .flash-msg {
+    padding: 12px 16px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .flash-danger  { background:#FAD7D3; color:#C0392B; border-left:4px solid #C0392B; }
+  .flash-success { background:#D5F0DD; color:#1E7B34; border-left:4px solid #1E7B34; }
+  .flash-warning { background:#FDEBD0; color:#E67E22; border-left:4px solid #E67E22; }
+  .flash-info    { background:#D6EAF8; color:#2980B9; border-left:4px solid #2980B9; }
 </style>
 </head>
 <body>
@@ -14,37 +45,38 @@
 <nav>
   <a href="{{ url_for('index') }}" class="nav-brand">✈ ALSONDOS TRAVEL</a>
   <div class="nav-links">
-    <a href="{{ url_for('index') }}"         class="{% if request.endpoint=='index' %}active{% endif %}">
-      📊 <span>Dashboard</span>
-    </a>
-    <a href="{{ url_for('sales_report') }}"  class="{% if request.endpoint=='sales_report' %}active{% endif %}">
-      📋 <span>Sales Report</span>
-    </a>
-    <a href="{{ url_for('statement') }}"     class="{% if request.endpoint=='statement' %}active{% endif %}">
-      🏢 <span>Statement</span>
-    </a>
-    <a href="{{ url_for('payments') }}"      class="{% if request.endpoint=='payments' %}active{% endif %}">
-      💳 <span>Payments</span>
-    </a>
-    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
-      🚨 <span>Deliver Tomorrow</span>
-    </a>
-    <a href="{{ url_for('admin') }}" class="{% if request.endpoint=='admin' %}active{% endif %}"
-       style="margin-left:auto">
-      🗄️ <span>Admin DB</span>
-    </a>
-    <a href="{{ url_for('add_sale') }}" class="btn-add">
-      ➕ <span>New Sale</span>
-    </a>
+    <a href="{{ url_for('index') }}"        class="{% if request.endpoint=='index' %}active{% endif %}">📊 <span>Dashboard</span></a>
+    <a href="{{ url_for('sales_report') }}" class="{% if request.endpoint=='sales_report' %}active{% endif %}">📋 <span>Sales Report</span></a>
+    <a href="{{ url_for('statement') }}"    class="{% if request.endpoint=='statement' %}active{% endif %}">🏢 <span>Statement</span></a>
+    <a href="{{ url_for('payments') }}"     class="{% if request.endpoint=='payments' %}active{% endif %}">💳 <span>Payments</span></a>
+    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">🚨 <span>Deliver Tomorrow</span></a>
+    {% if is_admin %}
+    <a href="{{ url_for('admin') }}"        class="{% if request.endpoint=='admin' %}active{% endif %}">🗄️ <span>Admin DB</span></a>
+    <a href="{{ url_for('manage_users') }}" class="{% if request.endpoint=='manage_users' %}active{% endif %}">👥 <span>Users</span></a>
+    <a href="{{ url_for('add_sale') }}"     class="btn-add">➕ <span>New Sale</span></a>
+    {% endif %}
+    {% if logged_in %}
+    <div class="user-badge">
+      <span>{{ session.username }}</span>
+      <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role == 'admin' else '👤 User' }}</span>
+      <a href="{{ url_for('logout') }}" class="btn-logout">⏏ Logout</a>
+    </div>
+    {% endif %}
   </div>
 </nav>
 
-<div class="container">
-  {% block content %}{% endblock %}
-</div>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-container" id="flashContainer">
+    {% for category, message in messages %}
+    <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  <script>setTimeout(function(){ var e=document.getElementById('flashContainer'); if(e) e.style.display='none'; }, 4000);</script>
+  {% endif %}
+{% endwith %}
 
-<script>
-{% block extra_js %}{% endblock %}
-</script>
+<div class="container">{% block content %}{% endblock %}</div>
+<script>{% block extra_js %}{% endblock %}</script>
 </body>
 </html>
