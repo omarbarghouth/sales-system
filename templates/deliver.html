@@ -29,6 +29,10 @@
 
 <div class="no-print" style="margin-bottom:16px;display:flex;gap:12px">
   <button onclick="window.print()" class="btn btn-primary">🖨 Print Delivery List</button>
+  <form method="POST" action="{{ url_for('send_deliver_email') }}"
+        onsubmit="return confirm('Send delivery list for {{ tomorrow }} to your email?')">
+    <button type="submit" class="btn btn-gold">📧 Send to Email</button>
+  </form>
 </div>
 
 <!-- ── OUTBOUND TICKETS (new system) ───────────────────────────────────────── -->
