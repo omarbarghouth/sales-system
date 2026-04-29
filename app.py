@@ -141,6 +141,11 @@ def init_db():
                 ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
         """)
+        cur.execute(f"""
+            DO $$ BEGIN
+                ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+            EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """)
     db.commit()
 
     # Indexes for performance
@@ -150,6 +155,8 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_sales_status     ON sales(status)",
         "CREATE INDEX IF NOT EXISTS idx_sales_travel     ON sales(travel_date)",
         "CREATE INDEX IF NOT EXISTS idx_sales_deleted    ON sales(deleted)",
+        "CREATE INDEX IF NOT EXISTS idx_sales_archived   ON sales(is_archived)",
+        "CREATE INDEX IF NOT EXISTS idx_payments_archived ON payments(is_archived)",
         "CREATE INDEX IF NOT EXISTS idx_payments_company ON payments(company)",
         "CREATE INDEX IF NOT EXISTS idx_payments_date    ON payments(pay_date)",
         "CREATE INDEX IF NOT EXISTS idx_audit_user       ON audit_logs(user_id)",
@@ -377,10 +384,10 @@ def index():
                COALESCE(SUM(sell),0) as total_sell,
                COALESCE(SUM(net),0) as total_net,
                COALESCE(SUM(profit),0) as total_profit
-        FROM sales WHERE deleted=FALSE
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
     ''', one=True)
     total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as paid FROM payments WHERE deleted=FALSE', one=True
+        'SELECT COALESCE(SUM(amount),0) as paid FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
     )['paid']
     balance = (stats['total_sell'] or 0) - total_paid
 
@@ -390,14 +397,14 @@ def index():
                COALESCE(SUM(profit),0) as total_profit,
                COUNT(*) as count
         FROM sales
-        WHERE deleted=FALSE
+        WHERE deleted=FALSE AND is_archived=FALSE
           AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY') = to_char(NOW(),'YYYY')
         GROUP BY month ORDER BY month
     ''')
 
     top_companies = query_db('''
         SELECT company, COALESCE(SUM(sell),0) as total, COUNT(*) as cnt
-        FROM sales WHERE deleted=FALSE
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
         GROUP BY company ORDER BY total DESC LIMIT 10
     ''')
 
@@ -413,7 +420,7 @@ def index():
     ''')
 
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
 
     return render_template('index.html',
@@ -429,7 +436,7 @@ def index():
 @login_required
 def add_sale():
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
@@ -475,7 +482,7 @@ def edit_sale(sale_id):
         flash('Sale not found.', 'danger')
         return redirect(url_for('sales_report'))
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
@@ -533,8 +540,8 @@ def sales_report():
     date_to   = request.args.get('date_to', '')
     page      = max(1, int(request.args.get('page', 1)))
 
-    base_q  = 'SELECT * FROM sales WHERE deleted=FALSE'
-    count_q = 'SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(net),0) as net, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt FROM sales WHERE deleted=FALSE'
+    base_q  = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
+    count_q = 'SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(net),0) as net, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
     params  = []
 
     if company:
@@ -556,7 +563,7 @@ def sales_report():
     sales, total_rows, total_pages = paginate(base_q, params, page)
 
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     return render_template('report.html',
         sales=sales, totals=totals, companies=companies,
@@ -572,18 +579,18 @@ def statement():
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     sales, payments, total_invoiced, total_paid, balance = [], [], 0, 0, 0
     if company:
-        q = 'SELECT * FROM sales WHERE deleted=FALSE AND company=%s'
+        q = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
         p = [company]
         if date_from: q += ' AND sale_date>=%s'; p.append(date_from)
         if date_to:   q += ' AND sale_date<=%s'; p.append(date_to)
         q += ' ORDER BY sale_date ASC'
         sales = query_db(q, p)
 
-        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND company=%s'
+        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
         pp = [company]
         if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
         if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
@@ -607,7 +614,7 @@ def statement():
 @login_required
 def payments():
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     if request.method == 'POST':
         if session.get('user_role') != 'admin':
@@ -634,10 +641,10 @@ def payments():
         return redirect(url_for('payments'))
 
     page = max(1, int(request.args.get('page', 1)))
-    base_q = 'SELECT * FROM payments WHERE deleted=FALSE ORDER BY pay_date DESC, id DESC'
+    base_q = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC, id DESC'
     all_payments, total_rows, total_pages = paginate(base_q, [], page)
     total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE deleted=FALSE', one=True
+        'SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
     )['t']
     return render_template('payments.html',
         payments=all_payments, companies=companies,
@@ -653,7 +660,7 @@ def edit_payment(pay_id):
         flash('Payment not found.', 'danger')
         return redirect(url_for('payments'))
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     if request.method == 'POST':
         try:
@@ -712,14 +719,14 @@ def admin():
     page      = max(1, int(request.args.get('page', 1)))
 
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
 
     sales_data, payments_data = [], []
     total_pages = total_rows = total_payments = 1
 
     if table == 'payments':
-        pq = 'SELECT * FROM payments WHERE deleted=FALSE'
+        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE'
         pp = []
         if company:   pq += ' AND company=%s';   pp.append(company)
         if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
@@ -728,7 +735,7 @@ def admin():
         payments_data, total_rows, total_pages = paginate(pq, pp, page)
         total_payments = sum(r['amount'] for r in payments_data)
     else:
-        sq = 'SELECT * FROM sales WHERE deleted=FALSE'
+        sq = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
         sp = []
         if company:   sq += ' AND company=%s';    sp.append(company)
         if status:    sq += ' AND status=%s';     sp.append(status)
@@ -739,11 +746,11 @@ def admin():
 
     db_stats = query_db('''
         SELECT
-            (SELECT COUNT(*) FROM sales WHERE deleted=FALSE) as sales_count,
-            (SELECT COUNT(*) FROM payments WHERE deleted=FALSE) as payments_count,
-            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE deleted=FALSE) as total_sell,
-            (SELECT COALESCE(SUM(profit),0) FROM sales WHERE deleted=FALSE) as total_profit,
-            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted=FALSE) as total_paid
+            (SELECT COUNT(*) FROM sales WHERE deleted=FALSE AND is_archived=FALSE) as sales_count,
+            (SELECT COUNT(*) FROM payments WHERE deleted=FALSE AND is_archived=FALSE) as payments_count,
+            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE deleted=FALSE AND is_archived=FALSE) as total_sell,
+            (SELECT COALESCE(SUM(profit),0) FROM sales WHERE deleted=FALSE AND is_archived=FALSE) as total_profit,
+            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted=FALSE AND is_archived=FALSE) as total_paid
     ''', one=True)
 
     return render_template('admin.html',
@@ -812,7 +819,7 @@ def export_excel():
         c = ws1.cell(row=1, column=col)
         c.font = header_font; c.fill = header_fill; c.alignment = center
 
-    sales = query_db('SELECT * FROM sales WHERE deleted=FALSE ORDER BY sale_date DESC, id DESC')
+    sales = query_db('SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY sale_date DESC, id DESC')
     for s in sales:
         ws1.append([s['id'],s['sale_date'],s['company'],s['customer'],
                     s['from_loc'],s['to_loc'],s['via'],s['trip_type'],
@@ -836,7 +843,7 @@ def export_excel():
         c = ws2.cell(row=1, column=col)
         c.font = header_font; c.fill = header_fill; c.alignment = center
 
-    pmts = query_db('SELECT * FROM payments WHERE deleted=FALSE ORDER BY pay_date DESC')
+    pmts = query_db('SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC')
     for p in pmts:
         ws2.append([p['id'],p['pay_date'],p['company'],p['amount'],p['notes']])
     for row in ws2.iter_rows(min_row=2, min_col=4, max_col=4):
@@ -908,11 +915,157 @@ def reset_data():
     ''', one=True)
     return render_template('reset_data.html', stats=stats)
 
+@app.route('/archive', methods=['GET'])
+@admin_required
+def archive():
+    company   = request.args.get('company', '')
+    date_from = request.args.get('date_from', '')
+    date_to   = request.args.get('date_to', '')
+    table     = request.args.get('table', 'sales')
+    page      = max(1, int(request.args.get('page', 1)))
+
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE is_archived=TRUE ORDER BY company'
+    )]
+
+    sales_data, payments_data = [], []
+    total_pages = total_rows = 1
+    total_payments = 0
+
+    if table == 'payments':
+        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=TRUE'
+        pp = []
+        if company:   pq += ' AND company=%s';   pp.append(company)
+        if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
+        if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
+        pq += ' ORDER BY pay_date DESC, id DESC'
+        payments_data, total_rows, total_pages = paginate(pq, pp, page)
+        total_payments = sum(r['amount'] for r in payments_data)
+    else:
+        sq = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=TRUE'
+        sp = []
+        if company:   sq += ' AND company=%s';    sp.append(company)
+        if date_from: sq += ' AND sale_date>=%s'; sp.append(date_from)
+        if date_to:   sq += ' AND sale_date<=%s'; sp.append(date_to)
+        sq += ' ORDER BY sale_date DESC, id DESC'
+        sales_data, total_rows, total_pages = paginate(sq, sp, page)
+
+    archive_stats = query_db('''
+        SELECT
+            (SELECT COUNT(*) FROM sales WHERE is_archived=TRUE AND deleted=FALSE) as sales_count,
+            (SELECT COUNT(*) FROM payments WHERE is_archived=TRUE AND deleted=FALSE) as payments_count,
+            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE is_archived=TRUE AND deleted=FALSE) as total_sell,
+            (SELECT COALESCE(SUM(profit),0) FROM sales WHERE is_archived=TRUE AND deleted=FALSE) as total_profit,
+            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE is_archived=TRUE AND deleted=FALSE) as total_paid
+    ''', one=True)
+
+    return render_template('archive.html',
+        sales=sales_data, payments=payments_data,
+        companies=companies, archive_stats=archive_stats,
+        table=table, total_payments=total_payments,
+        filters={'company':company,'date_from':date_from,'date_to':date_to},
+        page=page, total_pages=total_pages, total_rows=total_rows,
+        today=date.today().strftime('%d %B %Y')
+    )
+
+@app.route('/archive/do-archive', methods=['GET', 'POST'])
+@admin_required
+def do_archive():
+    if request.method == 'POST':
+        archive_date = request.form.get('archive_date', '').strip()
+        confirm_text = request.form.get('confirm_text', '').strip()
+
+        if not archive_date:
+            flash('Please select an archive date.', 'danger')
+            return redirect(url_for('do_archive'))
+
+        if confirm_text != 'ARCHIVE':
+            flash('Confirmation text incorrect. Nothing was archived.', 'danger')
+            return redirect(url_for('do_archive'))
+
+        # Count what will be archived
+        sales_count = query_db(
+            'SELECT COUNT(*) as cnt FROM sales WHERE sale_date < %s AND is_archived=FALSE AND deleted=FALSE',
+            [archive_date], one=True
+        )['cnt']
+        pay_count = query_db(
+            'SELECT COUNT(*) as cnt FROM payments WHERE pay_date < %s AND is_archived=FALSE AND deleted=FALSE',
+            [archive_date], one=True
+        )['cnt']
+
+        # Archive sales before the date
+        execute_db(
+            'UPDATE sales SET is_archived=TRUE WHERE sale_date < %s AND deleted=FALSE',
+            [archive_date]
+        )
+        # Archive payments before the date
+        execute_db(
+            'UPDATE payments SET is_archived=TRUE WHERE pay_date < %s AND deleted=FALSE',
+            [archive_date]
+        )
+
+        log_action('ARCHIVE', 'system', None,
+                   f"Archived {sales_count} sales and {pay_count} payments before {archive_date}")
+
+        flash(f'✅ Successfully archived {sales_count} sales and {pay_count} payments before {archive_date}. Main system now shows only new data.', 'success')
+        return redirect(url_for('index'))
+
+    # GET — show archive form with preview
+    preview_date = request.args.get('preview_date', '')
+    preview = None
+    if preview_date:
+        preview = query_db('''
+            SELECT
+                (SELECT COUNT(*) FROM sales WHERE sale_date < %s AND is_archived=FALSE AND deleted=FALSE) as sales_count,
+                (SELECT COUNT(*) FROM payments WHERE pay_date < %s AND is_archived=FALSE AND deleted=FALSE) as payments_count,
+                (SELECT COALESCE(SUM(sell),0) FROM sales WHERE sale_date < %s AND is_archived=FALSE AND deleted=FALSE) as total_sell,
+                (SELECT COALESCE(SUM(amount),0) FROM payments WHERE pay_date < %s AND is_archived=FALSE AND deleted=FALSE) as total_paid
+        ''', [preview_date, preview_date, preview_date, preview_date], one=True)
+
+    return render_template('do_archive.html',
+        preview=preview, preview_date=preview_date)
+
+@app.route('/archive/restore-sale/<int:sale_id>', methods=['POST'])
+@admin_required
+def restore_sale(sale_id):
+    execute_db('UPDATE sales SET is_archived=FALSE WHERE id=%s', [sale_id])
+    log_action('RESTORE', 'sales', sale_id, f"Sale #{sale_id} restored from archive")
+    flash(f'Sale #{sale_id} restored to active system.', 'success')
+    return redirect(url_for('archive', table='sales'))
+
+@app.route('/archive/restore-payment/<int:pay_id>', methods=['POST'])
+@admin_required
+def restore_payment(pay_id):
+    execute_db('UPDATE payments SET is_archived=FALSE WHERE id=%s', [pay_id])
+    log_action('RESTORE', 'payments', pay_id, f"Payment #{pay_id} restored from archive")
+    flash(f'Payment #{pay_id} restored to active system.', 'success')
+    return redirect(url_for('archive', table='payments'))
+
+@app.route('/archive/delete-sale/<int:sale_id>', methods=['POST'])
+@admin_required
+def archive_delete_sale(sale_id):
+    s = query_db('SELECT customer, company FROM sales WHERE id=%s', [sale_id], one=True)
+    execute_db('UPDATE sales SET deleted=TRUE WHERE id=%s', [sale_id])
+    log_action('DELETE', 'sales', sale_id,
+               f"Permanently deleted archived sale: {s['customer'] if s else ''}")
+    flash(f'Sale #{sale_id} permanently deleted.', 'success')
+    return redirect(url_for('archive', table='sales'))
+
+@app.route('/archive/delete-payment/<int:pay_id>', methods=['POST'])
+@admin_required
+def archive_delete_payment(pay_id):
+    p = query_db('SELECT company, amount FROM payments WHERE id=%s', [pay_id], one=True)
+    execute_db('UPDATE payments SET deleted=TRUE WHERE id=%s', [pay_id])
+    log_action('DELETE', 'payments', pay_id,
+               f"Permanently deleted archived payment: {p['company'] if p else ''}")
+    flash(f'Payment #{pay_id} permanently deleted.', 'success')
+    return redirect(url_for('archive', table='payments'))
+
 @app.route('/api/companies')
 @login_required
 def api_companies():
     companies = [r['company'] for r in query_db(
-        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     return jsonify(companies)
 
