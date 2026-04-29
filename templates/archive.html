@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% from "pagination_macro.html" import render_pagination %}
+{% block title %}Archive — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📦 Archive</h1>
+  <p>Historical data — safely stored, fully viewable, restorable at any time &nbsp;|&nbsp; {{ today }}</p>
+</div>
+
+<!-- Archive Stats -->
+<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+  <div class="kpi-box orange">
+    <div class="kpi-label">Archived Sales</div>
+    <div class="kpi-value orange">{{ archive_stats.sales_count }}</div>
+    <div class="kpi-sub">Historical records</div>
+  </div>
+  <div class="kpi-box orange">
+    <div class="kpi-label">Archived Payments</div>
+    <div class="kpi-value orange">{{ archive_stats.payments_count }}</div>
+    <div class="kpi-sub">Historical records</div>
+  </div>
+  <div class="kpi-box gold">
+    <div class="kpi-label">Archived Revenue</div>
+    <div class="kpi-value gold">$ {{ "%.2f"|format(archive_stats.total_sell or 0) }}</div>
+    <div class="kpi-sub">Historical total</div>
+  </div>
+  <div class="kpi-box green">
+    <div class="kpi-label">Archived Profit</div>
+    <div class="kpi-value green">$ {{ "%.2f"|format(archive_stats.total_profit or 0) }}</div>
+    <div class="kpi-sub">Historical total</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-label">Archived Paid</div>
+    <div class="kpi-value">$ {{ "%.2f"|format(archive_stats.total_paid or 0) }}</div>
+    <div class="kpi-sub">Historical total</div>
+  </div>
+</div>
+
+<!-- Action Buttons -->
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+  <a href="{{ url_for('do_archive') }}" class="btn btn-gold">📦 Archive More Data</a>
+  <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export All to Excel</a>
+  <a href="{{ url_for('admin') }}" class="btn btn-print">← Back to Admin</a>
+</div>
+
+<!-- Table Switcher -->
+<div class="filter-bar" style="margin-bottom:12px">
+  <div class="form-group">
+    <label>Viewing</label>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('archive', table='sales') }}"
+         class="btn {% if table=='sales' %}btn-primary{% else %}btn-print{% endif %}">
+        📋 Archived Sales ({{ archive_stats.sales_count }})
+      </a>
+      <a href="{{ url_for('archive', table='payments') }}"
+         class="btn {% if table=='payments' %}btn-primary{% else %}btn-print{% endif %}">
+        💳 Archived Payments ({{ archive_stats.payments_count }})
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" class="filter-bar">
+  <input type="hidden" name="table" value="{{ table }}">
+  <div class="form-group">
+    <label>Company</label>
+    <select name="company">
+      <option value="">All Companies</option>
+      {% for co in companies %}
+      <option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Date From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from }}">
+  </div>
+  <div class="form-group">
+    <label>Date To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to }}">
+  </div>
+  <button type="submit" class="btn btn-primary">🔍 Filter</button>
+  <a href="{{ url_for('archive', table=table) }}" class="btn btn-print">✕ Clear</a>
+</form>
+
+<!-- ── ARCHIVED SALES ─────────────────────────────────────────────────────── -->
+{% if table == 'sales' %}
+<div style="margin-bottom:8px;color:var(--muted);font-size:13px">
+  Showing <strong>{{ sales|length }}</strong> of <strong>{{ total_rows }}</strong> archived sales
+  {% if sales %}
+  — Sell: <strong class="text-gold">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</strong>
+  &nbsp;|&nbsp; Profit: <strong class="text-green">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</strong>
+  {% endif %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Sale Date</th>
+        <th>Company</th>
+        <th>Customer</th>
+        <th>Route</th>
+        <th class="text-center">Tkts</th>
+        <th>Travel Date</th>
+        <th class="text-right">Net</th>
+        <th class="text-right">Sell</th>
+        <th class="text-right">Profit</th>
+        <th>Status</th>
+        <th class="no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sales %}
+      <tr style="opacity:0.85">
+        <td class="text-muted" style="font-size:11px">{{ s.id }}</td>
+        <td>{{ s.sale_date }}</td>
+        <td><strong style="color:var(--navy)">{{ s.company }}</strong></td>
+        <td>{{ s.customer }}</td>
+        <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong>{% if s.via %} <span class="text-muted">via {{ s.via }}</span>{% endif %}</td>
+        <td class="text-center">{{ s.tickets }}</td>
+        <td class="text-muted">{{ s.travel_date }}</td>
+        <td class="text-right">{{ "%.2f"|format(s.net) }}</td>
+        <td class="text-right text-gold"><strong>{{ "%.2f"|format(s.sell) }}</strong></td>
+        <td class="text-right {% if s.profit >= 0 %}text-green{% else %}text-red{% endif %}">{{ "%.2f"|format(s.profit) }}</td>
+        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+        <td class="no-print">
+          <div class="gap-8">
+            <!-- Restore -->
+            <form method="POST" action="{{ url_for('restore_sale', sale_id=s.id) }}"
+                  onsubmit="return confirm('Restore sale #{{ s.id }} to active system?')">
+              <button type="submit" class="btn btn-edit" style="font-size:11px;padding:5px 10px">↩ Restore</button>
+            </form>
+            <!-- Delete permanently -->
+            <form method="POST" action="{{ url_for('archive_delete_sale', sale_id=s.id) }}"
+                  onsubmit="return confirm('⚠️ PERMANENTLY delete sale #{{ s.id }}? This cannot be undone.')">
+              <button type="submit" class="btn btn-danger">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="12" class="text-center text-muted" style="padding:40px">
+          No archived sales found.
+          {% if not filters.company and not filters.date_from %}
+          You haven't archived any data yet. <a href="{{ url_for('do_archive') }}">Archive now →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% if sales %}
+    <tfoot>
+      <tr>
+        <td colspan="7">TOTALS — {{ sales|length }} shown / {{ total_rows }} archived</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='net')) }}</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</td>
+        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+{{ render_pagination(page, total_pages, total_rows, 'archive', dict(filters, table='sales')) }}
+
+<!-- ── ARCHIVED PAYMENTS ──────────────────────────────────────────────────── -->
+{% else %}
+<div style="margin-bottom:8px;color:var(--muted);font-size:13px">
+  Showing <strong>{{ payments|length }}</strong> of <strong>{{ total_rows }}</strong> archived payments
+  {% if payments %}— Total: <strong class="text-green">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</strong>{% endif %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Pay Date</th>
+        <th>Company</th>
+        <th class="text-right">Amount</th>
+        <th>Notes</th>
+        <th>Created</th>
+        <th class="no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payments %}
+      <tr style="opacity:0.85">
+        <td class="text-muted" style="font-size:11px">{{ p.id }}</td>
+        <td><strong>{{ p.pay_date }}</strong></td>
+        <td><strong style="color:var(--navy)">{{ p.company }}</strong></td>
+        <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+        <td class="text-muted">{{ p.notes }}</td>
+        <td class="text-muted" style="font-size:11px">{{ p.created_at }}</td>
+        <td class="no-print">
+          <div class="gap-8">
+            <form method="POST" action="{{ url_for('restore_payment', pay_id=p.id) }}"
+                  onsubmit="return confirm('Restore payment #{{ p.id }} to active system?')">
+              <button type="submit" class="btn btn-edit" style="font-size:11px;padding:5px 10px">↩ Restore</button>
+            </form>
+            <form method="POST" action="{{ url_for('archive_delete_payment', pay_id=p.id) }}"
+                  onsubmit="return confirm('⚠️ PERMANENTLY delete payment #{{ p.id }}?')">
+              <button type="submit" class="btn btn-danger">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-center text-muted" style="padding:40px">
+          No archived payments found.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% if payments %}
+    <tfoot>
+      <tr>
+        <td colspan="3">TOTAL — {{ payments|length }} shown / {{ total_rows }} archived</td>
+        <td class="text-right">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
+        <td colspan="3"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+{{ render_pagination(page, total_pages, total_rows, 'archive', dict(filters, table='payments')) }}
+{% endif %}
+
+{% endblock %}
