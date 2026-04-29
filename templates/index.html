@@ -15,22 +15,22 @@
   </div>
   <div class="kpi-box gold">
     <div class="kpi-label">Total Revenue</div>
-    <div class="kpi-value gold">$ {{ "%.2f"|format(stats.total_sell or 0) }}</div>
+    <div class="kpi-value gold">JOD{{ "%.2f"|format(stats.total_sell or 0) }}</div>
     <div class="kpi-sub">Total sold</div>
   </div>
   <div class="kpi-box green">
     <div class="kpi-label">Total Profit</div>
-    <div class="kpi-value green">$ {{ "%.2f"|format(stats.total_profit or 0) }}</div>
+    <div class="kpi-value green">JOD{{ "%.2f"|format(stats.total_profit or 0) }}</div>
     <div class="kpi-sub">{{ "%.1f"|format((stats.total_profit / stats.total_sell * 100) if stats.total_sell else 0) }}% margin</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-label">Collected</div>
-    <div class="kpi-value">$ {{ "%.2f"|format(total_paid or 0) }}</div>
+    <div class="kpi-value">JOD{{ "%.2f"|format(total_paid or 0) }}</div>
     <div class="kpi-sub">Payments received</div>
   </div>
   <div class="kpi-box red">
     <div class="kpi-label">Outstanding</div>
-    <div class="kpi-value red">$ {{ "%.2f"|format(balance or 0) }}</div>
+    <div class="kpi-value red">JOD{{ "%.2f"|format(balance or 0) }}</div>
     <div class="kpi-sub">Still owed</div>
   </div>
   <div class="kpi-box orange">
@@ -52,8 +52,8 @@
           <tr>
             <td><strong>{{ month_names[m.month|int] }}</strong></td>
             <td class="text-right">{{ m.count }}</td>
-            <td class="text-right text-gold">$ {{ "%.2f"|format(m.total_sell or 0) }}</td>
-            <td class="text-right text-green">$ {{ "%.2f"|format(m.total_profit or 0) }}</td>
+            <td class="text-right text-gold">JOD{{ "%.2f"|format(m.total_sell or 0) }}</td>
+            <td class="text-right text-green">JOD {{ "%.2f"|format(m.total_profit or 0) }}</td>
           </tr>
           {% else %}
           <tr><td colspan="4" class="text-center text-muted" style="padding:20px">No data yet</td></tr>
@@ -74,7 +74,7 @@
             <td><strong>{{ loop.index }}</strong></td>
             <td><a href="{{ url_for('statement', company=co.company) }}" style="color:var(--navy);font-weight:600">{{ co.company }}</a></td>
             <td class="text-right text-muted">{{ co.cnt }}</td>
-            <td class="text-right text-gold">$ {{ "%.2f"|format(co.total or 0) }}</td>
+            <td class="text-right text-gold">JOD {{ "%.2f"|format(co.total or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
