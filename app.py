@@ -426,7 +426,7 @@ def index():
 
 # ── Sales ─────────────────────────────────────────────────────────────────────
 @app.route('/add', methods=['GET', 'POST'])
-@admin_required
+@login_required
 def add_sale():
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
