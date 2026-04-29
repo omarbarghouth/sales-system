@@ -11,16 +11,16 @@
 <div class="kpi-grid no-print" style="grid-template-columns:repeat(4,1fr)">
   <div class="kpi-box gold">
     <div class="kpi-label">Total Sell</div>
-    <div class="kpi-value gold">$ {{ "%.2f"|format(totals.sell) }}</div>
+    <div class="kpi-value gold">JOD {{ "%.2f"|format(totals.sell) }}</div>
     <div class="kpi-sub">{{ totals.count }} transactions</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-label">Total Net Cost</div>
-    <div class="kpi-value">$ {{ "%.2f"|format(totals.net) }}</div>
+    <div class="kpi-value">JOD {{ "%.2f"|format(totals.net) }}</div>
   </div>
   <div class="kpi-box green">
     <div class="kpi-label">Total Profit</div>
-    <div class="kpi-value green">$ {{ "%.2f"|format(totals.profit) }}</div>
+    <div class="kpi-value green">JOD {{ "%.2f"|format(totals.profit) }}</div>
     <div class="kpi-sub">{{ "%.1f"|format((totals.profit / totals.sell * 100) if totals.sell else 0) }}% margin</div>
   </div>
   <div class="kpi-box">
@@ -121,9 +121,9 @@
     <tfoot>
       <tr>
         <td colspan="8">TOTALS (all {{ total_rows }} records)</td>
-        <td class="text-right">$ {{ "%.2f"|format(totals.net) }}</td>
-        <td class="text-right">$ {{ "%.2f"|format(totals.sell) }}</td>
-        <td class="text-right">$ {{ "%.2f"|format(totals.profit) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(totals.net) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(totals.sell) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(totals.profit) }}</td>
         <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
       </tr>
     </tfoot>
