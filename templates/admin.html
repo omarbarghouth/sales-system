@@ -51,6 +51,7 @@
   <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('admin', table=table) }}" class="btn btn-print">✕ Clear</a>
   <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export Excel</a>
+  <a href="{{ url_for('reset_data') }}" class="btn btn-danger" style="margin-left:auto">🗑️ Reset All Data</a>
 </form>
 
 {% if table=='sales' %}
