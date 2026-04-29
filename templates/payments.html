@@ -45,7 +45,7 @@
   <div>
     <div class="kpi-box green" style="margin-bottom:16px">
       <div class="kpi-label">Total Payments Received</div>
-      <div class="kpi-value green">$ {{ "%.2f"|format(total_paid) }}</div>
+      <div class="kpi-value green">JOD {{ "%.2f"|format(total_paid) }}</div>
       <div class="kpi-sub">{{ total_rows }} payment records</div>
     </div>
 
@@ -67,7 +67,7 @@
             <tr>
               <td><strong>{{ p.pay_date }}</strong></td>
               <td><a href="{{ url_for('statement', company=p.company) }}" style="color:var(--navy);font-weight:600">{{ p.company }}</a></td>
-              <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+              <td class="text-right text-green"><strong>JOD {{ "%.2f"|format(p.amount) }}</strong></td>
               <td class="text-muted">{{ p.notes }}</td>
               {% if is_admin %}
               <td class="no-print">
@@ -89,7 +89,7 @@
           <tfoot>
             <tr>
               <td colspan="2">TOTAL (page)</td>
-              <td class="text-right">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
+              <td class="text-right">JOD {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
               <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
             </tr>
           </tfoot>
