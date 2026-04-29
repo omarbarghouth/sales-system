@@ -758,13 +758,13 @@ def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     today_str     = str(date.today())
 
-    # Auto-update outbound statuses
+    # Auto-update outbound statuses (active only)
     execute_db('''
         UPDATE sales SET outbound_status='DONE'
         WHERE outbound_delivery != '' AND outbound_delivery <= %s
           AND outbound_status='PENDING' AND deleted=FALSE AND is_archived=FALSE
     ''', [today_str])
-    # Auto-update return statuses
+    # Auto-update return statuses (active only)
     execute_db('''
         UPDATE sales SET return_status='DONE'
         WHERE return_delivery != '' AND return_delivery <= %s
@@ -778,26 +778,26 @@ def deliver_tomorrow():
           AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
     ''')
 
-    # Outbound tickets due tomorrow (new system — by outbound_delivery)
+    # Outbound tickets due tomorrow — show regardless of archive status
     outbound_tickets = query_db('''
         SELECT * FROM sales
-        WHERE outbound_delivery=%s AND deleted=FALSE AND is_archived=FALSE
+        WHERE outbound_delivery=%s AND deleted=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
 
-    # Return tickets due tomorrow (new system — by return_delivery)
+    # Return tickets due tomorrow — show regardless of archive status
     return_tickets = query_db('''
         SELECT * FROM sales
-        WHERE return_delivery=%s AND deleted=FALSE AND is_archived=FALSE
+        WHERE return_delivery=%s AND deleted=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
 
-    # Old-style tickets — travel_date = tomorrow (no outbound_delivery set)
+    # Old-style tickets by travel_date — show regardless of archive status
     travel_date_tickets = query_db('''
         SELECT * FROM sales
         WHERE travel_date=%s
           AND (outbound_delivery IS NULL OR outbound_delivery='')
-          AND deleted=FALSE AND is_archived=FALSE
+          AND deleted=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
 
@@ -808,6 +808,129 @@ def deliver_tomorrow():
         travel_date_tickets=travel_date_tickets,
         tomorrow=tomorrow_str
     )
+
+@app.route('/deliver-tomorrow/send-email', methods=['POST'])
+@login_required
+def send_deliver_email():
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    tomorrow_str  = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
+
+    # Gather all tickets
+    outbound_tickets = query_db('''
+        SELECT * FROM sales WHERE outbound_delivery=%s AND deleted=FALSE
+        ORDER BY company, customer
+    ''', [tomorrow_date])
+    return_tickets = query_db('''
+        SELECT * FROM sales WHERE return_delivery=%s AND deleted=FALSE
+        ORDER BY company, customer
+    ''', [tomorrow_date])
+    travel_date_tickets = query_db('''
+        SELECT * FROM sales WHERE travel_date=%s
+          AND (outbound_delivery IS NULL OR outbound_delivery='')
+          AND deleted=FALSE
+        ORDER BY company, customer
+    ''', [tomorrow_date])
+
+    all_tickets = list(outbound_tickets) + list(return_tickets) + list(travel_date_tickets)
+
+    if not all_tickets:
+        flash('No tickets to send — delivery list is empty for tomorrow.', 'warning')
+        return redirect(url_for('deliver_tomorrow'))
+
+    # Build HTML email table
+    rows_html = ''
+    for i, t in enumerate(all_tickets, 1):
+        status = t.get('outbound_status') or t.get('status') or 'PENDING'
+        color = '#1E7B34' if status == 'DONE' else '#E67E22'
+        rows_html += f"""
+        <tr style="background:{'#f0fff4' if i%2==0 else '#ffffff'}">
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{i}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold">{t['company']}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd">{t['customer']}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center"><strong>{t['from_loc']}</strong></td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center"><strong>{t['to_loc']}</strong></td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('via') or '—'}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('travel_date') or t.get('return_date') or '—'}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('buy_from') or t.get('return_supplier') or '—'}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t['tickets']}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;color:{color};font-weight:bold">{status}</td>
+        </tr>"""
+
+    html_body = f"""
+    <html><body style="font-family:Arial,sans-serif;margin:0;padding:20px;background:#f4f7fc">
+    <div style="max-width:900px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">
+      <div style="background:#1B3A6B;padding:24px 28px">
+        <h1 style="color:#C8A84B;margin:0;font-size:20px">✈ ALSONDOS TRAVEL</h1>
+        <h2 style="color:#fff;margin:8px 0 0;font-size:16px">🚨 Delivery List — {tomorrow_str}</h2>
+        <p style="color:rgba(255,255,255,.7);margin:4px 0 0;font-size:13px">Total tickets: {len(all_tickets)}</p>
+      </div>
+      <div style="padding:20px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:#1B3A6B;color:#fff">
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">#</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Company</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Customer</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">From</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">To</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Via</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Travel Date</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Buy From</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Tkts</th>
+              <th style="padding:10px 12px;border:1px solid #1B3A6B">Status</th>
+            </tr>
+          </thead>
+          <tbody>{rows_html}</tbody>
+          <tfoot>
+            <tr style="background:#1B3A6B;color:#fff">
+              <td colspan="8" style="padding:10px 12px;border:1px solid #1B3A6B;font-weight:bold">TOTAL TICKETS</td>
+              <td style="padding:10px 12px;border:1px solid #1B3A6B;font-weight:bold;text-align:center">{sum(t['tickets'] for t in all_tickets)}</td>
+              <td style="border:1px solid #1B3A6B"></td>
+            </tr>
+          </tfoot>
+        </table>
+        <p style="color:#6B7A99;font-size:12px;margin-top:16px;text-align:center">
+          Generated by ALSONDOS TRAVEL System — {tomorrow_str} | Sent by {session.get('username','system')}
+        </p>
+      </div>
+    </div>
+    </body></html>"""
+
+    # Get email settings from env
+    smtp_host     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port     = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user     = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    email_to      = os.environ.get('NOTIFY_EMAIL', smtp_user)
+
+    if not smtp_user or not smtp_password:
+        flash('Email not configured. Please set SMTP_USER, SMTP_PASSWORD, and NOTIFY_EMAIL in Render environment variables.', 'danger')
+        return redirect(url_for('deliver_tomorrow'))
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'🚨 ALSONDOS — Delivery List for {tomorrow_str} ({len(all_tickets)} tickets)'
+        msg['From']    = smtp_user
+        msg['To']      = email_to
+        msg.attach(MIMEText(html_body, 'html'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, email_to, msg.as_string())
+
+        log_action('EMAIL', 'sales', None,
+                   f"Delivery list for {tomorrow_str} sent to {email_to} — {len(all_tickets)} tickets")
+        flash(f'✅ Delivery list sent to {email_to} — {len(all_tickets)} tickets.', 'success')
+    except Exception as e:
+        logger.error(f"Email send error: {e}")
+        flash(f'❌ Email failed: {str(e)}', 'danger')
+
+    return redirect(url_for('deliver_tomorrow'))
 
 # ── Admin DB viewer ───────────────────────────────────────────────────────────
 @app.route('/admin')
