@@ -4,68 +4,56 @@
 {% block content %}
 <div class="page-header">
   <h1>📊 Dashboard</h1>
-  <p>Welcome to ALSONDOS Travel B2B Management System &nbsp;|&nbsp; {{ today }}</p>
+  <p>ALSONDOS Travel B2B Management &nbsp;|&nbsp; {{ today }} &nbsp;|&nbsp; Welcome, <strong>{{ session.username }}</strong></p>
 </div>
 
-<!-- KPIs -->
 <div class="kpi-grid">
   <div class="kpi-box">
     <div class="kpi-label">Total Transactions</div>
     <div class="kpi-value">{{ stats.total_transactions or 0 }}</div>
-    <div class="kpi-sub">All time records</div>
+    <div class="kpi-sub">All time</div>
   </div>
   <div class="kpi-box gold">
     <div class="kpi-label">Total Revenue</div>
-    <div class="kpi-value gold">JOD{{ "%.2f"|format(stats.total_sell or 0) }}</div>
-    <div class="kpi-sub">Total sold amount</div>
+    <div class="kpi-value gold">$ {{ "%.2f"|format(stats.total_sell or 0) }}</div>
+    <div class="kpi-sub">Total sold</div>
   </div>
   <div class="kpi-box green">
     <div class="kpi-label">Total Profit</div>
-    <div class="kpi-value green">JOD {{ "%.2f"|format(stats.total_profit or 0) }}</div>
-    <div class="kpi-sub">Sell minus cost</div>
+    <div class="kpi-value green">$ {{ "%.2f"|format(stats.total_profit or 0) }}</div>
+    <div class="kpi-sub">{{ "%.1f"|format((stats.total_profit / stats.total_sell * 100) if stats.total_sell else 0) }}% margin</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-label">Total Collected</div>
-    <div class="kpi-value">JOD {{ "%.2f"|format(total_paid or 0) }}</div>
+    <div class="kpi-label">Collected</div>
+    <div class="kpi-value">$ {{ "%.2f"|format(total_paid or 0) }}</div>
     <div class="kpi-sub">Payments received</div>
   </div>
   <div class="kpi-box red">
-    <div class="kpi-label">Outstanding Balance</div>
-    <div class="kpi-value red">JOD {{ "%.2f"|format(balance or 0) }}</div>
-    <div class="kpi-sub">Total - Collected</div>
+    <div class="kpi-label">Outstanding</div>
+    <div class="kpi-value red">$ {{ "%.2f"|format(balance or 0) }}</div>
+    <div class="kpi-sub">Still owed</div>
   </div>
   <div class="kpi-box orange">
     <div class="kpi-label">Deliver Tomorrow</div>
     <div class="kpi-value orange">{{ tomorrow|length }}</div>
-    <div class="kpi-sub">
-      <a href="{{ url_for('deliver_tomorrow') }}" style="color:var(--orange)">View tickets →</a>
-    </div>
+    <div class="kpi-sub"><a href="{{ url_for('deliver_tomorrow') }}" style="color:var(--orange)">View →</a></div>
   </div>
 </div>
 
 <div class="grid-2" style="margin-bottom:24px">
-
-  <!-- Monthly Analysis -->
   <div class="card">
-    <div class="card-header">📅 Monthly Sales Analysis — 2026</div>
+    <div class="card-header">📅 Monthly Sales — {{ today[-4:] }}</div>
     <div style="overflow-x:auto">
       <table>
-        <thead>
-          <tr>
-            <th>Month</th>
-            <th class="text-right">Transactions</th>
-            <th class="text-right">Total Sell</th>
-            <th class="text-right">Profit</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Month</th><th class="text-right">Transactions</th><th class="text-right">Revenue</th><th class="text-right">Profit</th></tr></thead>
         <tbody>
           {% set month_names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
           {% for m in monthly %}
           <tr>
             <td><strong>{{ month_names[m.month|int] }}</strong></td>
             <td class="text-right">{{ m.count }}</td>
-            <td class="text-right text-gold">JOD {{"%.2f"|format(m.total_sell or 0) }}</td>
-            <td class="text-right text-green">JOD {{ "%.2f"|format(m.total_profit or 0) }}</td>
+            <td class="text-right text-gold">$ {{ "%.2f"|format(m.total_sell or 0) }}</td>
+            <td class="text-right text-green">$ {{ "%.2f"|format(m.total_profit or 0) }}</td>
           </tr>
           {% else %}
           <tr><td colspan="4" class="text-center text-muted" style="padding:20px">No data yet</td></tr>
@@ -75,31 +63,18 @@
     </div>
   </div>
 
-  <!-- Top Companies -->
   <div class="card">
-    <div class="card-header">🏆 Top Companies by Sales</div>
+    <div class="card-header">🏆 Top Companies</div>
     <div style="overflow-x:auto">
       <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Company</th>
-            <th class="text-right">Transactions</th>
-            <th class="text-right">Total Sell</th>
-          </tr>
-        </thead>
+        <thead><tr><th>#</th><th>Company</th><th class="text-right">Txns</th><th class="text-right">Total Sell</th></tr></thead>
         <tbody>
           {% for co in top_companies %}
           <tr>
             <td><strong>{{ loop.index }}</strong></td>
-            <td>
-              <a href="{{ url_for('statement', company=co.company) }}"
-                 style="color:var(--navy);font-weight:600">
-                {{ co.company }}
-              </a>
-            </td>
+            <td><a href="{{ url_for('statement', company=co.company) }}" style="color:var(--navy);font-weight:600">{{ co.company }}</a></td>
             <td class="text-right text-muted">{{ co.cnt }}</td>
-            <td class="text-right text-gold">JOD {{ "%.2f"|format(co.total or 0) }}</td>
+            <td class="text-right text-gold">$ {{ "%.2f"|format(co.total or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -108,26 +83,15 @@
   </div>
 </div>
 
-<!-- Deliver Tomorrow Preview -->
 {% if tomorrow %}
 <div class="deliver-banner no-print">
   <div class="deliver-icon">🚨</div>
-  <div>
-    <div class="deliver-title">Tickets to Deliver Tomorrow</div>
-    <div class="deliver-sub">These tickets must be delivered today!</div>
-  </div>
+  <div><div class="deliver-title">Tickets to Deliver Tomorrow</div><div class="deliver-sub">Must be delivered today!</div></div>
   <div class="deliver-count">{{ tomorrow|length }}</div>
 </div>
-
 <div class="table-wrap" style="margin-bottom:24px">
   <table>
-    <thead>
-      <tr>
-        <th>#</th><th>Company</th><th>Customer</th>
-        <th>From</th><th>To</th><th>Travel Date</th>
-        <th>Tickets</th><th>Status</th>
-      </tr>
-    </thead>
+    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Travel Date</th><th>Tickets</th><th>Status</th></tr></thead>
     <tbody>
       {% for t in tomorrow %}
       <tr>
@@ -136,15 +100,35 @@
         <td>{{ t.customer }}</td>
         <td>{{ t.from_loc }}</td>
         <td>{{ t.to_loc }}</td>
-        <td>{{ t.travel_date }}</td>
+        <td><strong style="color:var(--red)">{{ t.travel_date }}</strong></td>
         <td class="text-center">{{ t.tickets }}</td>
-        <td>
-          <span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span>
-        </td>
+        <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% endif %}
+
+{% if is_admin and recent_logs %}
+<div class="card">
+  <div class="card-header">📜 Recent Activity <a href="{{ url_for('audit_log') }}" style="margin-left:auto;color:var(--gold);font-size:12px;font-weight:400">View All →</a></div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td style="font-size:11px;white-space:nowrap">{{ log.created_at }}</td>
+          <td><strong>{{ log.username }}</strong></td>
+          <td><span class="badge {% if log.action=='CREATE' %}badge-done{% elif log.action=='DELETE' %}badge-cancel{% else %}badge-still{% endif %}">{{ log.action }}</span></td>
+          <td class="text-muted">{{ log.table_name }}</td>
+          <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
 
