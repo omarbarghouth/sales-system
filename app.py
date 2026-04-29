@@ -1025,6 +1025,26 @@ def do_archive():
     return render_template('do_archive.html',
         preview=preview, preview_date=preview_date)
 
+@app.route('/archive/restore-all-sales', methods=['POST'])
+@admin_required
+def restore_all_sales():
+    result = query_db('SELECT COUNT(*) as cnt FROM sales WHERE is_archived=TRUE AND deleted=FALSE', one=True)
+    count = result['cnt']
+    execute_db('UPDATE sales SET is_archived=FALSE WHERE is_archived=TRUE AND deleted=FALSE')
+    log_action('RESTORE', 'sales', None, f"Restored ALL {count} archived sales to active system")
+    flash(f'✅ {count} archived sales restored to active system.', 'success')
+    return redirect(url_for('archive', table='sales'))
+
+@app.route('/archive/restore-all-payments', methods=['POST'])
+@admin_required
+def restore_all_payments():
+    result = query_db('SELECT COUNT(*) as cnt FROM payments WHERE is_archived=TRUE AND deleted=FALSE', one=True)
+    count = result['cnt']
+    execute_db('UPDATE payments SET is_archived=FALSE WHERE is_archived=TRUE AND deleted=FALSE')
+    log_action('RESTORE', 'payments', None, f"Restored ALL {count} archived payments to active system")
+    flash(f'✅ {count} archived payments restored to active system.', 'success')
+    return redirect(url_for('archive', table='payments'))
+
 @app.route('/archive/restore-sale/<int:sale_id>', methods=['POST'])
 @admin_required
 def restore_sale(sale_id):
