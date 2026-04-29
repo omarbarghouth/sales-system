@@ -37,18 +37,17 @@
     <a href="{{ url_for('payments') }}"         class="{% if request.endpoint=='payments' %}active{% endif %}">💳 <span>Payments</span></a>
     <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">🚨 <span>Deliver</span></a>
     {% if is_admin %}
-    <a href="{{ url_for('admin') }}"            class="{% if request.endpoint=='admin' %}active{% endif %}">🗄️ <span>Admin</span></a>
-    <a href="{{ url_for('audit_log') }}"        class="{% if request.endpoint=='audit_log' %}active{% endif %}">📜 <span>Audit</span></a>
-    <a href="{{ url_for('manage_users') }}"     class="{% if request.endpoint=='manage_users' %}active{% endif %}">👥 <span>Users</span></a>
+      <a href="{{ url_for('admin') }}"          class="{% if request.endpoint=='admin' %}active{% endif %}">🗄️ <span>Admin</span></a>
+      <a href="{{ url_for('audit_log') }}"      class="{% if request.endpoint=='audit_log' %}active{% endif %}">📜 <span>Audit</span></a>
+      <a href="{{ url_for('manage_users') }}"   class="{% if request.endpoint=='manage_users' %}active{% endif %}">👥 <span>Users</span></a>
     {% endif %}
     {% if logged_in %}
-    <a href="{{ url_for('add_sale') }}" class="btn-add">➕ <span>New Sale</span></a>
-    {% if logged_in %}
-    <div class="user-badge">
-      <span>{{ session.username }}</span>
-      <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role=='admin' else '👤 User' }}</span>
-      <a href="{{ url_for('logout') }}" class="btn-logout">⏏ Logout</a>
-    </div>
+      <a href="{{ url_for('add_sale') }}" class="btn-add">➕ <span>New Sale</span></a>
+      <div class="user-badge">
+        <span>{{ session.username }}</span>
+        <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role=='admin' else '👤 User' }}</span>
+        <a href="{{ url_for('logout') }}" class="btn-logout">⏏ Logout</a>
+      </div>
     {% endif %}
   </div>
 </nav>
