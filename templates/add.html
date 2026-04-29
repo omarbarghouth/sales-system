@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ '✏️ Edit Sale' if edit else '➕ New Sale' }}</h1>
-  <p>{{ 'Update transaction details' if edit else 'Add a new ticket transaction to the system' }}</p>
+  <p>{{ 'Update transaction details' if edit else 'Add a new ticket transaction' }}</p>
 </div>
 
 <div class="card">
@@ -15,29 +15,29 @@
       <!-- Row 1: Route -->
       <div class="form-grid" style="margin-bottom:18px">
         <div class="form-group">
-          <label>From (Airport/City)</label>
-          <input type="text" name="from_loc" placeholder="e.g. AMM"
-                 value="{{ sale.from_loc if sale else '' }}" required
+          <label>From (Airport/City) *</label>
+          <input type="text" name="from_loc" placeholder="e.g. AMM" required
+                 value="{{ sale.from_loc if sale else (form.from_loc or '') }}"
                  style="text-transform:uppercase">
         </div>
         <div class="form-group">
-          <label>To (Airport/City)</label>
-          <input type="text" name="to_loc" placeholder="e.g. IST"
-                 value="{{ sale.to_loc if sale else '' }}" required
+          <label>To (Airport/City) *</label>
+          <input type="text" name="to_loc" placeholder="e.g. IST" required
+                 value="{{ sale.to_loc if sale else (form.to_loc or '') }}"
                  style="text-transform:uppercase">
         </div>
         <div class="form-group">
           <label>Via (optional)</label>
           <input type="text" name="via" placeholder="e.g. CAI"
-                 value="{{ sale.via if sale else '' }}"
+                 value="{{ sale.via if sale else (form.via or '') }}"
                  style="text-transform:uppercase">
         </div>
         <div class="form-group">
           <label>Trip Type</label>
           <select name="trip_type">
-            <option value="RETURN"   {% if sale and sale.trip_type=='RETURN'   %}selected{% endif %}>Return</option>
-            <option value="ONE WAY"  {% if sale and sale.trip_type=='ONE WAY'  %}selected{% endif %}>One Way</option>
-            <option value="OPEN JAW" {% if sale and sale.trip_type=='OPEN JAW' %}selected{% endif %}>Open Jaw</option>
+            <option value="RETURN"   {% if (sale and sale.trip_type=='RETURN')   or (not sale and (form.trip_type or 'RETURN')=='RETURN')   %}selected{% endif %}>Return</option>
+            <option value="ONE WAY"  {% if (sale and sale.trip_type=='ONE WAY')  or (not sale and form.trip_type=='ONE WAY')  %}selected{% endif %}>One Way</option>
+            <option value="OPEN JAW" {% if (sale and sale.trip_type=='OPEN JAW') or (not sale and form.trip_type=='OPEN JAW') %}selected{% endif %}>Open Jaw</option>
           </select>
         </div>
       </div>
@@ -48,75 +48,116 @@
           <label>Sell To (Company) *</label>
           <input type="text" name="company" list="company-list" required
                  placeholder="Select or type company"
-                 value="{{ sale.company if sale else '' }}"
+                 value="{{ sale.company if sale else (form.company or '') }}"
                  style="text-transform:uppercase">
           <datalist id="company-list">
-            {% for co in companies %}
-            <option value="{{ co }}">
-            {% endfor %}
+            {% for co in companies %}<option value="{{ co }}">{% endfor %}
           </datalist>
         </div>
         <div class="form-group">
           <label>Customer Name *</label>
-          <input type="text" name="customer" placeholder="Full name"
-                 value="{{ sale.customer if sale else '' }}" required
-                 style="text-transform:uppercase">
+          <input type="text" name="customer" placeholder="Full name" required
+                 value="{{ sale.customer if sale else (form.customer or '') }}"
+                 style="text-transform:uppercase" maxlength="100">
         </div>
         <div class="form-group">
-          <label>Buy From (Supplier)</label>
+          <label>Outbound Supplier (Buy From)</label>
           <input type="text" name="buy_from" placeholder="e.g. EMA, AIRW"
-                 value="{{ sale.buy_from if sale else '' }}"
+                 value="{{ sale.buy_from if sale else (form.buy_from or '') }}"
                  style="text-transform:uppercase">
         </div>
         <div class="form-group">
           <label>No. of Tickets</label>
-          <input type="number" name="tickets" min="1" value="{{ sale.tickets if sale else 1 }}">
+          <input type="number" name="tickets" min="1"
+                 value="{{ sale.tickets if sale else (form.tickets or 1) }}">
         </div>
       </div>
 
-      <!-- Row 3: Dates -->
-      <div class="form-grid" style="margin-bottom:18px">
-        <div class="form-group">
-          <label>Sale Date *</label>
-          <input type="date" name="sale_date" required
-                 value="{{ sale.sale_date if sale else today }}">
-        </div>
-        <div class="form-group">
-          <label>Travel Date</label>
-          <input type="date" name="travel_date"
-                 value="{{ sale.travel_date if sale else '' }}">
-        </div>
-        <div class="form-group">
-          <label>Status</label>
-          <select name="status">
-            <option value="STILL"     {% if not sale or sale.status=='STILL'     %}selected{% endif %}>Still (Pending)</option>
-            <option value="DONE"      {% if sale and sale.status=='DONE'          %}selected{% endif %}>Done</option>
-            <option value="CANCELLED" {% if sale and sale.status=='CANCELLED'     %}selected{% endif %}>Cancelled</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Remarks</label>
-          <input type="text" name="remarks" placeholder="Optional notes"
-                 value="{{ sale.remarks if sale else '' }}">
-        </div>
-      </div>
-
-      <!-- Row 4: Pricing -->
-      <div style="background:var(--light);border-radius:var(--radius);padding:20px;margin-bottom:20px">
-        <h3 style="color:var(--navy);margin-bottom:16px;font-size:15px">💰 Pricing</h3>
+      <!-- Row 3: Outbound Sector -->
+      <div style="background:var(--light);border-radius:var(--radius);padding:18px;margin-bottom:18px;border-left:4px solid var(--navy)">
+        <h3 style="color:var(--navy);margin-bottom:14px;font-size:14px">✈️ OUTBOUND SECTOR</h3>
         <div class="form-grid">
           <div class="form-group">
-            <label>Net Cost (JOD) *</label>
+            <label>Sale Date *</label>
+            <input type="date" name="sale_date" required
+                   value="{{ sale.sale_date if sale else (form.sale_date or today) }}">
+          </div>
+          <div class="form-group">
+            <label>Departure Date</label>
+            <input type="date" name="travel_date"
+                   value="{{ sale.travel_date if sale else (form.travel_date or '') }}">
+          </div>
+          <div class="form-group">
+            <label>Outbound Delivery Date</label>
+            <input type="date" name="outbound_delivery"
+                   value="{{ sale.outbound_delivery if sale else (form.outbound_delivery or '') }}">
+            <small style="color:var(--muted);font-size:11px">When to deliver outbound ticket</small>
+          </div>
+          <div class="form-group">
+            <label>Outbound Status</label>
+            <div style="padding:10px 14px;border-radius:7px;font-size:13px;font-weight:700;
+              {% if sale and sale.outbound_status=='DONE' %}background:var(--green-lt);color:var(--green);border:1.5px solid var(--green)
+              {% else %}background:var(--orange-lt);color:var(--orange);border:1.5px solid var(--orange){% endif %}">
+              {% if sale %}{{ sale.outbound_status or 'PENDING' }}{% else %}AUTO{% endif %}
+            </div>
+            <small style="color:var(--muted);font-size:11px">Auto-calculated from delivery date</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Return Sector -->
+      <div style="background:#f0f8ff;border-radius:var(--radius);padding:18px;margin-bottom:18px;border-left:4px solid var(--accent)" id="returnSection">
+        <h3 style="color:var(--accent);margin-bottom:14px;font-size:14px">🔄 RETURN SECTOR <span style="font-size:11px;font-weight:400;color:var(--muted)">(optional — fill if round trip)</span></h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Return Date</label>
+            <input type="date" name="return_date" id="returnDate"
+                   value="{{ sale.return_date if sale else (form.return_date or '') }}"
+                   onchange="toggleReturnSupplier()">
+          </div>
+          <div class="form-group">
+            <label>Return Supplier</label>
+            <input type="text" name="return_supplier" id="returnSupplier"
+                   placeholder="Who supplied return ticket?"
+                   value="{{ sale.return_supplier if sale else (form.return_supplier or '') }}"
+                   style="text-transform:uppercase">
+            <small style="color:var(--muted);font-size:11px">Required if return date is set</small>
+          </div>
+          <div class="form-group">
+            <label>Return Delivery Date</label>
+            <input type="date" name="return_delivery"
+                   value="{{ sale.return_delivery if sale else (form.return_delivery or '') }}">
+            <small style="color:var(--muted);font-size:11px">When to deliver return ticket</small>
+          </div>
+          <div class="form-group">
+            <label>Return Status</label>
+            <div style="padding:10px 14px;border-radius:7px;font-size:13px;font-weight:700;
+              {% if sale and sale.return_status=='DONE' %}background:var(--green-lt);color:var(--green);border:1.5px solid var(--green)
+              {% elif sale and sale.return_date %}background:var(--orange-lt);color:var(--orange);border:1.5px solid var(--orange)
+              {% else %}background:var(--light);color:var(--muted);border:1.5px solid var(--border){% endif %}">
+              {% if sale and sale.return_date %}{{ sale.return_status or 'PENDING' }}{% else %}N/A{% endif %}
+            </div>
+            <small style="color:var(--muted);font-size:11px">Auto-calculated from delivery date</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 5: Pricing -->
+      <div style="background:var(--light);border-radius:var(--radius);padding:18px;margin-bottom:18px">
+        <h3 style="color:var(--navy);margin-bottom:14px;font-size:14px">💰 PRICING</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Net Cost (USD) *</label>
             <input type="number" name="net" id="net" step="0.01" min="0" required
                    placeholder="0.00"
-                   value="{{ sale.net if sale else '' }}"
+                   value="{{ sale.net if sale else (form.net or '') }}"
                    oninput="calcProfit()">
           </div>
           <div class="form-group">
-            <label>Sell Price (JOD) *</label>
+            <label>Sell Price (USD) *</label>
             <input type="number" name="sell" id="sell" step="0.01" min="0" required
                    placeholder="0.00"
-                   value="{{ sale.sell if sale else '' }}"
+                   value="{{ sale.sell if sale else (form.sell or '') }}"
                    oninput="calcProfit()">
           </div>
           <div class="form-group">
@@ -124,6 +165,11 @@
             <div class="profit-display" id="profit-display">
               $ {{ "%.2f"|format(sale.profit if sale else 0) }}
             </div>
+          </div>
+          <div class="form-group">
+            <label>Remarks</label>
+            <input type="text" name="remarks" placeholder="Optional notes" maxlength="200"
+                   value="{{ sale.remarks if sale else (form.remarks or '') }}">
           </div>
         </div>
       </div>
@@ -143,14 +189,26 @@
 
 {% block extra_js %}
 function calcProfit() {
-  const net  = parseFloat(document.getElementById('net').value)  || 0;
-  const sell = parseFloat(document.getElementById('sell').value) || 0;
-  const profit = sell - net;
-  const el = document.getElementById('profit-display');
-  el.textContent = 'JOD ' + profit.toFixed(2);
-  el.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+  var net    = parseFloat(document.getElementById('net').value)  || 0;
+  var sell   = parseFloat(document.getElementById('sell').value) || 0;
+  var profit = sell - net;
+  var el = document.getElementById('profit-display');
+  el.textContent = '$ ' + profit.toFixed(2);
+  el.style.color       = profit >= 0 ? 'var(--green)' : 'var(--red)';
   el.style.borderColor = profit >= 0 ? 'var(--green)' : 'var(--red)';
-  el.style.background = profit >= 0 ? 'var(--green-lt)' : 'var(--red-lt)';
+  el.style.background  = profit >= 0 ? 'var(--green-lt)' : 'var(--red-lt)';
+}
+function toggleReturnSupplier() {
+  var rd  = document.getElementById('returnDate').value;
+  var rs  = document.getElementById('returnSupplier');
+  if (rd) {
+    rs.style.borderColor = 'var(--accent)';
+    rs.placeholder = 'Required — who supplied return ticket?';
+  } else {
+    rs.style.borderColor = '';
+    rs.placeholder = 'Who supplied return ticket?';
+  }
 }
 calcProfit();
+toggleReturnSupplier();
 {% endblock %}
