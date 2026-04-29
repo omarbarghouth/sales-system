@@ -39,6 +39,7 @@
     {% if is_admin %}
       <a href="{{ url_for('admin') }}"          class="{% if request.endpoint=='admin' %}active{% endif %}">🗄️ <span>Admin</span></a>
       <a href="{{ url_for('audit_log') }}"      class="{% if request.endpoint=='audit_log' %}active{% endif %}">📜 <span>Audit</span></a>
+      <a href="{{ url_for('archive') }}"        class="{% if request.endpoint=='archive' or request.endpoint=='do_archive' %}active{% endif %}">📦 <span>Archive</span></a>
       <a href="{{ url_for('manage_users') }}"   class="{% if request.endpoint=='manage_users' %}active{% endif %}">👥 <span>Users</span></a>
     {% endif %}
     {% if logged_in %}
