@@ -41,6 +41,21 @@
 <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
   <a href="{{ url_for('do_archive') }}" class="btn btn-gold">📦 Archive More Data</a>
   <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export All to Excel</a>
+
+  {% if table == 'sales' and archive_stats.sales_count > 0 %}
+  <form method="POST" action="{{ url_for('restore_all_sales') }}"
+        onsubmit="return confirm('↩ Restore ALL {{ archive_stats.sales_count }} archived sales back to the active system?\n\nThey will appear in reports and dashboard again.')">
+    <button type="submit" class="btn btn-primary">↩ Restore ALL Sales to Active</button>
+  </form>
+  {% endif %}
+
+  {% if table == 'payments' and archive_stats.payments_count > 0 %}
+  <form method="POST" action="{{ url_for('restore_all_payments') }}"
+        onsubmit="return confirm('↩ Restore ALL {{ archive_stats.payments_count }} archived payments back to the active system?\n\nThey will appear in reports and dashboard again.')">
+    <button type="submit" class="btn btn-primary">↩ Restore ALL Payments to Active</button>
+  </form>
+  {% endif %}
+
   <a href="{{ url_for('admin') }}" class="btn btn-print">← Back to Admin</a>
 </div>
 
