@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Archive Old Data — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;margin:40px auto">
+
+  <div class="page-header">
+    <h1>📦 Archive Old Data</h1>
+    <p>Move old records to archive — data is kept safe and viewable at <a href="{{ url_for('archive') }}">/archive</a></p>
+  </div>
+
+  <!-- STEP 1: PREVIEW -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">🔍 Step 1 — Preview What Will Be Archived</div>
+    <div class="card-body">
+      <form method="GET">
+        <div class="form-grid" style="grid-template-columns:1fr auto;gap:12px;align-items:end">
+          <div class="form-group">
+            <label>Archive all records BEFORE this date</label>
+            <input type="date" name="preview_date" value="{{ preview_date }}" required>
+          </div>
+          <button type="submit" class="btn btn-primary">🔍 Preview</button>
+        </div>
+      </form>
+
+      {% if preview and preview_date %}
+      <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--light);border-radius:8px;padding:16px;text-align:center">
+          <div class="kpi-label">Sales to Archive</div>
+          <div class="kpi-value" style="color:var(--orange)">{{ preview.sales_count }}</div>
+          <div class="kpi-sub">Total: $ {{ "%.2f"|format(preview.total_sell or 0) }}</div>
+        </div>
+        <div style="background:var(--light);border-radius:8px;padding:16px;text-align:center">
+          <div class="kpi-label">Payments to Archive</div>
+          <div class="kpi-value" style="color:var(--orange)">{{ preview.payments_count }}</div>
+          <div class="kpi-sub">Total: $ {{ "%.2f"|format(preview.total_paid or 0) }}</div>
+        </div>
+      </div>
+      <div style="background:#D6EAF8;border:1px solid #2980B9;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#2980B9">
+        ℹ️ All records with dates before <strong>{{ preview_date }}</strong> will be moved to archive.
+        They will NOT be deleted — viewable at <a href="{{ url_for('archive') }}">/archive</a>.
+        This action is fully reversible.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- STEP 2: CONFIRM & ARCHIVE -->
+  {% if preview and preview_date and (preview.sales_count > 0 or preview.payments_count > 0) %}
+  <div class="card">
+    <div class="card-header" style="background:var(--orange)">📦 Step 2 — Confirm Archive</div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="archive_date" value="{{ preview_date }}">
+
+        <div style="background:#FEF9E7;border:1px solid #F39C12;border-radius:8px;padding:16px;margin-bottom:20px">
+          <div style="font-weight:700;color:#E67E22;margin-bottom:10px">✅ Confirm before archiving:</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="chk1" onchange="checkReady()">
+              <span>I have exported the Excel backup of current data</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="chk2" onchange="checkReady()">
+              <span>I understand archived data will NOT appear in main reports</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="chk3" onchange="checkReady()">
+              <span>I know I can restore any archived record at any time</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label>Type <strong>ARCHIVE</strong> to confirm</label>
+          <input type="text" name="confirm_text" id="confirmInput"
+                 placeholder="Type ARCHIVE here..."
+                 oninput="checkReady()" autocomplete="off"
+                 style="font-weight:700;letter-spacing:1px">
+        </div>
+
+        <div style="display:flex;gap:12px">
+          <a href="{{ url_for('admin') }}" class="btn btn-print">✕ Cancel</a>
+          <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export Excel First</a>
+          <button type="submit" id="archiveBtn" disabled
+                  style="flex:1;background:#7f8c8d;color:#fff;border:none;border-radius:7px;padding:11px;font-size:14px;font-weight:700;cursor:not-allowed;transition:all .2s">
+            📦 Archive {{ preview.sales_count }} Sales + {{ preview.payments_count }} Payments
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% elif preview and preview_date %}
+  <div class="card" style="text-align:center;padding:40px">
+    <div style="font-size:48px;margin-bottom:12px">✅</div>
+    <h3 style="color:var(--green)">No records to archive before {{ preview_date }}</h3>
+    <p class="text-muted">All existing records are already on or after this date.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+function checkReady() {
+  var c1  = document.getElementById('chk1').checked;
+  var c2  = document.getElementById('chk2').checked;
+  var c3  = document.getElementById('chk3').checked;
+  var txt = document.getElementById('confirmInput').value.trim();
+  var btn = document.getElementById('archiveBtn');
+  if (!btn) return;
+  if (c1 && c2 && c3 && txt === 'ARCHIVE') {
+    btn.disabled = false;
+    btn.style.background = '#E67E22';
+    btn.style.cursor = 'pointer';
+  } else {
+    btn.disabled = true;
+    btn.style.background = '#7f8c8d';
+    btn.style.cursor = 'not-allowed';
+  }
+}
+{% endblock %}
