@@ -1,17 +1,18 @@
 {% extends "base.html" %}
+{% from "pagination_macro.html" import render_pagination %}
 {% block title %}Sales Report — ALSONDOS TRAVEL{% endblock %}
 
 {% block content %}
 <div class="page-header no-print">
   <h1>📋 Sales Report</h1>
-  <p>All transactions with full details, filters, and totals</p>
+  <p>All transactions with filters, totals and pagination</p>
 </div>
 
-<!-- KPI Summary -->
 <div class="kpi-grid no-print" style="grid-template-columns:repeat(4,1fr)">
   <div class="kpi-box gold">
     <div class="kpi-label">Total Sell</div>
     <div class="kpi-value gold">$ {{ "%.2f"|format(totals.sell) }}</div>
+    <div class="kpi-sub">{{ totals.count }} transactions</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-label">Total Net Cost</div>
@@ -20,14 +21,15 @@
   <div class="kpi-box green">
     <div class="kpi-label">Total Profit</div>
     <div class="kpi-value green">$ {{ "%.2f"|format(totals.profit) }}</div>
+    <div class="kpi-sub">{{ "%.1f"|format((totals.profit / totals.sell * 100) if totals.sell else 0) }}% margin</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-label">Transactions</div>
-    <div class="kpi-value">{{ totals.count }}</div>
+    <div class="kpi-label">Showing</div>
+    <div class="kpi-value">{{ sales|length }}</div>
+    <div class="kpi-sub">of {{ total_rows }} records</div>
   </div>
 </div>
 
-<!-- Filters -->
 <form method="GET" class="filter-bar no-print">
   <div class="form-group">
     <label>Company</label>
@@ -41,7 +43,7 @@
   <div class="form-group">
     <label>Status</label>
     <select name="status">
-      <option value="">All Status</option>
+      <option value="">All</option>
       <option value="DONE"      {% if filters.status=='DONE'      %}selected{% endif %}>Done</option>
       <option value="STILL"     {% if filters.status=='STILL'     %}selected{% endif %}>Still</option>
       <option value="CANCELLED" {% if filters.status=='CANCELLED' %}selected{% endif %}>Cancelled</option>
@@ -58,9 +60,11 @@
   <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('sales_report') }}" class="btn btn-print">✕ Clear</a>
   <button type="button" onclick="window.print()" class="btn btn-gold">🖨 Print</button>
+  {% if is_admin %}
+  <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Excel</a>
+  {% endif %}
 </form>
 
-<!-- Table -->
 <div class="table-wrap">
   <table>
     <thead>
@@ -73,68 +77,59 @@
         <th>Type</th>
         <th class="text-center">Tkts</th>
         <th>Travel Date</th>
-        <th class="text-right">Net (USD)</th>
-        <th class="text-right">Sell (USD)</th>
-        <th class="text-right">Profit (USD)</th>
+        <th class="text-right">Net</th>
+        <th class="text-right">Sell</th>
+        <th class="text-right">Profit</th>
         <th>Status</th>
-        <th class="no-print">Actions</th>
+        {% if is_admin %}<th class="no-print">Actions</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for s in sales %}
       <tr>
-        <td class="text-muted">{{ s.id }}</td>
+        <td class="text-muted" style="font-size:11px">{{ s.id }}</td>
         <td>{{ s.sale_date }}</td>
-        <td>
-          <a href="{{ url_for('statement', company=s.company) }}"
-             style="color:var(--navy);font-weight:600">{{ s.company }}</a>
-        </td>
-        <td>{{ s.customer }}</td>
-        <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong>
-          {% if s.via %}<span class="text-muted"> via {{ s.via }}</span>{% endif %}
-        </td>
+        <td><a href="{{ url_for('statement', company=s.company) }}" style="color:var(--navy);font-weight:600">{{ s.company }}</a></td>
+        <td><strong>{{ s.customer }}</strong></td>
+        <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong>{% if s.via %} <span class="text-muted">via {{ s.via }}</span>{% endif %}</td>
         <td class="text-muted">{{ s.trip_type }}</td>
         <td class="text-center">{{ s.tickets }}</td>
         <td class="text-muted">{{ s.travel_date }}</td>
         <td class="text-right">{{ "%.2f"|format(s.net) }}</td>
-        <td class="text-right text-gold">{{ "%.2f"|format(s.sell) }}</td>
-        <td class="text-right text-green">{{ "%.2f"|format(s.profit) }}</td>
-        <td>
-          <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
-        </td>
+        <td class="text-right text-gold"><strong>{{ "%.2f"|format(s.sell) }}</strong></td>
+        <td class="text-right {% if s.profit >= 0 %}text-green{% else %}text-red{% endif %}"><strong>{{ "%.2f"|format(s.profit) }}</strong></td>
+        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+        {% if is_admin %}
         <td class="no-print">
           <div class="gap-8">
-            {% if is_admin %}
             <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit">✏️</a>
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
-                  onsubmit="return confirm('Delete this record?')">
+                  onsubmit="return confirm('⚠️ Delete sale for {{ s.customer }}?\nThis cannot be undone.')">
               <button type="submit" class="btn btn-danger">🗑</button>
             </form>
-            {% else %}
-            <span class="text-muted" style="font-size:11px">View only</span>
-            {% endif %}
           </div>
         </td>
+        {% endif %}
       </tr>
       {% else %}
-      <tr>
-        <td colspan="13" class="text-center text-muted" style="padding:40px">
-          No transactions found. <a href="{{ url_for('add_sale') }}">Add the first one →</a>
-        </td>
-      </tr>
+      <tr><td colspan="13" class="text-center text-muted" style="padding:40px">
+        No transactions found. {% if is_admin %}<a href="{{ url_for('add_sale') }}">Add the first one →</a>{% endif %}
+      </td></tr>
       {% endfor %}
     </tbody>
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="8">TOTALS — {{ totals.count }} transactions</td>
+        <td colspan="8">TOTALS (all {{ total_rows }} records)</td>
         <td class="text-right">$ {{ "%.2f"|format(totals.net) }}</td>
         <td class="text-right">$ {{ "%.2f"|format(totals.sell) }}</td>
         <td class="text-right">$ {{ "%.2f"|format(totals.profit) }}</td>
-        <td colspan="2"></td>
+        <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
       </tr>
     </tfoot>
     {% endif %}
   </table>
 </div>
+
+{{ render_pagination(page, total_pages, total_rows, 'sales_report', filters) }}
 {% endblock %}
