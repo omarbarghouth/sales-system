@@ -778,15 +778,26 @@ def deliver_tomorrow():
           AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
     ''')
 
+    # Outbound tickets due tomorrow (new system — by outbound_delivery)
     outbound_tickets = query_db('''
         SELECT * FROM sales
         WHERE outbound_delivery=%s AND deleted=FALSE AND is_archived=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
 
+    # Return tickets due tomorrow (new system — by return_delivery)
     return_tickets = query_db('''
         SELECT * FROM sales
         WHERE return_delivery=%s AND deleted=FALSE AND is_archived=FALSE
+        ORDER BY company, customer
+    ''', [tomorrow_date])
+
+    # Old-style tickets — travel_date = tomorrow (no outbound_delivery set)
+    travel_date_tickets = query_db('''
+        SELECT * FROM sales
+        WHERE travel_date=%s
+          AND (outbound_delivery IS NULL OR outbound_delivery='')
+          AND deleted=FALSE AND is_archived=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
 
@@ -794,6 +805,7 @@ def deliver_tomorrow():
     return render_template('deliver.html',
         outbound_tickets=outbound_tickets,
         return_tickets=return_tickets,
+        travel_date_tickets=travel_date_tickets,
         tomorrow=tomorrow_str
     )
 
