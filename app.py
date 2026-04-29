@@ -134,6 +134,15 @@ def init_db():
         )
     ''')
 
+    # Add deleted column FIRST (before indexes) — handles old schema upgrades
+    for tbl in ('sales', 'payments'):
+        cur.execute(f"""
+            DO $$ BEGIN
+                ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
+            EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """)
+    db.commit()
+
     # Indexes for performance
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_sales_company    ON sales(company)",
@@ -149,14 +158,6 @@ def init_db():
     ]
     for idx in indexes:
         cur.execute(idx)
-
-    # Add deleted column if upgrading from old schema
-    for tbl in ('sales', 'payments'):
-        cur.execute(f"""
-            DO $$ BEGIN
-                ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS deleted BOOLEAN DEFAULT FALSE;
-            EXCEPTION WHEN duplicate_column THEN NULL; END $$;
-        """)
 
     db.commit()
 
