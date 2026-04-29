@@ -146,6 +146,19 @@ def init_db():
                 ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
         """)
+
+    # New ticket tracking columns
+    new_cols = [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_date         TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_supplier     TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS outbound_delivery   TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_delivery     TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS outbound_status     TEXT DEFAULT 'PENDING'",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_status       TEXT DEFAULT 'PENDING'",
+    ]
+    for col in new_cols:
+        cur.execute(f"DO $$ BEGIN {col}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
+
     db.commit()
 
     # Indexes for performance
@@ -211,6 +224,18 @@ def log_action(action, table_name, record_id=None, detail=''):
         ''', (uid, uname, action, table_name, record_id, detail))
     except Exception as e:
         logger.error(f"Audit log failed: {e}")
+
+def compute_ticket_status(outbound_delivery, return_delivery):
+    """Auto-compute outbound/return status based on today's date."""
+    today_str = str(date.today())
+    outbound_status = 'DONE' if outbound_delivery and today_str >= outbound_delivery else 'PENDING'
+    return_status   = 'DONE' if return_delivery  and today_str >= return_delivery  else 'PENDING'
+    # Overall status: DONE only when all applicable sectors done
+    if return_delivery:
+        overall = 'DONE' if outbound_status == 'DONE' and return_status == 'DONE' else 'STILL'
+    else:
+        overall = 'DONE' if outbound_status == 'DONE' else 'STILL'
+    return outbound_status, return_status, overall
 
 # ── Input validation ──────────────────────────────────────────────────────────
 def validate_sale_form(form):
@@ -446,11 +471,23 @@ def add_sale():
                                    today=str(date.today()), form=request.form)
         net  = float(request.form.get('net', 0))
         sell = float(request.form.get('sell', 0))
+
+        outbound_delivery = request.form.get('outbound_delivery','').strip()
+        return_delivery   = request.form.get('return_delivery','').strip()
+        return_date       = request.form.get('return_date','').strip()
+        return_supplier   = request.form.get('return_supplier','').upper().strip()
+
+        outbound_status, return_status, overall = compute_ticket_status(
+            outbound_delivery, return_delivery
+        )
+
         new_id = execute_db('''
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
-             customer,sale_date,travel_date,net,sell,profit,status,remarks)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             customer,sale_date,travel_date,return_date,return_supplier,
+             outbound_delivery,return_delivery,outbound_status,return_status,
+             net,sell,profit,status,remarks)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ''', (
             request.form.get('from_loc','').upper().strip(),
             request.form.get('to_loc','').upper().strip(),
@@ -461,9 +498,12 @@ def add_sale():
             int(request.form.get('tickets', 1)),
             request.form.get('customer','').upper().strip(),
             request.form.get('sale_date', str(date.today())),
-            request.form.get('travel_date',''),
+            request.form.get('travel_date','').strip(),
+            return_date, return_supplier,
+            outbound_delivery, return_delivery,
+            outbound_status, return_status,
             net, sell, sell - net,
-            request.form.get('status','STILL'),
+            overall,
             request.form.get('remarks','').strip()
         ))
         log_action('CREATE', 'sales', new_id,
@@ -491,10 +531,23 @@ def edit_sale(sale_id):
             return render_template('add.html', sale=sale, companies=companies, edit=True)
         net  = float(request.form.get('net', 0))
         sell = float(request.form.get('sell', 0))
+
+        outbound_delivery = request.form.get('outbound_delivery','').strip()
+        return_delivery   = request.form.get('return_delivery','').strip()
+        return_date       = request.form.get('return_date','').strip()
+        return_supplier   = request.form.get('return_supplier','').upper().strip()
+
+        outbound_status, return_status, overall = compute_ticket_status(
+            outbound_delivery, return_delivery
+        )
+
         execute_db('''
             UPDATE sales SET
                 from_loc=%s, to_loc=%s, via=%s, trip_type=%s, buy_from=%s,
                 company=%s, tickets=%s, customer=%s, sale_date=%s, travel_date=%s,
+                return_date=%s, return_supplier=%s,
+                outbound_delivery=%s, return_delivery=%s,
+                outbound_status=%s, return_status=%s,
                 net=%s, sell=%s, profit=%s, status=%s, remarks=%s
             WHERE id=%s
         ''', (
@@ -507,9 +560,12 @@ def edit_sale(sale_id):
             int(request.form.get('tickets', 1)),
             request.form.get('customer','').upper().strip(),
             request.form.get('sale_date',''),
-            request.form.get('travel_date',''),
+            request.form.get('travel_date','').strip(),
+            return_date, return_supplier,
+            outbound_delivery, return_delivery,
+            outbound_status, return_status,
             net, sell, sell - net,
-            request.form.get('status','STILL'),
+            overall,
             request.form.get('remarks','').strip(),
             sale_id
         ))
@@ -700,12 +756,46 @@ def delete_payment_page(pay_id):
 @login_required
 def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    tickets = query_db('''
-        SELECT * FROM sales WHERE travel_date=%s AND deleted=FALSE
+    today_str     = str(date.today())
+
+    # Auto-update outbound statuses
+    execute_db('''
+        UPDATE sales SET outbound_status='DONE'
+        WHERE outbound_delivery != '' AND outbound_delivery <= %s
+          AND outbound_status='PENDING' AND deleted=FALSE AND is_archived=FALSE
+    ''', [today_str])
+    # Auto-update return statuses
+    execute_db('''
+        UPDATE sales SET return_status='DONE'
+        WHERE return_delivery != '' AND return_delivery <= %s
+          AND return_status='PENDING' AND deleted=FALSE AND is_archived=FALSE
+    ''', [today_str])
+    # Update overall status to DONE when all sectors complete
+    execute_db('''
+        UPDATE sales SET status='DONE'
+        WHERE outbound_status='DONE'
+          AND (return_delivery='' OR return_status='DONE')
+          AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
+    ''')
+
+    outbound_tickets = query_db('''
+        SELECT * FROM sales
+        WHERE outbound_delivery=%s AND deleted=FALSE AND is_archived=FALSE
         ORDER BY company, customer
     ''', [tomorrow_date])
+
+    return_tickets = query_db('''
+        SELECT * FROM sales
+        WHERE return_delivery=%s AND deleted=FALSE AND is_archived=FALSE
+        ORDER BY company, customer
+    ''', [tomorrow_date])
+
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
-    return render_template('deliver.html', tickets=tickets, tomorrow=tomorrow_str)
+    return render_template('deliver.html',
+        outbound_tickets=outbound_tickets,
+        return_tickets=return_tickets,
+        tomorrow=tomorrow_str
+    )
 
 # ── Admin DB viewer ───────────────────────────────────────────────────────────
 @app.route('/admin')
