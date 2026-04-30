@@ -813,6 +813,7 @@ def deliver_tomorrow():
 @login_required
 def send_deliver_email():
     import smtplib
+    import threading
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
@@ -908,28 +909,36 @@ def send_deliver_email():
     email_to      = os.environ.get('NOTIFY_EMAIL', smtp_user)
 
     if not smtp_user or not smtp_password:
-        flash('Email not configured. Please set SMTP_USER, SMTP_PASSWORD, and NOTIFY_EMAIL in Render environment variables.', 'danger')
+        flash('Email not configured. Set SMTP_USER, SMTP_PASSWORD, NOTIFY_EMAIL in Render environment variables.', 'danger')
         return redirect(url_for('deliver_tomorrow'))
 
-    try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f'🚨 ALSONDOS — Delivery List for {tomorrow_str} ({len(all_tickets)} tickets)'
-        msg['From']    = smtp_user
-        msg['To']      = email_to
-        msg.attach(MIMEText(html_body, 'html'))
+    # Build message before thread starts
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f'ALSONDOS Delivery List {tomorrow_str} ({len(all_tickets)} tickets)'
+    msg['From']    = smtp_user
+    msg['To']      = email_to
+    msg.attach(MIMEText(html_body, 'html'))
+    msg_string = msg.as_string()
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_user, email_to, msg.as_string())
+    # Send in background so request returns immediately (avoids 502 timeout)
+    def send_background():
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=25) as srv:
+                srv.ehlo()
+                srv.starttls()
+                srv.ehlo()
+                srv.login(smtp_user, smtp_password)
+                srv.sendmail(smtp_user, email_to, msg_string)
+            logger.info(f"Email sent OK to {email_to}")
+        except Exception as ex:
+            logger.error(f"Background email failed: {ex}")
 
-        log_action('EMAIL', 'sales', None,
-                   f"Delivery list for {tomorrow_str} sent to {email_to} — {len(all_tickets)} tickets")
-        flash(f'✅ Delivery list sent to {email_to} — {len(all_tickets)} tickets.', 'success')
-    except Exception as e:
-        logger.error(f"Email send error: {e}")
-        flash(f'❌ Email failed: {str(e)}', 'danger')
+    import threading
+    threading.Thread(target=send_background, daemon=True).start()
 
+    log_action('EMAIL', 'sales', None,
+               f"Delivery list {tomorrow_str} queued to {email_to} ({len(all_tickets)} tickets)")
+    flash(f'Email sending to {email_to} — {len(all_tickets)} tickets. Check inbox in 30 seconds.', 'success')
     return redirect(url_for('deliver_tomorrow'))
 
 # ── Admin DB viewer ───────────────────────────────────────────────────────────
