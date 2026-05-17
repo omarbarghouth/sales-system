@@ -28,12 +28,12 @@
         <div style="background:var(--light);border-radius:8px;padding:16px;text-align:center">
           <div class="kpi-label">Sales to Archive</div>
           <div class="kpi-value" style="color:var(--orange)">{{ preview.sales_count }}</div>
-          <div class="kpi-sub">Total: $ {{ "%.2f"|format(preview.total_sell or 0) }}</div>
+          <div class="kpi-sub">Total: JOD {{ "%.2f"|format(preview.total_sell or 0) }}</div>
         </div>
         <div style="background:var(--light);border-radius:8px;padding:16px;text-align:center">
           <div class="kpi-label">Payments to Archive</div>
           <div class="kpi-value" style="color:var(--orange)">{{ preview.payments_count }}</div>
-          <div class="kpi-sub">Total: $ {{ "%.2f"|format(preview.total_paid or 0) }}</div>
+          <div class="kpi-sub">Total: JOD {{ "%.2f"|format(preview.total_paid or 0) }}</div>
         </div>
       </div>
       <div style="background:#D6EAF8;border:1px solid #2980B9;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#2980B9">

@@ -448,11 +448,47 @@ def index():
         'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
 
+    # Status distribution for pie chart
+    status_counts = query_db("""
+        SELECT
+            SUM(CASE WHEN status='DONE'   THEN 1 ELSE 0 END) as done_count,
+            SUM(CASE WHEN status='STILL'  THEN 1 ELSE 0 END) as still_count,
+            SUM(CASE WHEN status NOT IN ('DONE','STILL') THEN 1 ELSE 0 END) as other_count
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+    """, one=True)
+    if status_counts:
+        stats = dict(stats)
+        stats['done_count']  = status_counts['done_count']  or 0
+        stats['still_count'] = status_counts['still_count'] or 0
+        stats['other_count'] = status_counts['other_count'] or 0
+
+    # Outstanding balances by company
+    outstanding_by_company = query_db("""
+        SELECT s.company,
+               COALESCE(SUM(s.sell),0) as total_sell,
+               COALESCE(SUM(p.paid),0) as total_paid,
+               COALESCE(SUM(s.sell),0) - COALESCE(SUM(p.paid),0) as balance
+        FROM (
+            SELECT company, SUM(sell) as sell
+            FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+            GROUP BY company
+        ) s
+        LEFT JOIN (
+            SELECT company, SUM(amount) as paid
+            FROM payments WHERE deleted=FALSE AND is_archived=FALSE
+            GROUP BY company
+        ) p ON s.company = p.company
+        WHERE (COALESCE(SUM(s.sell),0) - COALESCE(SUM(p.paid),0)) > 0.01
+        ORDER BY balance DESC
+        LIMIT 10
+    """) or []
+
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
         monthly=monthly, top_companies=top_companies,
         tomorrow=tomorrow, companies=companies,
         recent_logs=recent_logs,
+        outstanding_by_company=outstanding_by_company,
         today=date.today().strftime('%d %B %Y')
     )
 
@@ -1047,7 +1083,7 @@ def export_excel():
     ws1.title = "Sales"
     hdrs = ["ID","Sale Date","Company","Customer","From","To","Via",
             "Trip Type","Buy From","Tickets","Travel Date",
-            "Net (USD)","Sell (USD)","Profit (USD)","Status","Remarks"]
+            "Net (JOD)","Sell (JOD)","Profit (JOD)","Status","Remarks"]
     ws1.append(hdrs)
     for col in range(1, len(hdrs)+1):
         c = ws1.cell(row=1, column=col)
@@ -1071,7 +1107,7 @@ def export_excel():
         ws1.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
     ws2 = wb.create_sheet("Payments")
-    pay_hdrs = ["ID","Pay Date","Company","Amount (USD)","Notes"]
+    pay_hdrs = ["ID","Pay Date","Company","Amount (JOD)","Notes"]
     ws2.append(pay_hdrs)
     for col in range(1, len(pay_hdrs)+1):
         c = ws2.cell(row=1, column=col)

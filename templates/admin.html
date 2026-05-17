@@ -11,9 +11,9 @@
 <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
   <div class="kpi-box"><div class="kpi-label">Sales Records</div><div class="kpi-value">{{ db_stats.sales_count }}</div></div>
   <div class="kpi-box"><div class="kpi-label">Payment Records</div><div class="kpi-value">{{ db_stats.payments_count }}</div></div>
-  <div class="kpi-box gold"><div class="kpi-label">Total Revenue</div><div class="kpi-value gold">$ {{ "%.2f"|format(db_stats.total_sell or 0) }}</div></div>
-  <div class="kpi-box green"><div class="kpi-label">Total Profit</div><div class="kpi-value green">$ {{ "%.2f"|format(db_stats.total_profit or 0) }}</div></div>
-  <div class="kpi-box"><div class="kpi-label">Total Collected</div><div class="kpi-value">$ {{ "%.2f"|format(db_stats.total_paid or 0) }}</div></div>
+  <div class="kpi-box gold"><div class="kpi-label">Total Revenue</div><div class="kpi-value gold">JOD {{ "%.2f"|format(db_stats.total_sell or 0) }}</div></div>
+  <div class="kpi-box green"><div class="kpi-label">Total Profit</div><div class="kpi-value green">JOD {{ "%.2f"|format(db_stats.total_profit or 0) }}</div></div>
+  <div class="kpi-box"><div class="kpi-label">Total Collected</div><div class="kpi-value">JOD {{ "%.2f"|format(db_stats.total_paid or 0) }}</div></div>
 </div>
 
 <div class="filter-bar" style="margin-bottom:12px">
@@ -57,7 +57,7 @@
 {% if table=='sales' %}
 <div style="margin-bottom:8px;color:var(--muted);font-size:13px">
   Showing <strong>{{ sales|length }}</strong> of <strong>{{ total_rows }}</strong> records
-  {% if sales %}— Sell: <strong class="text-gold">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</strong> | Profit: <strong class="text-green">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</strong>{% endif %}
+  {% if sales %}— Sell: <strong class="text-gold">JOD {{ "%.2f"|format(sales|sum(attribute='sell')) }}</strong> | Profit: <strong class="text-green">JOD {{ "%.2f"|format(sales|sum(attribute='profit')) }}</strong>{% endif %}
 </div>
 <div class="table-wrap">
   <table>
@@ -105,9 +105,9 @@
     <tfoot>
       <tr>
         <td colspan="10">TOTALS — {{ sales|length }} shown / {{ total_rows }} total</td>
-        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='net')) }}</td>
-        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='sell')) }}</td>
-        <td class="text-right">$ {{ "%.2f"|format(sales|sum(attribute='profit')) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(sales|sum(attribute='net')) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(sales|sum(attribute='sell')) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(sales|sum(attribute='profit')) }}</td>
         <td colspan="3"></td>
       </tr>
     </tfoot>
@@ -119,7 +119,7 @@
 {% else %}
 <div style="margin-bottom:8px;color:var(--muted);font-size:13px">
   Showing <strong>{{ payments|length }}</strong> of <strong>{{ total_rows }}</strong> records
-  {% if payments %}— Total: <strong class="text-green">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</strong>{% endif %}
+  {% if payments %}— Total: <strong class="text-green">JOD {{ "%.2f"|format(payments|sum(attribute='amount')) }}</strong>{% endif %}
 </div>
 <div class="table-wrap">
   <table>
@@ -132,7 +132,7 @@
         <td class="text-muted" style="font-size:11px">{{ p.id }}</td>
         <td><strong>{{ p.pay_date }}</strong></td>
         <td><strong style="color:var(--navy)">{{ p.company }}</strong></td>
-        <td class="text-right text-green"><strong>$ {{ "%.2f"|format(p.amount) }}</strong></td>
+        <td class="text-right text-green"><strong>JOD {{ "%.2f"|format(p.amount) }}</strong></td>
         <td class="text-muted">{{ p.notes }}</td>
         <td class="text-muted" style="font-size:11px">{{ p.created_at }}</td>
         <td class="no-print">
@@ -150,7 +150,7 @@
     <tfoot>
       <tr>
         <td colspan="3">TOTAL — {{ payments|length }} shown / {{ total_rows }} total</td>
-        <td class="text-right">$ {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
+        <td class="text-right">JOD {{ "%.2f"|format(payments|sum(attribute='amount')) }}</td>
         <td colspan="3"></td>
       </tr>
     </tfoot>

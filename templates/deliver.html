@@ -1,213 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Deliver Tomorrow — ALSONDOS TRAVEL{% endblock %}
+{% block title %}Delivery List — {{ tomorrow }} — ALSONDOS{% endblock %}
 
 {% block content %}
-<div class="page-header no-print">
-  <h1>🚨 Deliver Tomorrow</h1>
-  <p>All tickets scheduled for delivery tomorrow — must be delivered today</p>
-</div>
-
-{% set total_outbound = outbound_tickets|length %}
-{% set total_return   = return_tickets|length %}
-{% set total_travel   = travel_date_tickets|length %}
-{% set grand_total    = total_outbound + total_return + total_travel %}
-
-{% if grand_total > 0 %}
-<div class="deliver-banner">
-  <div class="deliver-icon">🚨</div>
-  <div>
-    <div class="deliver-title">Tickets to Deliver Tomorrow</div>
-    <div class="deliver-sub">{{ tomorrow }} — Deliver these tickets TODAY</div>
-    <div style="margin-top:6px;font-size:13px;opacity:.85">
-      {% if total_outbound > 0 %}✈️ Outbound: <strong>{{ total_outbound }}</strong> &nbsp;|&nbsp;{% endif %}
-      {% if total_return > 0 %}🔄 Return: <strong>{{ total_return }}</strong> &nbsp;|&nbsp;{% endif %}
-      {% if total_travel > 0 %}🎫 By Travel Date: <strong>{{ total_travel }}</strong>{% endif %}
-    </div>
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-truck" style="color:var(--red)"></i> Ticket Delivery — {{ tomorrow }}</h1>
+    <p>All tickets to be delivered for {{ tomorrow }}</p>
   </div>
-  <div class="deliver-count">{{ grand_total }}</div>
+  <div class="page-header-actions no-print">
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print List</button>
+    <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
+    </form>
+  </div>
 </div>
 
-<div class="no-print" style="margin-bottom:16px;display:flex;gap:12px">
-  <button onclick="window.print()" class="btn btn-primary">🖨 Print Delivery List</button>
-  <form method="POST" action="{{ url_for('send_deliver_email') }}"
-        onsubmit="return confirm('Send delivery list for {{ tomorrow }} to your email?')">
-    <button type="submit" class="btn btn-gold">📧 Send to Email</button>
-  </form>
+{% set total_out = outbound_tickets|length %}
+{% set total_ret = return_tickets|length %}
+{% set total_old = travel_date_tickets|length %}
+{% set grand = total_out + total_ret + total_old %}
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+  <div class="kpi-box blue">
+    <div class="kpi-label">Outbound Tickets</div>
+    <div class="kpi-value">{{ total_out }}</div>
+  </div>
+  <div class="kpi-box gold">
+    <div class="kpi-label">Return Tickets</div>
+    <div class="kpi-value gold">{{ total_ret }}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-label">Travel Date</div>
+    <div class="kpi-value">{{ total_old }}</div>
+  </div>
 </div>
 
-<!-- ── OUTBOUND TICKETS (new system) ───────────────────────────────────────── -->
-{% if outbound_tickets %}
-<h3 style="color:var(--navy);font-size:15px;padding:10px 0 8px">✈️ Outbound Tickets — by Delivery Date ({{ total_outbound }})</h3>
-<div class="table-wrap" style="margin-bottom:24px">
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Company</th>
-        <th>Customer</th>
-        <th>From</th>
-        <th>To</th>
-        <th>Departure</th>
-        <th>Delivery Date</th>
-        <th>Supplier</th>
-        <th class="text-center">Tkts</th>
-        <th>Status</th>
-        <th class="no-print">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for t in outbound_tickets %}
-      <tr {% if t.outbound_status=='DONE' %}style="background:#D5F0DD"{% endif %}>
-        <td><strong>{{ loop.index }}</strong></td>
-        <td><strong style="color:var(--navy)">{{ t.company }}</strong></td>
-        <td><strong>{{ t.customer }}</strong></td>
-        <td><strong>{{ t.from_loc }}</strong></td>
-        <td><strong>{{ t.to_loc }}</strong></td>
-        <td>{{ t.travel_date }}</td>
-        <td><strong style="color:var(--red)">{{ t.outbound_delivery }}</strong></td>
-        <td class="text-muted">{{ t.buy_from }}</td>
-        <td class="text-center">{{ t.tickets }}</td>
-        <td>
-          {% if t.outbound_status == 'DONE' %}
-            <span class="badge badge-done">✅ DONE</span>
-          {% else %}
-            <span class="badge badge-still">⏳ PENDING</span>
-          {% endif %}
-        </td>
-        <td class="no-print">
-          <a href="{{ url_for('edit_sale', sale_id=t.id) }}" class="btn btn-edit">✏️ Edit</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="8">TOTAL OUTBOUND</td>
-        <td class="text-center">{{ outbound_tickets|sum(attribute='tickets') }}</td>
-        <td colspan="2"></td>
-      </tr>
-    </tfoot>
-  </table>
+{% if grand == 0 %}
+<div style="background:var(--green-lt);border:2px solid var(--green);border-radius:var(--radius);padding:28px;text-align:center;color:var(--green)">
+  <i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px"></i>
+  <div style="font-size:17px;font-weight:700">No tickets to deliver tomorrow</div>
+  <div style="opacity:.7;margin-top:4px">Your team is clear for {{ tomorrow }}</div>
 </div>
 {% endif %}
 
-<!-- ── RETURN TICKETS (new system) ─────────────────────────────────────────── -->
-{% if return_tickets %}
-<h3 style="color:var(--accent);font-size:15px;padding:10px 0 8px">🔄 Return Tickets — by Return Delivery Date ({{ total_return }})</h3>
-<div class="table-wrap" style="margin-bottom:24px">
-  <table>
-    <thead>
-      <tr style="background:#2980B9">
-        <th>#</th>
-        <th>Company</th>
-        <th>Customer</th>
-        <th>Route</th>
-        <th>Return Date</th>
-        <th>Return Delivery</th>
-        <th>Return Supplier</th>
-        <th class="text-center">Tkts</th>
-        <th>Return Status</th>
-        <th class="no-print">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for t in return_tickets %}
-      <tr {% if t.return_status=='DONE' %}style="background:#D5F0DD"{% endif %}>
-        <td><strong>{{ loop.index }}</strong></td>
-        <td><strong style="color:var(--navy)">{{ t.company }}</strong></td>
-        <td><strong>{{ t.customer }}</strong></td>
-        <td>{{ t.from_loc }}-{{ t.to_loc }}</td>
-        <td>{{ t.return_date }}</td>
-        <td><strong style="color:var(--red)">{{ t.return_delivery }}</strong></td>
-        <td class="text-muted">{{ t.return_supplier }}</td>
-        <td class="text-center">{{ t.tickets }}</td>
-        <td>
-          {% if t.return_status == 'DONE' %}
-            <span class="badge badge-done">✅ DONE</span>
-          {% else %}
-            <span class="badge badge-still">⏳ PENDING</span>
-          {% endif %}
-        </td>
-        <td class="no-print">
-          <a href="{{ url_for('edit_sale', sale_id=t.id) }}" class="btn btn-edit">✏️ Edit</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="7">TOTAL RETURN</td>
-        <td class="text-center">{{ return_tickets|sum(attribute='tickets') }}</td>
-        <td colspan="2"></td>
-      </tr>
-    </tfoot>
-  </table>
+{% macro ticket_table(tickets, title, icon, color) %}
+{% if tickets %}
+<div class="card mb-4">
+  <div class="card-header" style="background:{{ color }}">
+    <i class="fas fa-{{ icon }}"></i> {{ title }} ({{ tickets|length }})
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th>
+          <th>Via</th><th>Buy From</th><th>Tickets</th><th>Travel Date</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><strong>{{ t.company }}</strong></td>
+          <td>{{ t.customer }}</td>
+          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
+          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
+          <td class="text-muted">{{ t.via or '—' }}</td>
+          <td style="font-size:12.5px">{{ t.buy_from or t.return_supplier or '—' }}</td>
+          <td class="text-center"><strong>{{ t.tickets }}</strong></td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or t.return_date or '—' }}</td>
+          <td>
+            <span class="badge badge-{% if (t.outbound_status or t.status)=='DONE' %}done{% else %}still{% endif %}">
+              {{ t.outbound_status or t.status or 'PENDING' }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
+{% endmacro %}
 
-<!-- ── OLD-STYLE TICKETS (by travel_date) ──────────────────────────────────── -->
-{% if travel_date_tickets %}
-<h3 style="color:var(--grey);font-size:15px;padding:10px 0 8px">🎫 Tickets by Travel Date ({{ total_travel }})</h3>
-<div class="table-wrap" style="margin-bottom:24px">
-  <table>
-    <thead>
-      <tr style="background:#2C3E50">
-        <th>#</th>
-        <th>Company</th>
-        <th>Customer</th>
-        <th>From</th>
-        <th>To</th>
-        <th>Via</th>
-        <th>Travel Date</th>
-        <th>Buy From</th>
-        <th class="text-center">Tkts</th>
-        <th>Status</th>
-        <th class="no-print">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for t in travel_date_tickets %}
-      <tr {% if t.status=='DONE' %}style="background:#D5F0DD"{% endif %}>
-        <td><strong>{{ loop.index }}</strong></td>
-        <td><strong style="color:var(--navy)">{{ t.company }}</strong></td>
-        <td><strong>{{ t.customer }}</strong></td>
-        <td><strong>{{ t.from_loc }}</strong></td>
-        <td><strong>{{ t.to_loc }}</strong></td>
-        <td class="text-muted">{{ t.via }}</td>
-        <td><strong style="color:var(--red)">{{ t.travel_date }}</strong></td>
-        <td class="text-muted">{{ t.buy_from }}</td>
-        <td class="text-center">{{ t.tickets }}</td>
-        <td>
-          <span class="badge badge-{{ t.status|lower if t.status else 'still' }}">
-            {{ t.status or 'STILL' }}
-          </span>
-        </td>
-        <td class="no-print">
-          <a href="{{ url_for('edit_sale', sale_id=t.id) }}" class="btn btn-edit">✏️ Edit</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="8">TOTAL BY TRAVEL DATE</td>
-        <td class="text-center">{{ travel_date_tickets|sum(attribute='tickets') }}</td>
-        <td colspan="2"></td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-{% endif %}
-
-{% else %}
-<div class="card" style="text-align:center;padding:60px">
-  <div style="font-size:56px;margin-bottom:16px">✅</div>
-  <h2 style="color:var(--green);margin-bottom:8px">No Tickets to Deliver Tomorrow</h2>
-  <p class="text-muted">No outbound, return, or travel-date tickets scheduled for tomorrow.</p>
-  {% if tomorrow %}
-  <p style="margin-top:16px;color:var(--muted);font-size:13px">Checking for: <strong>{{ tomorrow }}</strong></p>
-  {% endif %}
-</div>
-{% endif %}
+{{ ticket_table(outbound_tickets, 'Outbound Tickets', 'plane-departure', '#1B3A6B') }}
+{{ ticket_table(return_tickets, 'Return Tickets', 'plane-arrival', '#8B6914') }}
+{{ ticket_table(travel_date_tickets, 'Travel Date Tickets (legacy)', 'calendar-check', '#2C3E50') }}
 
 {% endblock %}

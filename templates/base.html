@@ -3,51 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}ALSONDOS TRAVEL{% endblock %}</title>
+<title>{% block title %}ALSONDOS TRAVEL ERP{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<style>
 {% block extra_css %}{% endblock %}
-.user-badge{display:flex;align-items:center;gap:8px;margin-left:auto;color:rgba(255,255,255,0.85);font-size:13px}
-.role-tag{padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px}
-.role-tag.admin{background:rgba(200,168,75,0.3);color:#C8A84B}
-.role-tag.user{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.75)}
-.btn-logout{background:rgba(192,57,43,0.75);color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;transition:background .2s}
-.btn-logout:hover{background:#C0392B;color:#fff}
-.flash-container{position:fixed;top:68px;right:18px;z-index:1000;display:flex;flex-direction:column;gap:8px;max-width:360px}
-.flash-msg{padding:12px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:10px}
-.flash-danger{background:#FAD7D3;color:#C0392B;border-left:4px solid #C0392B}
-.flash-success{background:#D5F0DD;color:#1E7B34;border-left:4px solid #1E7B34}
-.flash-warning{background:#FDEBD0;color:#E67E22;border-left:4px solid #E67E22}
-.flash-info{background:#D6EAF8;color:#2980B9;border-left:4px solid #2980B9}
-.pagination{display:flex;align-items:center;gap:6px;margin-top:18px;justify-content:center;flex-wrap:wrap}
-.pagination a,.pagination span{padding:7px 13px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:var(--card);color:var(--navy);transition:all .18s}
-.pagination a:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
-.pagination .active{background:var(--navy);color:#fff;border-color:var(--navy)}
-.pagination .disabled{color:var(--muted);cursor:default;pointer-events:none}
-.page-info{color:var(--muted);font-size:12px;margin-top:6px;text-align:center}
-</style>
 </head>
 <body>
+
 <nav>
-  <a href="{{ url_for('index') }}" class="nav-brand">✈ ALSONDOS TRAVEL</a>
+  <a href="{{ url_for('index') }}" class="nav-brand">
+    <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel"/>
+  </a>
   <div class="nav-links">
-    <a href="{{ url_for('index') }}"            class="{% if request.endpoint=='index' %}active{% endif %}">📊 <span>Dashboard</span></a>
-    <a href="{{ url_for('sales_report') }}"     class="{% if request.endpoint=='sales_report' %}active{% endif %}">📋 <span>Sales</span></a>
-    <a href="{{ url_for('statement') }}"        class="{% if request.endpoint=='statement' %}active{% endif %}">🏢 <span>Statement</span></a>
-    <a href="{{ url_for('payments') }}"         class="{% if request.endpoint=='payments' %}active{% endif %}">💳 <span>Payments</span></a>
-    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">🚨 <span>Deliver</span></a>
+    <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">
+      <i class="fas fa-chart-pie"></i> <span>Dashboard</span>
+    </a>
+    <a href="{{ url_for('sales_report') }}" class="{% if request.endpoint=='sales_report' %}active{% endif %}">
+      <i class="fas fa-exchange-alt"></i> <span>Sales</span>
+    </a>
+    <a href="{{ url_for('statement') }}" class="{% if request.endpoint=='statement' %}active{% endif %}">
+      <i class="fas fa-file-invoice-dollar"></i> <span>Statement</span>
+    </a>
+    <a href="{{ url_for('payments') }}" class="{% if request.endpoint=='payments' %}active{% endif %}">
+      <i class="fas fa-money-bill-wave"></i> <span>Payments</span>
+    </a>
+    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
+      <i class="fas fa-truck"></i> <span>Deliver</span>
+    </a>
     {% if is_admin %}
-      <a href="{{ url_for('admin') }}"          class="{% if request.endpoint=='admin' %}active{% endif %}">🗄️ <span>Admin</span></a>
-      <a href="{{ url_for('audit_log') }}"      class="{% if request.endpoint=='audit_log' %}active{% endif %}">📜 <span>Audit</span></a>
-      <a href="{{ url_for('archive') }}"        class="{% if request.endpoint=='archive' or request.endpoint=='do_archive' %}active{% endif %}">📦 <span>Archive</span></a>
-      <a href="{{ url_for('manage_users') }}"   class="{% if request.endpoint=='manage_users' %}active{% endif %}">👥 <span>Users</span></a>
+      <a href="{{ url_for('admin') }}" class="{% if request.endpoint=='admin' %}active{% endif %}">
+        <i class="fas fa-database"></i> <span>Admin</span>
+      </a>
+      <a href="{{ url_for('audit_log') }}" class="{% if request.endpoint=='audit_log' %}active{% endif %}">
+        <i class="fas fa-clipboard-list"></i> <span>Audit</span>
+      </a>
+      <a href="{{ url_for('archive') }}" class="{% if request.endpoint in ('archive','do_archive') %}active{% endif %}">
+        <i class="fas fa-archive"></i> <span>Archive</span>
+      </a>
+      <a href="{{ url_for('manage_users') }}" class="{% if request.endpoint=='manage_users' %}active{% endif %}">
+        <i class="fas fa-users"></i> <span>Users</span>
+      </a>
     {% endif %}
     {% if logged_in %}
-      <a href="{{ url_for('add_sale') }}" class="btn-add">➕ <span>New Sale</span></a>
+      <a href="{{ url_for('add_sale') }}" class="btn-add">
+        <i class="fas fa-plus"></i> <span>New Sale</span>
+      </a>
       <div class="user-badge">
+        <i class="fas fa-user-circle" style="font-size:15px;color:rgba(255,255,255,.5)"></i>
         <span>{{ session.username }}</span>
         <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role=='admin' else '👤 User' }}</span>
-        <a href="{{ url_for('logout') }}" class="btn-logout">⏏ Logout</a>
+        <a href="{{ url_for('logout') }}" class="btn-logout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
       </div>
     {% endif %}
   </div>
@@ -58,16 +67,22 @@
 <div class="flash-container" id="flashBox">
   {% for cat, msg in messages %}
   <div class="flash-msg flash-{{ cat }}">
-    <span>{% if cat=='success' %}✅{% elif cat=='danger' %}❌{% elif cat=='warning' %}⚠️{% else %}ℹ️{% endif %}</span>
+    <i class="fas fa-{% if cat=='success' %}check-circle{% elif cat=='danger' %}exclamation-circle{% elif cat=='warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
     {{ msg }}
   </div>
   {% endfor %}
 </div>
-<script>setTimeout(()=>{var e=document.getElementById('flashBox');if(e)e.style.transition='opacity .5s',e.style.opacity=0,setTimeout(()=>e.remove(),500)},4000);</script>
+<script>
+setTimeout(function(){
+  var e=document.getElementById('flashBox');
+  if(e){e.style.transition='opacity .5s';e.style.opacity=0;setTimeout(function(){e.remove()},500);}
+},4500);
+</script>
 {% endif %}
 {% endwith %}
 
 <div class="container">{% block content %}{% endblock %}</div>
-<script>{% block extra_js %}{% endblock %}</script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>

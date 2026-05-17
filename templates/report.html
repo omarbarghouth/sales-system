@@ -1,129 +1,171 @@
 {% extends "base.html" %}
-{% from "pagination_macro.html" import render_pagination %}
 {% block title %}Sales Report — ALSONDOS TRAVEL{% endblock %}
 
 {% block content %}
-<div class="page-header no-print">
-  <h1>📋 Sales Report</h1>
-  <p>All transactions with filters, totals and pagination</p>
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-exchange-alt"></i> Sales Report</h1>
+    <p>{{ totals.count }} transactions · JOD {{ "%.3f"|format(totals.sell or 0) }} total revenue</p>
+  </div>
+  <div class="page-header-actions no-print">
+    {% if is_admin %}
+    <a href="{{ url_for('add_sale') }}" class="btn btn-red">
+      <i class="fas fa-plus"></i> New Sale
+    </a>
+    {% endif %}
+    <a href="{{ url_for('export_excel') }}" class="btn btn-gold">
+      <i class="fas fa-file-excel"></i> Export Excel
+    </a>
+    <button onclick="window.print()" class="btn btn-print">
+      <i class="fas fa-print"></i> Print
+    </button>
+  </div>
 </div>
 
-<div class="kpi-grid no-print" style="grid-template-columns:repeat(4,1fr)">
-  <div class="kpi-box gold">
-    <div class="kpi-label">Total Sell</div>
-    <div class="kpi-value gold">JOD {{ "%.2f"|format(totals.sell) }}</div>
-    <div class="kpi-sub">{{ totals.count }} transactions</div>
-  </div>
+{# ── Filters ──────────────────────────────────────────────── #}
+<div class="filter-bar no-print">
+  <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
+    <div class="form-group" style="flex:2;min-width:180px">
+      <label>Company</label>
+      <select name="company" onchange="this.form.submit()">
+        <option value="">All Companies</option>
+        {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="min-width:150px">
+      <label>Status</label>
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        <option value="STILL"  {% if filters.status=='STILL'  %}selected{% endif %}>Still</option>
+        <option value="DONE"   {% if filters.status=='DONE'   %}selected{% endif %}>Done</option>
+        <option value="CANCEL" {% if filters.status=='CANCEL' %}selected{% endif %}>Cancelled</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:140px">
+      <label>Date From</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
+    </div>
+    <div class="form-group" style="min-width:140px">
+      <label>Date To</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
+    </div>
+    <div style="display:flex;gap:8px;align-self:flex-end">
+      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
+      {% if filters.company or filters.status or filters.date_from or filters.date_to %}
+      <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm"><i class="fas fa-times"></i></a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{# ── Summary KPIs ─────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
   <div class="kpi-box">
-    <div class="kpi-label">Total Net Cost</div>
-    <div class="kpi-value">JOD {{ "%.2f"|format(totals.net) }}</div>
+    <div class="kpi-label">Transactions</div>
+    <div class="kpi-value">{{ totals.count }}</div>
+  </div>
+  <div class="kpi-box gold">
+    <div class="kpi-label">Revenue</div>
+    <div class="kpi-value gold" style="font-size:16px">JOD {{ "%.3f"|format(totals.sell or 0) }}</div>
+  </div>
+  <div class="kpi-box" style="border-top-color:var(--muted)">
+    <div class="kpi-label">Net Cost</div>
+    <div class="kpi-value" style="font-size:16px;color:var(--muted)">JOD {{ "%.3f"|format(totals.net or 0) }}</div>
   </div>
   <div class="kpi-box green">
-    <div class="kpi-label">Total Profit</div>
-    <div class="kpi-value green">JOD {{ "%.2f"|format(totals.profit) }}</div>
-    <div class="kpi-sub">{{ "%.1f"|format((totals.profit / totals.sell * 100) if totals.sell else 0) }}% margin</div>
-  </div>
-  <div class="kpi-box">
-    <div class="kpi-label">Showing</div>
-    <div class="kpi-value">{{ sales|length }}</div>
-    <div class="kpi-sub">of {{ total_rows }} records</div>
+    <div class="kpi-label">Profit</div>
+    <div class="kpi-value green" style="font-size:16px">JOD {{ "%.3f"|format(totals.profit or 0) }}</div>
   </div>
 </div>
 
-<form method="GET" class="filter-bar no-print">
-  <div class="form-group">
-    <label>Company</label>
-    <select name="company">
-      <option value="">All Companies</option>
-      {% for co in companies %}
-      <option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="form-group">
-    <label>Status</label>
-    <select name="status">
-      <option value="">All</option>
-      <option value="DONE"      {% if filters.status=='DONE'      %}selected{% endif %}>Done</option>
-      <option value="STILL"     {% if filters.status=='STILL'     %}selected{% endif %}>Still</option>
-      <option value="CANCELLED" {% if filters.status=='CANCELLED' %}selected{% endif %}>Cancelled</option>
-    </select>
-  </div>
-  <div class="form-group">
-    <label>Date From</label>
-    <input type="date" name="date_from" value="{{ filters.date_from }}">
-  </div>
-  <div class="form-group">
-    <label>Date To</label>
-    <input type="date" name="date_to" value="{{ filters.date_to }}">
-  </div>
-  <button type="submit" class="btn btn-primary">🔍 Filter</button>
-  <a href="{{ url_for('sales_report') }}" class="btn btn-print">✕ Clear</a>
-  <button type="button" onclick="window.print()" class="btn btn-gold">🖨 Print</button>
-  {% if is_admin %}
-  <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Excel</a>
-  {% endif %}
-</form>
-
+{# ── Table ────────────────────────────────────────────────── #}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>#</th>
-        <th>Sale Date</th>
-        <th>Company</th>
-        <th>Customer</th>
-        <th>Route</th>
-        <th>Type</th>
-        <th class="text-center">Tkts</th>
-        <th>Travel Date</th>
-        <th class="text-right">Net</th>
-        <th class="text-right">Sell</th>
-        <th class="text-right">Profit</th>
-        <th>Status</th>
-        {% if is_admin %}<th class="no-print">Actions</th>{% endif %}
+        <th>ID</th><th>Date</th><th>Company</th><th>Customer</th>
+        <th>Route</th><th>Buy From / Return Supplier</th><th>Tix</th>
+        <th>Travel Date</th><th class="text-right">Net (JOD)</th>
+        <th class="text-right">Sell (JOD)</th><th class="text-right">Profit (JOD)</th>
+        <th>Status</th>{% if is_admin %}<th>Actions</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for s in sales %}
       <tr>
-        <td class="text-muted" style="font-size:11px">{{ s.id }}</td>
-        <td>{{ s.sale_date }}</td>
-        <td><a href="{{ url_for('statement', company=s.company) }}" style="color:var(--navy);font-weight:600">{{ s.company }}</a></td>
-        <td><strong>{{ s.customer }}</strong></td>
-        <td><strong>{{ s.from_loc }}-{{ s.to_loc }}</strong>{% if s.via %} <span class="text-muted">via {{ s.via }}</span>{% endif %}</td>
-        <td class="text-muted">{{ s.trip_type }}</td>
+        <td style="color:var(--muted);font-size:11.5px">{{ s.id }}</td>
+        <td style="white-space:nowrap;font-size:12.5px">{{ s.sale_date }}</td>
+        <td>
+          <a href="{{ url_for('statement', company=s.company) }}"
+             style="color:var(--navy);font-weight:700;text-decoration:none;font-size:13px">
+            {{ s.company }}
+          </a>
+        </td>
+        <td style="font-size:13px">{{ s.customer }}</td>
+        <td style="white-space:nowrap">
+          <strong>{{ s.from_loc }}</strong>
+          <span style="color:var(--gold);margin:0 2px">→</span>
+          <strong>{{ s.to_loc }}</strong>
+          {% if s.via %}<br><span style="color:var(--muted);font-size:11px">via {{ s.via }}</span>{% endif %}
+        </td>
+        <td style="font-size:12px">
+          {% if s.buy_from %}<span title="Outbound">✈ {{ s.buy_from }}</span>{% endif %}
+          {% if s.return_supplier %}<br><span style="color:var(--gold-dk)" title="Return">↩ {{ s.return_supplier }}</span>{% endif %}
+          {% if not s.buy_from and not s.return_supplier %}—{% endif %}
+        </td>
         <td class="text-center">{{ s.tickets }}</td>
-        <td class="text-muted">{{ s.travel_date }}</td>
-        <td class="text-right">{{ "%.2f"|format(s.net) }}</td>
-        <td class="text-right text-gold"><strong>{{ "%.2f"|format(s.sell) }}</strong></td>
-        <td class="text-right {% if s.profit >= 0 %}text-green{% else %}text-red{% endif %}"><strong>{{ "%.2f"|format(s.profit) }}</strong></td>
-        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+        <td style="font-size:12.5px;white-space:nowrap">
+          {% if s.travel_date %}<span style="color:var(--navy);font-weight:600">{{ s.travel_date }}</span>{% endif %}
+          {% if s.return_date %}<br><span style="color:var(--gold-dk);font-size:11.5px">↩ {{ s.return_date }}</span>{% endif %}
+          {% if not s.travel_date and not s.return_date %}—{% endif %}
+        </td>
+        <td class="text-right text-muted">{{ "%.3f"|format(s.net) }}</td>
+        <td class="text-right td-money">{{ "%.3f"|format(s.sell) }}</td>
+        <td class="text-right text-green">{{ "%.3f"|format(s.profit) }}</td>
+        <td>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+            {% if s.outbound_status %}
+            <span class="badge badge-{% if s.outbound_status=='DONE' %}done{% else %}still{% endif %}" style="font-size:9px">
+              ✈ {{ s.outbound_status }}
+            </span>
+            {% endif %}
+            {% if s.return_date and s.return_status %}
+            <span class="badge badge-{% if s.return_status=='DONE' %}done{% else %}pending{% endif %}" style="font-size:9px">
+              ↩ {{ s.return_status }}
+            </span>
+            {% endif %}
+          </div>
+        </td>
         {% if is_admin %}
-        <td class="no-print">
-          <div class="gap-8">
-            <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit">✏️</a>
+        <td>
+          <div style="display:flex;gap:5px">
+            <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit" title="Edit">
+              <i class="fas fa-pencil-alt"></i>
+            </a>
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
-                  onsubmit="return confirm('⚠️ Delete sale for {{ s.customer }}?\nThis cannot be undone.')">
-              <button type="submit" class="btn btn-danger">🗑</button>
+                  onsubmit="return confirm('Delete this transaction? This cannot be undone.')">
+              <button type="submit" class="btn btn-danger" title="Delete">
+                <i class="fas fa-trash"></i>
+              </button>
             </form>
           </div>
         </td>
         {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="13" class="text-center text-muted" style="padding:40px">
-        No transactions found. {% if is_admin %}<a href="{{ url_for('add_sale') }}">Add the first one →</a>{% endif %}
+      <tr><td colspan="{% if is_admin %}13{% else %}12{% endif %}" class="text-center" style="padding:32px;color:var(--muted)">
+        No transactions found. <a href="{{ url_for('add_sale') }}" style="color:var(--navy);font-weight:700">Add one →</a>
       </td></tr>
       {% endfor %}
     </tbody>
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="8">TOTALS (all {{ total_rows }} records)</td>
-        <td class="text-right">JOD {{ "%.2f"|format(totals.net) }}</td>
-        <td class="text-right">JOD {{ "%.2f"|format(totals.sell) }}</td>
-        <td class="text-right">JOD {{ "%.2f"|format(totals.profit) }}</td>
+        <td colspan="{% if is_admin %}8{% else %}7{% endif %}">TOTALS — {{ totals.count }} records</td>
+        <td class="text-right" style="color:rgba(255,255,255,.65)">{{ "%.3f"|format(totals.net or 0) }}</td>
+        <td class="text-right" style="color:var(--gold);font-size:14px">{{ "%.3f"|format(totals.sell or 0) }}</td>
+        <td class="text-right" style="color:#6dd58a;font-size:14px">{{ "%.3f"|format(totals.profit or 0) }}</td>
         <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
       </tr>
     </tfoot>
@@ -131,5 +173,8 @@
   </table>
 </div>
 
-{{ render_pagination(page, total_pages, total_rows, 'sales_report', filters) }}
+{# Pagination #}
+{% from 'pagination_macro.html' import render_pagination %}
+{{ render_pagination(page, total_pages, total_rows) }}
+
 {% endblock %}
