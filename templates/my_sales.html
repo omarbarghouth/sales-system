@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}My Sales — ALSONDOS{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-exchange-alt"></i> My Transactions</h1>
+    <p>{{ totals.count }} transactions · JOD {{ "%.2f"|format(totals.sell) }} revenue · JOD {{ "%.2f"|format(totals.profit) }} profit</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('add_sale_v2') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
+  </div>
+</div>
+
+<div class="filter-bar no-print">
+  <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
+    <div class="form-group" style="flex:2;min-width:150px"><label>Company</label>
+      <select name="company" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="min-width:130px"><label>Status</label>
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="STILL" {% if filters.status=='STILL' %}selected{% endif %}>Still</option>
+        <option value="DONE"  {% if filters.status=='DONE'  %}selected{% endif %}>Done</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:130px"><label>From</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
+    </div>
+    <div class="form-group" style="min-width:130px"><label>To</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
+    </div>
+    {% if filters.company or filters.status or filters.date_from or filters.date_to %}
+    <a href="{{ url_for('my_sales') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th>ID</th><th>Date</th><th>Company</th><th>Customer</th>
+      <th>Route</th><th>Tix</th><th>Travel</th>
+      <th class="text-right">Sell (JOD)</th><th class="text-right">Profit (JOD)</th>
+      <th>Status</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td class="text-muted" style="font-size:11.5px">{{ s.id }}</td>
+        <td style="font-size:12.5px">{{ s.sale_date }}</td>
+        <td><strong>{{ s.company }}</strong></td>
+        <td>{{ s.customer }}</td>
+        <td><strong>{{ s.from_loc }}</strong> <span style="color:var(--gold)">→</span> <strong>{{ s.to_loc }}</strong>{% if s.via %}<br><span style="font-size:11px;color:var(--muted)">via {{ s.via }}</span>{% endif %}</td>
+        <td class="text-center">{{ s.tickets }}</td>
+        <td style="font-size:12.5px">{{ s.travel_date or '—' }}</td>
+        <td class="text-right text-gold">{{ "%.2f"|format(s.sell|float) }}</td>
+        <td class="text-right text-green">{{ "%.2f"|format(s.profit|float) }}</td>
+        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-sm btn-outline" title="Invoice" style="font-size:11px;padding:5px 8px"><i class="fas fa-file-invoice"></i></a>
+            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-sm btn-outline" title="Voucher" style="font-size:11px;padding:5px 8px"><i class="fas fa-hotel"></i></a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
+      {% endfor %}
+    </tbody>
+    {% if sales %}
+    <tfoot>
+      <tr>
+        <td colspan="7">TOTALS — {{ totals.count }} transactions</td>
+        <td class="text-right" style="color:var(--gold);font-size:14px">{{ "%.2f"|format(totals.sell) }}</td>
+        <td class="text-right" style="color:#6dd58a;font-size:14px">{{ "%.2f"|format(totals.profit) }}</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+{% from 'pagination_macro.html' import render_pagination %}
+{{ render_pagination(page, total_pages, total_rows) }}
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if inv else 'New' }} Invoice — ALSONDOS{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-file-invoice"></i> {{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
+    <p>{{ 'Update invoice details' if inv else 'Create a professional invoice' }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+<div class="card" style="max-width:780px">
+  <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
+  <div class="card-body">
+    <form method="POST">
+      {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
+      {% if inv %}<input type="hidden" name="sale_id" value="{{ inv.sale_id or '' }}">{% endif %}
+      <div class="form-grid form-grid-2" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>Company / Client <span style="color:var(--red)">*</span></label>
+          <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700"
+                 value="{{ inv.company if inv else (sale.company if sale else '') }}">
+          <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+        </div>
+        <div class="form-group">
+          <label>Customer Name <span style="color:var(--red)">*</span></label>
+          <input type="text" name="customer" required style="text-transform:uppercase"
+                 value="{{ inv.customer if inv else (sale.customer if sale else '') }}">
+        </div>
+        <div class="form-group">
+          <label>Invoice Date <span style="color:var(--red)">*</span></label>
+          <input type="date" name="invoice_date" required
+                 value="{{ inv.invoice_date if inv else today }}">
+        </div>
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" name="due_date" value="{{ inv.due_date if inv else '' }}">
+        </div>
+        <div class="form-group">
+          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
+          <input type="number" name="amount" step="0.001" min="0" required id="inv-amount"
+                 oninput="calcTotal()" style="font-size:16px;font-weight:700"
+                 value="{{ inv.amount if inv else (sale.sell if sale else '') }}">
+        </div>
+        <div class="form-group">
+          <label>Discount (JOD)</label>
+          <input type="number" name="discount" step="0.001" min="0" id="inv-discount"
+                 oninput="calcTotal()" value="{{ inv.discount if inv else 0 }}">
+        </div>
+        <div class="form-group">
+          <label>Invoice Total</label>
+          <div class="profit-display" id="inv-total">JOD {{ "%.3f"|format((inv.total if inv else (sale.sell if sale else 0))|float) }}</div>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status">
+            <option value="UNPAID"  {% if not inv or inv.status=='UNPAID'  %}selected{% endif %}>Unpaid</option>
+            <option value="PARTIAL" {% if inv and inv.status=='PARTIAL' %}selected{% endif %}>Partial</option>
+            <option value="PAID"    {% if inv and inv.status=='PAID'    %}selected{% endif %}>Paid</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Service Description <span style="color:var(--red)">*</span></label>
+        <textarea name="service_desc" rows="3" required
+                  placeholder="e.g. Flight tickets AMM-DXB-AMM, Hotel 3 nights, Transfer...">{{ inv.service_desc if inv else (sale.from_loc + ' → ' + sale.to_loc + ' | ' + sale.customer if sale else '') }}</textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Notes</label>
+        <input type="text" name="notes" placeholder="Additional notes or terms"
+               value="{{ inv.notes if inv else '' }}">
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end">
+        <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-red"><i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function calcTotal(){
+  var a=parseFloat(document.getElementById('inv-amount').value)||0;
+  var d=parseFloat(document.getElementById('inv-discount').value)||0;
+  var t=a-d;
+  document.getElementById('inv-total').textContent='JOD '+t.toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3});
+}
+</script>
+{% endblock %}

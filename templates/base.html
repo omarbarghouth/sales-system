@@ -13,47 +13,75 @@
 <body>
 
 <nav>
-  <a href="{{ url_for('index') }}" class="nav-brand">
+  <a href="{{ url_for('index') if is_admin else url_for('employee_dashboard') }}" class="nav-brand">
     <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel"/>
   </a>
   <div class="nav-links">
-    <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">
-      <i class="fas fa-chart-pie"></i> <span>Dashboard</span>
-    </a>
-    <a href="{{ url_for('sales_report') }}" class="{% if request.endpoint=='sales_report' %}active{% endif %}">
-      <i class="fas fa-exchange-alt"></i> <span>Sales</span>
-    </a>
-    <a href="{{ url_for('statement') }}" class="{% if request.endpoint=='statement' %}active{% endif %}">
-      <i class="fas fa-file-invoice-dollar"></i> <span>Statement</span>
-    </a>
-    <a href="{{ url_for('payments') }}" class="{% if request.endpoint=='payments' %}active{% endif %}">
-      <i class="fas fa-money-bill-wave"></i> <span>Payments</span>
-    </a>
-    <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
-      <i class="fas fa-truck"></i> <span>Deliver</span>
-    </a>
     {% if is_admin %}
+      {# ── Admin Nav ─────────────────────────────────────────── #}
+      <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">
+        <i class="fas fa-chart-pie"></i> <span>Dashboard</span>
+      </a>
+      <a href="{{ url_for('sales_report') }}" class="{% if request.endpoint=='sales_report' %}active{% endif %}">
+        <i class="fas fa-exchange-alt"></i> <span>Sales</span>
+      </a>
+      <a href="{{ url_for('statement') }}" class="{% if request.endpoint=='statement' %}active{% endif %}">
+        <i class="fas fa-file-invoice-dollar"></i> <span>Statement</span>
+      </a>
+      <a href="{{ url_for('payments') }}" class="{% if request.endpoint=='payments' %}active{% endif %}">
+        <i class="fas fa-money-bill-wave"></i> <span>Payments</span>
+      </a>
+      <a href="{{ url_for('invoice_list') }}" class="{% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-file-invoice"></i> <span>Invoices</span>
+      </a>
+      <a href="{{ url_for('voucher_list') }}" class="{% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-hotel"></i> <span>Vouchers</span>
+      </a>
+      <a href="{{ url_for('package_list') }}" class="{% if 'package' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-box-open"></i> <span>Packages</span>
+      </a>
+      <a href="{{ url_for('deliver_tomorrow') }}" class="{% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
+        <i class="fas fa-truck"></i> <span>Deliver</span>
+      </a>
+      <a href="{{ url_for('admin_employees') }}" class="{% if 'employee' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-users-cog"></i> <span>Staff</span>
+      </a>
       <a href="{{ url_for('admin') }}" class="{% if request.endpoint=='admin' %}active{% endif %}">
         <i class="fas fa-database"></i> <span>Admin</span>
       </a>
       <a href="{{ url_for('audit_log') }}" class="{% if request.endpoint=='audit_log' %}active{% endif %}">
         <i class="fas fa-clipboard-list"></i> <span>Audit</span>
       </a>
-      <a href="{{ url_for('archive') }}" class="{% if request.endpoint in ('archive','do_archive') %}active{% endif %}">
-        <i class="fas fa-archive"></i> <span>Archive</span>
+    {% else %}
+      {# ── Employee Nav ──────────────────────────────────────── #}
+      <a href="{{ url_for('employee_dashboard') }}" class="{% if request.endpoint=='employee_dashboard' %}active{% endif %}">
+        <i class="fas fa-chart-pie"></i> <span>My Dashboard</span>
       </a>
-      <a href="{{ url_for('manage_users') }}" class="{% if request.endpoint=='manage_users' %}active{% endif %}">
-        <i class="fas fa-users"></i> <span>Users</span>
+      <a href="{{ url_for('my_sales') }}" class="{% if 'my_sales' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-exchange-alt"></i> <span>My Sales</span>
+      </a>
+      <a href="{{ url_for('invoice_list') }}" class="{% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-file-invoice"></i> <span>Invoices</span>
+      </a>
+      <a href="{{ url_for('voucher_list') }}" class="{% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-hotel"></i> <span>Vouchers</span>
+      </a>
+      <a href="{{ url_for('package_list') }}" class="{% if 'package' in (request.endpoint or '') %}active{% endif %}">
+        <i class="fas fa-box-open"></i> <span>Packages</span>
+      </a>
+      <a href="{{ url_for('my_commission') }}" class="{% if request.endpoint=='my_commission' %}active{% endif %}">
+        <i class="fas fa-coins"></i> <span>Commission</span>
       </a>
     {% endif %}
+
     {% if logged_in %}
-      <a href="{{ url_for('add_sale') }}" class="btn-add">
+      <a href="{{ url_for('add_sale_v2') }}" class="btn-add">
         <i class="fas fa-plus"></i> <span>New Sale</span>
       </a>
       <div class="user-badge">
         <i class="fas fa-user-circle" style="font-size:15px;color:rgba(255,255,255,.5)"></i>
         <span>{{ session.username }}</span>
-        <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role=='admin' else '👤 User' }}</span>
+        <span class="role-tag {{ session.user_role }}">{{ '👑 Admin' if session.user_role=='admin' else '👤 Agent' }}</span>
         <a href="{{ url_for('logout') }}" class="btn-logout">
           <i class="fas fa-sign-out-alt"></i> Logout
         </a>
@@ -82,7 +110,6 @@ setTimeout(function(){
 {% endwith %}
 
 <div class="container">{% block content %}{% endblock %}</div>
-
 {% block extra_js %}{% endblock %}
 </body>
 </html>
