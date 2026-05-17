@@ -462,26 +462,34 @@ def index():
         stats['still_count'] = status_counts['still_count'] or 0
         stats['other_count'] = status_counts['other_count'] or 0
 
-    # Outstanding balances by company
+    # Outstanding balances by company - correct SQL with HAVING
     outstanding_by_company = query_db("""
         SELECT s.company,
-               COALESCE(SUM(s.sell),0) as total_sell,
-               COALESCE(SUM(p.paid),0) as total_paid,
-               COALESCE(SUM(s.sell),0) - COALESCE(SUM(p.paid),0) as balance
+               s.sell      AS total_sell,
+               COALESCE(p.paid, 0) AS total_paid,
+               s.sell - COALESCE(p.paid, 0) AS balance
         FROM (
-            SELECT company, SUM(sell) as sell
+            SELECT company, SUM(sell) AS sell
             FROM sales WHERE deleted=FALSE AND is_archived=FALSE
             GROUP BY company
         ) s
         LEFT JOIN (
-            SELECT company, SUM(amount) as paid
+            SELECT company, SUM(amount) AS paid
             FROM payments WHERE deleted=FALSE AND is_archived=FALSE
             GROUP BY company
         ) p ON s.company = p.company
-        WHERE (COALESCE(SUM(s.sell),0) - COALESCE(SUM(p.paid),0)) > 0.01
+        WHERE s.sell - COALESCE(p.paid, 0) > 0.01
         ORDER BY balance DESC
         LIMIT 10
     """) or []
+
+    # Pre-process chart data as plain Python lists (avoids Decimal/RealDictRow JSON issues)
+    chart_month_labels  = [str(r['month']) for r in monthly]
+    chart_month_sells   = [float(r['total_sell'] or 0) for r in monthly]
+    chart_month_profits = [float(r['total_profit'] or 0) for r in monthly]
+    chart_company_names = [str(r['company']) for r in top_companies]
+    chart_company_totals= [float(r['total'] or 0) for r in top_companies]
+    has_monthly_data    = any(v > 0 for v in chart_month_sells)
 
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
@@ -489,6 +497,12 @@ def index():
         tomorrow=tomorrow, companies=companies,
         recent_logs=recent_logs,
         outstanding_by_company=outstanding_by_company,
+        chart_month_labels=chart_month_labels,
+        chart_month_sells=chart_month_sells,
+        chart_month_profits=chart_month_profits,
+        chart_company_names=chart_company_names,
+        chart_company_totals=chart_company_totals,
+        has_monthly_data=has_monthly_data,
         today=date.today().strftime('%d %B %Y')
     )
 
