@@ -246,10 +246,13 @@ def compute_ticket_status(outbound_delivery, return_delivery):
 # ── Input validation ──────────────────────────────────────────────────────────
 def validate_sale_form(form):
     errors = []
-    if not form.get('from_loc','').strip():
-        errors.append('From location is required.')
-    if not form.get('to_loc','').strip():
-        errors.append('To location is required.')
+    svc = form.get('service_type', 'FLIGHT').upper().strip()
+    # from/to only required for flight-based types
+    if svc in ('FLIGHT', 'PACKAGE'):
+        if not form.get('from_loc','').strip():
+            errors.append('From location is required for flights.')
+        if not form.get('to_loc','').strip():
+            errors.append('To location is required for flights.')
     if not form.get('company','').strip():
         errors.append('Company is required.')
     if not form.get('customer','').strip():
@@ -257,14 +260,14 @@ def validate_sale_form(form):
     if not form.get('sale_date','').strip():
         errors.append('Sale date is required.')
     try:
-        net  = float(form.get('net', 0))
-        sell = float(form.get('sell', 0))
+        net  = float(form.get('net', 0) or 0)
+        sell = float(form.get('sell', 0) or 0)
         if net < 0:  errors.append('Net cost cannot be negative.')
         if sell < 0: errors.append('Sell price cannot be negative.')
     except ValueError:
         errors.append('Net and Sell must be valid numbers.')
     try:
-        tickets = int(form.get('tickets', 1))
+        tickets = int(form.get('tickets', 1) or 1)
         if tickets < 1: errors.append('Tickets must be at least 1.')
     except ValueError:
         errors.append('Tickets must be a valid number.')
@@ -643,7 +646,6 @@ def add_sale():
 
 
         # ── Service-type specific fields ─────────────────────────────────────
-        import json as _json
         service_type = request.form.get('service_type','FLIGHT').upper().strip()
         # Tours: collect dynamic rows from form
         tour_names    = request.form.getlist('tour_name[]')
@@ -707,8 +709,8 @@ def add_sale():
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ''', (
-            request.form.get('from_loc','').upper().strip(),
-            request.form.get('to_loc','').upper().strip(),
+            (request.form.get('from_loc','').upper().strip() or '-'),
+            (request.form.get('to_loc','').upper().strip() or '-'),
             request.form.get('via','').upper().strip(),
             request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),
@@ -768,8 +770,8 @@ def edit_sale(sale_id):
         )
 
 
-        import json as _json
         service_type = request.form.get('service_type','FLIGHT').upper().strip()
+        _json = json
         tour_names    = request.form.getlist('tour_name[]')
         tour_dates    = request.form.getlist('tour_date[]')
         tour_pickups  = request.form.getlist('tour_pickup[]')
@@ -797,8 +799,8 @@ def edit_sale(sale_id):
                 insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
             WHERE id=%s
         ''', (
-            request.form.get('from_loc','').upper().strip(),
-            request.form.get('to_loc','').upper().strip(),
+            (request.form.get('from_loc','').upper().strip() or '-'),
+            (request.form.get('to_loc','').upper().strip() or '-'),
             request.form.get('via','').upper().strip(),
             request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),
@@ -2069,8 +2071,8 @@ def add_sale_v2():
         outbound_status, return_status, overall = compute_ticket_status(
             outbound_delivery, return_delivery)
 
-        import json as _json
         service_type = request.form.get('service_type','FLIGHT').upper().strip()
+        _json = json
         tour_names    = request.form.getlist('tour_name[]')
         tour_dates    = request.form.getlist('tour_date[]')
         tour_pickups  = request.form.getlist('tour_pickup[]')
@@ -2097,13 +2099,13 @@ def add_sale_v2():
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ''', (
-            request.form.get('from_loc','').upper().strip(),
-            request.form.get('to_loc','').upper().strip(),
+            (request.form.get('from_loc','').upper().strip() or '-'),
+            (request.form.get('to_loc','').upper().strip() or '-'),
             request.form.get('via','').upper().strip(),
             request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),
             request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets', 1)),
+            int(request.form.get('tickets', 1) or 1),
             request.form.get('customer','').upper().strip(),
             request.form.get('sale_date', str(date.today())),
             request.form.get('travel_date','').strip(),
@@ -2153,9 +2155,9 @@ def my_edit_sale(sale_id):
         outbound_status, return_status, overall = compute_ticket_status(
             outbound_delivery, return_delivery)
 
-        import json as _json
         service_type = request.form.get('service_type','FLIGHT').upper().strip()
         tour_names=request.form.getlist('tour_name[]'); tour_dates=request.form.getlist('tour_date[]'); tour_pickups=request.form.getlist('tour_pickup[]'); tour_statuses=request.form.getlist('tour_status[]'); tour_suppliers=request.form.getlist('tour_supplier[]'); tour_costs=request.form.getlist('tour_cost[]'); tour_notes=request.form.getlist('tour_notes[]')
+        _json = json
         tours_list=[{'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''} for i in range(len(tour_names)) if tour_names[i].strip()]
         ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip())
         execute_db('''
@@ -2711,4 +2713,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
