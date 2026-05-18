@@ -1488,6 +1488,28 @@ tfoot td {
   .doc-info-box-header { background: #e8eef8 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 }
 
+
+/* ── Service Type Badges ──────────────────────────────────────── */
+.svc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.svc-FLIGHT     { background:#e8eef8; color:#1B3A6B; }
+.svc-HOTEL      { background:#FFF8E7; color:#8B6914; }
+.svc-PACKAGE    { background:#FAEAEA; color:#8b1a1a; }
+.svc-VISA       { background:#EDE9FE; color:#6D28D9; }
+.svc-INSURANCE  { background:#E8F8EE; color:#1E7B34; }
+.svc-TRANSFER   { background:#FEF3C7; color:#D97706; }
+.svc-TOUR       { background:#EFF6FF; color:#2980B9; }
+
 /* ══════════════════════════════════════════════════════════════
    UTILITIES
    ══════════════════════════════════════════════════════════════ */
