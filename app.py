@@ -50,20 +50,17 @@ def query_db(query, args=(), one=False):
         raise
 
 def execute_db(query, args=()):
-    """Execute INSERT/UPDATE/DELETE. For INSERT returns the new row id."""
+    """Execute INSERT/UPDATE/DELETE. For INSERT with RETURNING id, returns the new row id."""
     try:
         db  = get_db()
         cur = db.cursor()
-        # For INSERT statements, append RETURNING id to get the new id back
-        returning_query = query
-        is_insert = query.strip().upper().startswith('INSERT')
-        if is_insert and 'RETURNING' not in query.upper():
-            returning_query = query.rstrip().rstrip(';') + ' RETURNING id'
-        cur.execute(returning_query, args)
+        cur.execute(query, args)
         db.commit()
-        if is_insert:
+        # If query has RETURNING clause, fetch the returned value
+        if 'RETURNING' in query.upper():
             row = cur.fetchone()
-            return row['id'] if row else None
+            if row:
+                return row[0] if not hasattr(row, 'keys') else (row.get('id') or row[list(row.keys())[0]])
         return None
     except Exception as e:
         try: get_db().rollback()
@@ -716,7 +713,7 @@ def add_sale():
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,%s
-            )
+            ) RETURNING id
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
             (request.form.get('to_loc','').upper().strip() or '-'),
@@ -2134,7 +2131,7 @@ def add_sale_v2():
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,%s,%s
-            )
+            ) RETURNING id
         """, (
             (request.form.get('from_loc','').upper().strip() or '-'),  # 1  from_loc
             (request.form.get('to_loc','').upper().strip() or '-'),    # 2  to_loc
@@ -2183,8 +2180,9 @@ def add_sale_v2():
             ev['airline'],                                                # 45 airline
             ev['pnr'],                                                    # 46 pnr
             ev['baggage'],                                                # 47 baggage
-            _oc,                                                           # 48 outbound_cost
-            _rc,                                                           # 49 return_cost
+            ev['passengers_json'],                                         # 48 passengers_json
+            _oc,                                                           # 49 outbound_cost
+            _rc,                                                           # 50 return_cost
         ))
         log_action('CREATE', 'sales', new_id,
                    f"{request.form.get('customer','').upper()} | Sell:{sell}")
@@ -2885,4 +2883,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
