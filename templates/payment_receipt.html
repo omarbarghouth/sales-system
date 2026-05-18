@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Receipt — {{ pay.company }} — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+  <div class="page-header-left">
+    <h1><i class="fas fa-receipt" style="color:var(--green);font-size:20px;vertical-align:middle;margin-right:6px"></i>Payment Receipt</h1>
+    <p>{{ pay.company }} &nbsp;·&nbsp; {{ pay.pay_date }}</p>
+  </div>
+  <div class="page-header-actions">
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Receipt</button>
+    <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div class="doc-print-wrap" style="max-width:680px">
+  <div class="print-only" id="genStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;padding:8px 36px 0"></div>
+
+  {# Header #}
+  <div style="background:linear-gradient(135deg,#0d1e3f 0%,#1a2f52 55%,#1a3360 100%);padding:28px 36px 24px;display:flex;justify-content:space-between;align-items:center;gap:24px;border-bottom:3px solid #C8A84B">
+    <div>
+      <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos"
+           style="height:66px;width:auto;display:block;margin-bottom:12px;filter:drop-shadow(0 2px 10px rgba(0,0,0,.25))">
+      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.7">
+        Alsondos Travel &amp; Tourism<br>Amman, Jordan &nbsp;·&nbsp; Travel Agency
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:800;color:#fff;line-height:1">PAYMENT RECEIPT</div>
+      <div style="font-size:14px;font-weight:700;color:#C8A84B;margin-top:8px">#{{ pay.id }}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px">{{ pay.pay_date }}</div>
+    </div>
+  </div>
+
+  {# From / To #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #e2e8f0">
+    <div style="padding:20px 36px;border-right:1px solid #e2e8f0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Received From</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:800;color:#0f1d35">{{ pay.company }}</div>
+    </div>
+    <div style="padding:20px 36px">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Payment Info</div>
+      <div style="font-size:13px;line-height:2;color:#374151">
+        <span style="color:#94a3b8">Date:</span> <strong>{{ pay.pay_date }}</strong><br>
+        {% if pay.notes %}<span style="color:#94a3b8">Notes:</span> <strong>{{ pay.notes }}</strong>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Amount #}
+  <div style="padding:28px 36px;background:linear-gradient(180deg,#fff,#f8fafc)">
+    <div style="display:flex;justify-content:center;align-items:center;flex-direction:column;padding:24px;background:linear-gradient(135deg,#0f1d35,#1a2f52);border-radius:12px;margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.5);margin-bottom:8px">Amount Received</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:42px;font-weight:900;color:#C8A84B;line-height:1;letter-spacing:-1px">JOD {{ "%.3f"|format(pay.amount|float) }}</div>
+    </div>
+
+    {# Balance summary #}
+    <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
+        <span style="color:#64748b">Total Invoiced</span>
+        <span style="font-weight:600;color:#0f1d35">JOD {{ "%.3f"|format(total_invoiced) }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 18px;font-size:13px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
+        <span style="color:#64748b">This Payment</span>
+        <span style="font-weight:700;color:#1E7B34">JOD {{ "%.3f"|format(pay.amount|float) }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:12px 18px;font-size:14px;font-weight:800;background:{% if balance <= 0.005 %}linear-gradient(90deg,#052e16,#166534){% else %}linear-gradient(90deg,#4c0519,#9b1c1c){% endif %};color:#fff">
+        <span>Remaining Balance</span>
+        <span style="color:{% if balance <= 0.005 %}#86efac{% else %}#fca5a5{% endif %};font-family:'Playfair Display',serif;font-size:17px">
+          JOD {{ "%.3f"|format([balance, 0]|max) }}
+          {% if balance <= 0.005 %} ✅{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {# Signatures #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 36px;border-top:1px solid #e2e8f0">
+    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel</div></div>
+    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature</div></div>
+  </div>
+
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:10px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
+    Alsondos Travel &amp; Tourism &nbsp;·&nbsp; Amman, Jordan &nbsp;·&nbsp; This is a computer-generated receipt
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var el=document.getElementById('genStamp'); if(el) el.textContent=stamp;
+})();
+</script>
+{% endblock %}

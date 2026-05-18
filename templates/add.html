@@ -340,6 +340,40 @@
   </div>
 </div>
 
+{# ══════════════ PASSENGERS / CUSTOMERS ══════════════ #}
+<div class="form-section svc-section visible" id="sec-passengers" data-types="ALL">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#1a2a4a,var(--navy))">
+    <i class="fas fa-users" style="color:var(--gold)"></i> Passengers / Customers
+    <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:6px">— add all travellers on this booking</span>
+  </div>
+  <div class="form-section-body">
+    <div id="paxContainer">
+      {% set passengers = [] %}
+      {% if sale and sale.passengers_json %}{% set passengers = sale.passengers_json|from_json %}{% endif %}
+      {% if passengers %}
+        {% for p in passengers %}
+        <div class="pax-row" style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1fr auto;gap:8px;align-items:end;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:7px;border:1px solid var(--border-lt)">
+          <div class="form-group"><label>Full Name</label><input type="text" name="pax_name[]" placeholder="Passenger full name" value="{{ p.name }}" style="text-transform:uppercase"></div>
+          <div class="form-group"><label>Passport No.</label><input type="text" name="pax_passport[]" placeholder="Passport number" value="{{ p.passport }}" style="text-transform:uppercase;font-weight:700"></div>
+          <div class="form-group"><label>Nationality</label><input type="text" name="pax_nationality[]" placeholder="e.g. Jordanian" value="{{ p.nationality }}"></div>
+          <div class="form-group"><label>Date of Birth</label><input type="date" name="pax_dob[]" value="{{ p.dob }}"></div>
+          <div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pax-row').remove()"><i class="fas fa-trash"></i></button></div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="pax-row" style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1fr auto;gap:8px;align-items:end;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:7px;border:1px solid var(--border-lt)">
+          <div class="form-group"><label>Full Name</label><input type="text" name="pax_name[]" placeholder="Passenger full name" style="text-transform:uppercase"></div>
+          <div class="form-group"><label>Passport No.</label><input type="text" name="pax_passport[]" placeholder="Passport number" style="text-transform:uppercase;font-weight:700"></div>
+          <div class="form-group"><label>Nationality</label><input type="text" name="pax_nationality[]" placeholder="e.g. Jordanian"></div>
+          <div class="form-group"><label>Date of Birth</label><input type="date" name="pax_dob[]"></div>
+          <div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.pax-row').remove()"><i class="fas fa-trash"></i></button></div>
+        </div>
+      {% endif %}
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="addPaxRow()"><i class="fas fa-plus"></i> Add Passenger</button>
+  </div>
+</div>
+
 {# ══════════════ PRICING SECTION (always shown) ══════════════ #}
 <div class="form-section">
   <div class="form-section-header"><i class="fas fa-coins"></i> Pricing (JOD)</div>
@@ -400,9 +434,16 @@
   </div>
 </div>
 
-<div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px">
+<div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px;flex-wrap:wrap">
   <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
   <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if edit else 'Add Transaction' }}</button>
+  {% if edit and sale and (sale.service_type or 'FLIGHT') == 'PACKAGE' %}
+  <a href="{{ url_for('auto_generate_voucher', sale_id=sale.id) }}"
+     onclick="return confirm('Generate a professional voucher automatically from this package transaction?')"
+     class="btn btn-gold btn-lg">
+    <i class="fas fa-magic"></i> Generate Voucher
+  </a>
+  {% endif %}
 </div>
 </form>
 {% endblock %}
@@ -485,6 +526,18 @@ function calcNights() {
   var ci = new Date(document.getElementById('h_ci').value);
   var co = new Date(document.getElementById('h_co').value);
   if(ci && co && co > ci) document.getElementById('hotel_nights').value = Math.round((co-ci)/86400000);
+}
+
+function addPaxRow() {
+  var row = document.createElement('div');
+  row.className = 'pax-row';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1fr auto;gap:8px;align-items:end;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:7px;border:1px solid var(--border-lt)';
+  row.innerHTML = '<div class="form-group"><label>Full Name</label><input type="text" name="pax_name[]" placeholder="Passenger full name" style="text-transform:uppercase"></div>'
+    +'<div class="form-group"><label>Passport No.</label><input type="text" name="pax_passport[]" placeholder="Passport number" style="text-transform:uppercase;font-weight:700"></div>'
+    +'<div class="form-group"><label>Nationality</label><input type="text" name="pax_nationality[]" placeholder="e.g. Jordanian"></div>'
+    +'<div class="form-group"><label>Date of Birth</label><input type="date" name="pax_dob[]"></div>'
+    +'<div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.pax-row\').remove()"><i class="fas fa-trash"></i></button></div>';
+  document.getElementById('paxContainer').appendChild(row);
 }
 
 function addTourRow() {
