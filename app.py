@@ -542,11 +542,24 @@ def index():
     chart_company_totals= [float(r['total'] or 0) for r in top_companies]
     has_monthly_data    = any(v > 0 for v in chart_month_sells)
 
+    # Recent transactions with agent names
+    recent_txns = query_db("""
+        SELECT s.*,
+               COALESCE(u.full_name, s.created_by_username, '—') AS agent_display,
+               COALESCE(s.created_by_username, '—') AS agent_name
+        FROM sales s
+        LEFT JOIN users u ON s.created_by_user_id = u.id
+        WHERE s.deleted=FALSE AND s.is_archived=FALSE
+        ORDER BY s.created_at DESC, s.id DESC
+        LIMIT 12
+    """) or []
+
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
         monthly=monthly, top_companies=top_companies,
         tomorrow=tomorrow, companies=companies,
         recent_logs=recent_logs,
+        recent_txns=recent_txns,
         outstanding_by_company=outstanding_by_company,
         chart_month_labels=chart_month_labels,
         chart_month_sells=chart_month_sells,
@@ -587,8 +600,9 @@ def add_sale():
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
              customer,sale_date,travel_date,return_date,return_supplier,
              outbound_delivery,return_delivery,outbound_status,return_status,
-             net,sell,profit,status,remarks)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             net,sell,profit,status,remarks,
+             created_by_user_id,created_by_username)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ''', (
             request.form.get('from_loc','').upper().strip(),
             request.form.get('to_loc','').upper().strip(),
@@ -605,7 +619,8 @@ def add_sale():
             outbound_status, return_status,
             net, sell, sell - net,
             overall,
-            request.form.get('remarks','').strip()
+            request.form.get('remarks','').strip(),
+            session.get('user_id'), session.get('username','')
         ))
         log_action('CREATE', 'sales', new_id,
                    f"{request.form.get('customer','').upper()} | "
@@ -695,25 +710,40 @@ def sales_report():
     status    = request.args.get('status', '')
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
+    agent_id  = request.args.get('agent_id', '')      # NEW: filter by sales agent
     page      = max(1, int(request.args.get('page', 1)))
 
-    base_q  = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
+    base_q  = '''
+        SELECT s.*,
+               COALESCE(s.created_by_username, '—') AS agent_name,
+               COALESCE(u.full_name, s.created_by_username, '—') AS agent_display
+        FROM sales s
+        LEFT JOIN users u ON s.created_by_user_id = u.id
+        WHERE s.deleted=FALSE AND s.is_archived=FALSE
+    '''
     count_q = 'SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(net),0) as net, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
     params  = []
+    cparams = []
 
     if company:
-        base_q  += ' AND company=%s'; count_q += ' AND company=%s'; params.append(company)
+        base_q  += ' AND s.company=%s'; count_q += ' AND company=%s'
+        params.append(company); cparams.append(company)
     if status:
-        base_q  += ' AND status=%s';  count_q += ' AND status=%s';  params.append(status)
+        base_q  += ' AND s.status=%s';  count_q += ' AND status=%s'
+        params.append(status); cparams.append(status)
     if date_from:
-        base_q  += ' AND sale_date>=%s'; count_q += ' AND sale_date>=%s'; params.append(date_from)
+        base_q  += ' AND s.sale_date>=%s'; count_q += ' AND sale_date>=%s'
+        params.append(date_from); cparams.append(date_from)
     if date_to:
-        base_q  += ' AND sale_date<=%s'; count_q += ' AND sale_date<=%s'; params.append(date_to)
+        base_q  += ' AND s.sale_date<=%s'; count_q += ' AND sale_date<=%s'
+        params.append(date_to); cparams.append(date_to)
+    if agent_id:
+        base_q  += ' AND s.created_by_user_id=%s'; count_q += ' AND created_by_user_id=%s'
+        params.append(agent_id); cparams.append(agent_id)
 
-    base_q += ' ORDER BY sale_date DESC, id DESC'
+    base_q += ' ORDER BY s.sale_date DESC, s.id DESC'
 
-    # Totals (all matching rows, not just current page)
-    agg = query_db(count_q, params, one=True)
+    agg = query_db(count_q, cparams, one=True)
     totals = {'sell': agg['sell'], 'net': agg['net'],
               'profit': agg['profit'], 'count': agg['cnt']}
 
@@ -722,9 +752,15 @@ def sales_report():
     companies = [r['company'] for r in query_db(
         'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
+    # All users for agent filter dropdown (admin only)
+    agents = []
+    if session.get('user_role') == 'admin':
+        agents = query_db('SELECT id, username, COALESCE(full_name,username) AS display FROM users ORDER BY username') or []
+
     return render_template('report.html',
-        sales=sales, totals=totals, companies=companies,
-        filters={'company':company,'status':status,'date_from':date_from,'date_to':date_to},
+        sales=sales, totals=totals, companies=companies, agents=agents,
+        filters={'company':company,'status':status,'date_from':date_from,
+                 'date_to':date_to, 'agent_id':agent_id},
         page=page, total_pages=total_pages, total_rows=total_rows
     )
 
@@ -1148,18 +1184,25 @@ def export_excel():
     ws1.title = "Sales"
     hdrs = ["ID","Sale Date","Company","Customer","From","To","Via",
             "Trip Type","Buy From","Tickets","Travel Date",
-            "Net (JOD)","Sell (JOD)","Profit (JOD)","Status","Remarks"]
+            "Net (JOD)","Sell (JOD)","Profit (JOD)","Status","Remarks","Sales Agent"]
     ws1.append(hdrs)
     for col in range(1, len(hdrs)+1):
         c = ws1.cell(row=1, column=col)
         c.font = header_font; c.fill = header_fill; c.alignment = center
 
-    sales = query_db('SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY sale_date DESC, id DESC')
+    sales = query_db('''
+        SELECT s.*, COALESCE(u.full_name, s.created_by_username, '—') AS agent_display
+        FROM sales s
+        LEFT JOIN users u ON s.created_by_user_id = u.id
+        WHERE s.deleted=FALSE AND s.is_archived=FALSE
+        ORDER BY s.sale_date DESC, s.id DESC
+    ''')
     for s in sales:
         ws1.append([s['id'],s['sale_date'],s['company'],s['customer'],
                     s['from_loc'],s['to_loc'],s['via'],s['trip_type'],
                     s['buy_from'],s['tickets'],s['travel_date'],
-                    s['net'],s['sell'],s['profit'],s['status'],s['remarks']])
+                    s['net'],s['sell'],s['profit'],s['status'],
+                    s['remarks'], s['agent_display']])
     for row in ws1.iter_rows(min_row=2, min_col=12, max_col=14):
         for cell in row: cell.number_format = currency_fmt
 
@@ -1168,7 +1211,7 @@ def export_excel():
     for col, attr in [(12,'net'),(13,'sell'),(14,'profit')]:
         c = ws1.cell(row=tr, column=col, value=sum(s[attr] for s in sales))
         c.font = Font(bold=True); c.fill = gold_fill; c.number_format = currency_fmt
-    for i, w in enumerate([6,12,20,25,8,8,8,10,10,8,12,13,13,13,10,20], 1):
+    for i, w in enumerate([6,12,20,25,8,8,8,10,10,8,12,13,13,13,10,20,16], 1):
         ws1.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
     ws2 = wb.create_sheet("Payments")

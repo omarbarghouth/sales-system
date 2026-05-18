@@ -220,6 +220,88 @@
 
 </div>
 
+{# ── Recent Transactions (with Sales Agent) ─────────────────── #}
+{% if is_admin and recent_txns %}
+<div class="card mb-6">
+  <div class="card-header">
+    <i class="fas fa-list-alt"></i> Recent Transactions
+    <span style="font-size:11.5px;font-weight:400;opacity:.7;margin-left:6px">with sales agent tracking</span>
+    <a href="{{ url_for('sales_report') }}" style="margin-left:auto">View All →</a>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Company</th>
+          <th>Customer</th>
+          <th>Route</th>
+          <th class="text-right">Sell (JOD)</th>
+          <th class="text-right">Profit (JOD)</th>
+          <th>Status</th>
+          <th>
+            <span style="display:flex;align-items:center;gap:4px;color:var(--gold)">
+              <i class="fas fa-user-tie"></i> Agent
+            </span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_txns %}
+        <tr>
+          <td style="color:var(--muted-lt);font-size:11px">{{ s.id }}</td>
+          <td style="font-size:12.5px;white-space:nowrap">{{ s.sale_date }}</td>
+          <td>
+            <a href="{{ url_for('statement', company=s.company) }}"
+               style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:13px">
+              {{ s.company }}
+            </a>
+          </td>
+          <td style="font-size:13px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ s.customer }}">{{ s.customer }}</td>
+          <td style="white-space:nowrap;font-size:13px">
+            <strong>{{ s.from_loc }}</strong>
+            <span style="color:var(--gold);margin:0 2px;font-size:11px">→</span>
+            <strong>{{ s.to_loc }}</strong>
+          </td>
+          <td class="text-right" style="font-weight:700;color:var(--navy-dk);font-size:13px">
+            {{ "%.2f"|format((s.sell or 0)|float) }}
+          </td>
+          <td class="text-right text-green" style="font-size:13px">
+            {{ "%.2f"|format((s.profit or 0)|float) }}
+          </td>
+          <td>
+            <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+          </td>
+          <td>
+            {# Sales agent pill — clickable to filter report by agent #}
+            {% set agent = s.agent_display or s.agent_name or '' %}
+            {% if agent and agent != '—' %}
+            <a href="{{ url_for('sales_report', agent_id=s.created_by_user_id) }}"
+               style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;
+                      background:var(--purple-lt);color:var(--purple);
+                      padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+                      border:1px solid rgba(109,40,217,.15);white-space:nowrap;
+                      transition:background .15s,color .15s"
+               onmouseover="this.style.background='var(--purple)';this.style.color='#fff'"
+               onmouseout="this.style.background='var(--purple-lt)';this.style.color='var(--purple)'"
+               title="View all transactions by {{ agent }}">
+              <i class="fas fa-user-tie" style="font-size:9px"></i>
+              {{ agent }}
+            </a>
+            {% else %}
+            <span style="color:var(--muted-lt);font-size:11.5px">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {# ── Outstanding + Company Bar ─────────────────────────────── #}
 <div class="grid-2 mb-6">
 
