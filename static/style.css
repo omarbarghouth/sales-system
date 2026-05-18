@@ -52,7 +52,7 @@
   --dur-md:     280ms;
   --font:       'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-hd:    'Playfair Display', Georgia, serif;
-  --sb-w:       256px;
+  --sb-w:       264px;
 }
 
 /* ── Reset ─────────────────────────────────────────────────── */
@@ -81,7 +81,7 @@ a { color: inherit; }
   top: 0; left: 0;
   width: var(--sb-w);
   height: 100vh;
-  background: linear-gradient(180deg, #0e1c35 0%, #122240 55%, #0d1a2e 100%);
+  background: linear-gradient(180deg, #1a2f52 0%, #1e3660 55%, #172947 100%);
   display: flex;
   flex-direction: column;
   z-index: 900;
@@ -98,12 +98,12 @@ a { color: inherit; }
 .sb-brand {
   flex-shrink: 0;
   padding: 0 14px;
-  height: 66px;
+  height: 70px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-decoration: none;
-  background: rgba(0,0,0,.2);
+  background: rgba(0,0,0,.1);
   position: relative;
 }
 .sb-brand::after {
@@ -114,9 +114,9 @@ a { color: inherit; }
   background: linear-gradient(90deg, transparent, rgba(200,168,75,.28), transparent);
 }
 .sb-logo {
-  height: 32px; width: auto;
+  height: 36px; width: auto;
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 6px rgba(0,0,0,.35));
+  filter: brightness(1.1) drop-shadow(0 1px 8px rgba(0,0,0,.3));
   transition: filter .2s, transform .18s var(--spring);
 }
 .sb-logo:hover {
@@ -127,12 +127,12 @@ a { color: inherit; }
 .sb-brand-name {
   font-family: var(--font-hd);
   font-size: 13px; font-weight: 700;
-  color: rgba(255,255,255,.88);
+  color: #ffffff;
   white-space: nowrap; line-height: 1.2;
 }
 .sb-brand-sub {
   font-size: 8.5px;
-  color: rgba(200,168,75,.88);
+  color: #C8A84B;
   text-transform: uppercase;
   letter-spacing: 1.8px;
   font-weight: 700; margin-top: 2px;
@@ -157,7 +157,7 @@ a { color: inherit; }
   padding: 13px 18px 3px;
   font-size: 8.5px; font-weight: 800;
   letter-spacing: 2.2px; text-transform: uppercase;
-  color: rgba(255,255,255,.38); white-space: nowrap;
+  color: rgba(255,255,255,.55); white-space: nowrap;
 }
 
 /* ─────────────────────────────── NEW SALE CTA ───────────────── */
@@ -186,7 +186,7 @@ a { color: inherit; }
 .sb-link {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 14px 9px 16px;
-  color: rgba(255,255,255,.72);
+  color: rgba(255,255,255,.88);
   text-decoration: none;
   font-size: 13px; font-weight: 500;
   transition: all .15s cubic-bezier(.4,0,.2,1);
@@ -198,17 +198,18 @@ a { color: inherit; }
 .sb-link i {
   font-size: 13.5px; width: 18px;
   text-align: center; flex-shrink: 0;
+  color: rgba(255,255,255,.65);
   transition: color .15s, transform .15s var(--spring);
 }
 .sb-link:hover {
-  color: rgba(255,255,255,.95);
-  background: rgba(255,255,255,.08);
+  color: #fff;
+  background: rgba(255,255,255,.1);
   border-left-color: rgba(200,168,75,.3);
 }
 .sb-link:hover i { color: rgba(200,168,75,.75); transform: scale(1.12); }
 .sb-link.active {
   color: #fff;
-  background: linear-gradient(90deg, rgba(139,26,26,.28), rgba(139,26,26,.04));
+  background: linear-gradient(90deg, rgba(139,26,26,.45) 0%, rgba(139,26,26,.12) 60%, transparent 100%);
   border-left-color: var(--red);
   font-weight: 700;
 }
@@ -228,7 +229,7 @@ a { color: inherit; }
 .sb-user {
   flex-shrink: 0;
   padding: 12px 14px;
-  background: rgba(0,0,0,.22);
+  background: rgba(0,0,0,.15);
   position: relative;
 }
 .sb-user::before {
@@ -255,7 +256,7 @@ a { color: inherit; }
 .sb-user-info { flex: 1; min-width: 0; }
 .sb-username {
   font-size: 12px; font-weight: 700;
-  color: rgba(255,255,255,.95);
+  color: #ffffff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sb-role-tag {
@@ -294,7 +295,7 @@ a { color: inherit; }
   position: fixed;
   top: 0; left: 0; right: 0;
   height: 54px;
-  background: linear-gradient(90deg, #0e1c35, #142444);
+  background: linear-gradient(90deg, #1a2f52, #1e3660);
   z-index: 800;
   align-items: center;
   padding: 0 14px; gap: 12px;
@@ -1288,12 +1289,12 @@ tfoot td {
 }
 
 .doc-header {
-  background: linear-gradient(135deg, #0d1e3f 0%, var(--navy) 55%, #1a3360 100%);
-  padding: 28px 36px 22px;
+  background: linear-gradient(135deg, #0d1e3f 0%, #1a2f52 55%, #1a3360 100%);
+  padding: 28px 36px 24px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
+  gap: 24px;
   flex-wrap: wrap;
   border-bottom: 3px solid var(--gold);
   position: relative;
@@ -1306,11 +1307,11 @@ tfoot td {
   background: linear-gradient(90deg, var(--gold-dk), var(--gold), var(--gold-dk));
 }
 .doc-logo-section img {
-  height: 52px;
+  height: 64px;
   width: auto;
-  filter: brightness(10) drop-shadow(0 2px 8px rgba(0,0,0,.3));
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 2px 10px rgba(0,0,0,.25));
 }
 .doc-company-info {
   font-size: 11px;
