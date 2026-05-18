@@ -706,8 +706,17 @@ def add_sale():
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
              insurance_supplier,insurance_type,airline,pnr,baggage,
              outbound_cost,return_cost)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (
+                %s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s
+            )
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
             (request.form.get('to_loc','').upper().strip() or '-'),
@@ -2085,7 +2094,9 @@ def add_sale_v2():
             if tour_names[i].strip():
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip())
-        new_id = execute_db('''
+        _oc = float(request.form.get('outbound_cost',0) or 0)
+        _rc = float(request.form.get('return_cost',0) or 0)
+        new_id = execute_db("""
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
              customer,sale_date,travel_date,return_date,return_supplier,
@@ -2096,31 +2107,67 @@ def add_sale_v2():
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
              insurance_supplier,insurance_type,airline,pnr,baggage,outbound_cost,return_cost)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        ''', (
-            (request.form.get('from_loc','').upper().strip() or '-'),
-            (request.form.get('to_loc','').upper().strip() or '-'),
-            request.form.get('via','').upper().strip(),
-            request.form.get('trip_type',''),
-            request.form.get('buy_from','').upper().strip(),
-            request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets', 1) or 1),
-            request.form.get('customer','').upper().strip(),
-            request.form.get('sale_date', str(date.today())),
-            request.form.get('travel_date','').strip(),
-            return_date, return_supplier,
-            outbound_delivery, return_delivery,
-            outbound_status, return_status,
-            net, sell, sell - net, overall,
-            request.form.get('remarks','').strip(),
-            session.get('user_id'), session.get('username',''),
-            ev['service_type'],ev['hotel_supplier'],ev['hotel_name'],ev['hotel_room'],ev['hotel_meal'],
-            ev['hotel_checkin'],ev['hotel_checkout'],ev['hotel_nights'],ev['hotel_net'],
-            ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
-            ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
-            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],
-            float(request.form.get('outbound_cost',0) or 0),float(request.form.get('return_cost',0) or 0),
+            VALUES (
+                %s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s
+            )
+        """, (
+            (request.form.get('from_loc','').upper().strip() or '-'),  # 1  from_loc
+            (request.form.get('to_loc','').upper().strip() or '-'),    # 2  to_loc
+            request.form.get('via','').upper().strip(),                  # 3  via
+            request.form.get('trip_type',''),                           # 4  trip_type
+            request.form.get('buy_from','').upper().strip(),             # 5  buy_from
+            request.form.get('company','').upper().strip(),              # 6  company
+            int(request.form.get('tickets',1) or 1),                     # 7  tickets
+            request.form.get('customer','').upper().strip(),             # 8  customer
+            request.form.get('sale_date', str(date.today())),             # 9  sale_date
+            request.form.get('travel_date','').strip(),                  # 10 travel_date
+            return_date,                                                   # 11 return_date
+            return_supplier,                                               # 12 return_supplier
+            outbound_delivery,                                             # 13 outbound_delivery
+            return_delivery,                                               # 14 return_delivery
+            outbound_status,                                               # 15 outbound_status
+            return_status,                                                 # 16 return_status
+            net,                                                           # 17 net
+            sell,                                                          # 18 sell
+            sell - net,                                                    # 19 profit
+            overall,                                                       # 20 status
+            request.form.get('remarks','').strip(),                      # 21 remarks
+            session.get('user_id'),                                       # 22 created_by_user_id
+            session.get('username',''),                                  # 23 created_by_username
+            ev['service_type'],                                           # 24 service_type
+            ev['hotel_supplier'],                                         # 25 hotel_supplier
+            ev['hotel_name'],                                             # 26 hotel_name
+            ev['hotel_room'],                                             # 27 hotel_room
+            ev['hotel_meal'],                                             # 28 hotel_meal
+            ev['hotel_checkin'],                                          # 29 hotel_checkin
+            ev['hotel_checkout'],                                         # 30 hotel_checkout
+            ev['hotel_nights'],                                           # 31 hotel_nights
+            ev['hotel_net'],                                              # 32 hotel_net
+            ev['transfer_supplier'],                                      # 33 transfer_supplier
+            ev['transfer_type'],                                          # 34 transfer_type
+            ev['transfer_pickup'],                                        # 35 transfer_pickup
+            ev['transfer_vehicle'],                                       # 36 transfer_vehicle
+            ev['transfer_net'],                                           # 37 transfer_net
+            ev['tours_json'],                                             # 38 tours_json
+            ev['visa_supplier'],                                          # 39 visa_supplier
+            ev['visa_type'],                                              # 40 visa_type
+            ev['passport_number'],                                        # 41 passport_number
+            ev['visa_status'],                                            # 42 visa_status
+            ev['insurance_supplier'],                                     # 43 insurance_supplier
+            ev['insurance_type'],                                         # 44 insurance_type
+            ev['airline'],                                                # 45 airline
+            ev['pnr'],                                                    # 46 pnr
+            ev['baggage'],                                                # 47 baggage
+            _oc,                                                           # 48 outbound_cost
+            _rc,                                                           # 49 return_cost
         ))
         log_action('CREATE', 'sales', new_id,
                    f"{request.form.get('customer','').upper()} | Sell:{sell}")
@@ -2713,3 +2760,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
