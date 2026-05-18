@@ -58,6 +58,20 @@
   </div>
 </div>
 
+{# ── My Service Breakdown ─────────────────────────────────────── #}
+{% if emp_svc %}
+<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px;align-items:center">
+  <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap">You Sold:</span>
+  {% for s in emp_svc %}
+  <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid var(--border-lt);background:var(--bg-card)">
+    <span class="svc-badge svc-{{ s.svc }}" style="margin:0"><i class="fas {{ s.svc|svc_icon }}"></i>{{ s.svc }}</span>
+    <strong style="font-size:13px;color:var(--navy)">{{ s.cnt }}</strong>
+    <span style="font-size:11px;color:var(--muted)">JOD {{ "%.0f"|format((s.total_sell or 0)|float) }}</span>
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
 {# ── Charts ───────────────────────────────────────────────── #}
 <div class="chart-grid" style="margin-bottom:20px">
   <div class="chart-card">

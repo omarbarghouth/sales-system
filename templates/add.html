@@ -1,332 +1,508 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit Transaction' if edit else 'New Transaction' }} — ALSONDOS TRAVEL{% endblock %}
+{% block title %}{{ 'Edit Transaction' if edit else 'New Transaction' }} — ALSONDOS{% endblock %}
+
+{% block extra_css %}
+<style>
+.svc-section { display:none }
+.svc-section.visible { display:block }
+.type-btn { display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);cursor:pointer;transition:all .15s;font-size:11px;font-weight:700;color:var(--muted);font-family:var(--font);text-transform:uppercase;letter-spacing:.5px }
+.type-btn i { font-size:20px }
+.type-btn:hover { border-color:var(--navy);color:var(--navy);background:var(--navy-lt) }
+.type-btn.active { border-color:var(--red);background:var(--red-lt);color:var(--red) }
+.type-btn.active i { color:var(--red) }
+.tour-row { display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1.5fr auto;gap:8px;align-items:end;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:7px;border:1px solid var(--border-lt) }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1>
-      <i class="fas fa-{{ 'edit' if edit else 'plus-circle' }}" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:6px"></i>
-      {{ 'Edit Transaction' if edit else 'New Transaction' }}
-    </h1>
-    <p>{{ 'Update the booking details below' if edit else 'Record a new sale with full outbound and return details' }}</p>
+    <h1><i class="fas fa-{{ 'edit' if edit else 'plus-circle' }}" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ 'Edit Transaction' if edit else 'New Transaction' }}</h1>
+    <p>Select the service type then fill in the details</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline">
-      <i class="fas fa-arrow-left"></i> Back
-    </a>
+    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
 
 <form method="POST" id="saleForm" autocomplete="off">
 
-  {# ── 1. Route ─────────────────────────────────────────────── #}
-  <div class="form-section">
-    <div class="form-section-header">
-      <i class="fas fa-route"></i> Route &amp; Basic Information
+{# ── SERVICE TYPE SELECTOR ─────────────────────────────────────── #}
+<div class="form-section">
+  <div class="form-section-header"><i class="fas fa-tag"></i> Service Type <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:6px">— choose what you are selling</span></div>
+  <div class="form-section-body">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+      {% set cur_type = (sale.service_type if sale else (form.service_type or 'FLIGHT')) %}
+      {% for t, icon in [('FLIGHT','fa-plane'),('HOTEL','fa-hotel'),('PACKAGE','fa-box-open'),('VISA','fa-passport'),('INSURANCE','fa-shield-alt'),('TRANSFER','fa-car'),('TOUR','fa-map-marked-alt')] %}
+      <button type="button" class="type-btn {% if cur_type==t %}active{% endif %}" data-type="{{ t }}" onclick="setType('{{ t }}')">
+        <i class="fas {{ icon }}"></i>{{ t }}
+      </button>
+      {% endfor %}
     </div>
-    <div class="form-section-body">
-      <div class="form-grid form-grid-4">
-        <div class="form-group">
-          <label>From <span class="req">*</span></label>
-          <input type="text" name="from_loc" placeholder="AMM" required
-                 value="{{ sale.from_loc if sale else (form.from_loc or '') }}"
-                 style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label>To <span class="req">*</span></label>
-          <input type="text" name="to_loc" placeholder="DXB" required
-                 value="{{ sale.to_loc if sale else (form.to_loc or '') }}"
-                 style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label>Via</label>
-          <input type="text" name="via" placeholder="e.g. CAI"
-                 value="{{ sale.via if sale else (form.via or '') }}"
-                 style="text-transform:uppercase;letter-spacing:1px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label>Trip Type</label>
-          <select name="trip_type">
-            <option value="RETURN"   {% if (sale and sale.trip_type=='RETURN')   or (not sale and (form.trip_type or 'RETURN')=='RETURN')   %}selected{% endif %}>✈ Return</option>
-            <option value="ONE WAY"  {% if (sale and sale.trip_type=='ONE WAY')  or (not sale and form.trip_type=='ONE WAY')  %}selected{% endif %}>→ One Way</option>
-            <option value="OPEN JAW" {% if (sale and sale.trip_type=='OPEN JAW') or (not sale and form.trip_type=='OPEN JAW') %}selected{% endif %}>⇄ Open Jaw</option>
-          </select>
-        </div>
+    <input type="hidden" name="service_type" id="service_type" value="{{ cur_type }}">
+  </div>
+</div>
+
+{# ── BASIC INFO (always shown) ─────────────────────────────────── #}
+<div class="form-section">
+  <div class="form-section-header"><i class="fas fa-info-circle"></i> Basic Information</div>
+  <div class="form-section-body">
+    <div class="form-grid form-grid-4">
+      <div class="form-group">
+        <label>Company <span class="req">*</span></label>
+        <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700" value="{{ sale.company if sale else (form.company or '') }}">
+        <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+      </div>
+      <div class="form-group">
+        <label>Customer <span class="req">*</span></label>
+        <input type="text" name="customer" required style="text-transform:uppercase" value="{{ sale.customer if sale else (form.customer or '') }}">
+      </div>
+      <div class="form-group">
+        <label>Sale Date <span class="req">*</span></label>
+        <input type="date" name="sale_date" required value="{{ sale.sale_date if sale else (form.sale_date or today) }}">
+      </div>
+      <div class="form-group">
+        <label>No. of Tickets / Pax</label>
+        <input type="number" name="tickets" min="1" max="99" value="{{ sale.tickets if sale else 1 }}" style="font-weight:800;font-size:18px;text-align:center">
       </div>
     </div>
-  </div>
-
-  {# ── 2. Company & Customer ─────────────────────────────────── #}
-  <div class="form-section">
-    <div class="form-section-header">
-      <i class="fas fa-building"></i> Company &amp; Customer
+    <div class="form-group" style="margin-top:12px">
+      <label>Remarks / Reference</label>
+      <input type="text" name="remarks" placeholder="Optional notes, booking reference…" maxlength="250" value="{{ sale.remarks if sale else '' }}">
     </div>
-    <div class="form-section-body">
-      <div class="form-grid form-grid-4">
-        <div class="form-group">
-          <label>Company <span class="req">*</span></label>
-          <input type="text" name="company" list="company-list" required
-                 placeholder="Type or select company"
-                 value="{{ sale.company if sale else (form.company or '') }}"
-                 style="text-transform:uppercase;font-weight:700">
-          <datalist id="company-list">
-            {% for co in companies %}<option value="{{ co }}">{% endfor %}
-          </datalist>
-          <small>Existing companies auto-suggested</small>
-        </div>
-        <div class="form-group">
-          <label>Customer Full Name <span class="req">*</span></label>
-          <input type="text" name="customer" placeholder="AHMAD AL-RASHID" required
-                 value="{{ sale.customer if sale else (form.customer or '') }}"
-                 style="text-transform:uppercase" maxlength="120">
-        </div>
-        <div class="form-group">
-          <label>No. of Tickets</label>
-          <input type="number" name="tickets" min="1" max="99"
-                 value="{{ sale.tickets if sale else (form.tickets or 1) }}"
-                 style="font-weight:800;font-size:18px;text-align:center">
-        </div>
-        <div class="form-group">
-          <label>Sale Date <span class="req">*</span></label>
-          <input type="date" name="sale_date" required
-                 value="{{ sale.sale_date if sale else (form.sale_date or today) }}">
-        </div>
+  </div>
+</div>
+
+{# ══════════════ FLIGHT SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-flight" data-types="FLIGHT PACKAGE">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#0d2048,var(--navy))"><i class="fas fa-plane"></i> Flight Details</div>
+  <div class="form-section-body">
+    <div class="form-grid form-grid-4" style="margin-bottom:14px">
+      <div class="form-group">
+        <label>From <span class="req">*</span></label>
+        <input type="text" name="from_loc" placeholder="AMM" required value="{{ sale.from_loc if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>To <span class="req">*</span></label>
+        <input type="text" name="to_loc" placeholder="DXB" required value="{{ sale.to_loc if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>Via</label>
+        <input type="text" name="via" placeholder="e.g. IST" value="{{ sale.via if sale else '' }}" style="text-transform:uppercase;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>Trip Type</label>
+        <select name="trip_type">
+          <option value="RETURN"   {% if not sale or (sale and sale.trip_type=='RETURN')   %}selected{% endif %}>✈ Return</option>
+          <option value="ONE WAY"  {% if sale and sale.trip_type=='ONE WAY'  %}selected{% endif %}>→ One Way</option>
+          <option value="OPEN JAW" {% if sale and sale.trip_type=='OPEN JAW' %}selected{% endif %}>⇄ Open Jaw</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Airline</label>
+        <input type="text" name="airline" placeholder="e.g. RJ, EK" value="{{ sale.airline if sale else '' }}" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>PNR</label>
+        <input type="text" name="pnr" placeholder="Booking reference" value="{{ sale.pnr if sale else '' }}" style="text-transform:uppercase;font-weight:700">
+      </div>
+      <div class="form-group">
+        <label>Baggage</label>
+        <input type="text" name="baggage" placeholder="e.g. 23kg + 7kg" value="{{ sale.baggage if sale else '' }}">
       </div>
     </div>
-  </div>
-
-  {# ── 3. Outbound Sector ────────────────────────────────────── #}
-  <div class="form-section">
-    <div class="form-section-header" style="background:linear-gradient(90deg,#0d2048,var(--navy))">
-      <i class="fas fa-plane-departure"></i> Outbound Sector
-    </div>
-    <div class="form-section-body">
-      <div class="form-grid form-grid-4">
-        <div class="form-group">
-          <label>Outbound Supplier</label>
-          <input type="text" name="buy_from" placeholder="e.g. ROYAL JORDANIAN"
-                 value="{{ sale.buy_from if sale else (form.buy_from or '') }}"
-                 style="text-transform:uppercase">
-          <small>Airline / GDS / consolidator</small>
-        </div>
-        <div class="form-group">
-          <label>Departure Date</label>
-          <input type="date" name="travel_date"
-                 value="{{ sale.travel_date if sale else (form.travel_date or '') }}">
-        </div>
-        <div class="form-group">
-          <label>Outbound Delivery Date</label>
-          <input type="date" name="outbound_delivery"
-                 value="{{ sale.outbound_delivery if sale else (form.outbound_delivery or '') }}">
-          <small>When ticket delivered to client</small>
-        </div>
-        <div class="form-group">
-          <label>Outbound Status</label>
-          <div style="padding:9px 13px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
-            {% if sale and sale.outbound_status=='DONE' %}background:var(--green-lt);color:var(--green);border:1.5px solid rgba(30,123,52,.25);
-            {% else %}background:var(--orange-lt);color:var(--orange);border:1.5px solid rgba(217,119,6,.25);{% endif %}
-            display:flex;align-items:center;gap:6px">
-            <i class="fas fa-{% if sale and sale.outbound_status=='DONE' %}check-circle{% else %}clock{% endif %}"></i>
-            {% if sale %}{{ sale.outbound_status or 'PENDING' }}{% else %}AUTO{% endif %}
-          </div>
-          <small>Auto-set from delivery date</small>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {# ── 4. Return Sector ──────────────────────────────────────── #}
-  <div class="form-section">
-    <div class="form-section-header" style="background:linear-gradient(90deg,#3d2800,#6b4400)">
-      <i class="fas fa-plane-arrival"></i> Return Sector
-      <span style="font-size:10.5px;font-weight:400;color:rgba(255,255,255,.5);margin-left:6px">(optional — fill if different supplier for return leg)</span>
-    </div>
-    <div class="form-section-body" style="background:linear-gradient(180deg,#fffdf5,#fff)">
-      <div class="form-grid form-grid-4">
-        <div class="form-group">
-          <label>Return Supplier</label>
-          <input type="text" name="return_supplier" id="returnSupplier"
-                 placeholder="Different return supplier?"
-                 value="{{ sale.return_supplier if sale else (form.return_supplier or '') }}"
-                 style="text-transform:uppercase">
-          <small>Leave empty if same as outbound</small>
-        </div>
-        <div class="form-group">
-          <label>Return Date</label>
-          <input type="date" name="return_date" id="returnDate"
-                 value="{{ sale.return_date if sale else (form.return_date or '') }}"
-                 onchange="onReturnDateChange()">
-        </div>
-        <div class="form-group">
-          <label>Return Delivery Date</label>
-          <input type="date" name="return_delivery"
-                 value="{{ sale.return_delivery if sale else (form.return_delivery or '') }}">
-          <small>When return ticket delivered</small>
-        </div>
-        <div class="form-group">
-          <label>Return Status</label>
-          <div style="padding:9px 13px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
-            {% if sale and sale.return_status=='DONE' and sale.return_date %}background:var(--green-lt);color:var(--green);border:1.5px solid rgba(30,123,52,.25);
-            {% elif sale and sale.return_date %}background:var(--orange-lt);color:var(--orange);border:1.5px solid rgba(217,119,6,.25);
-            {% else %}background:var(--bg);color:var(--muted);border:1.5px solid var(--border-lt);{% endif %}
-            display:flex;align-items:center;gap:6px">
-            <i class="fas fa-{% if sale and sale.return_date and sale.return_status=='DONE' %}check-circle{% elif sale and sale.return_date %}clock{% else %}minus-circle{% endif %}"></i>
-            {% if sale and sale.return_date %}{{ sale.return_status or 'PENDING' }}{% else %}N/A{% endif %}
-          </div>
-          <small>Auto-set from delivery date</small>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {# ── 5. PRICING — Split outbound + return costs ────────────── #}
-  <div class="form-section">
-    <div class="form-section-header">
-      <i class="fas fa-coins"></i> Pricing (JOD) — Split Cost Accounting
-    </div>
-    <div class="form-section-body">
-
-      {# Split supplier cost panels #}
-      <div class="price-split-grid">
-        <div class="price-panel out-panel">
-          <div class="price-panel-title">
-            <i class="fas fa-plane-departure"></i> Outbound Cost (JOD)
+    {# Outbound sector #}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="price-panel out-panel">
+        <div class="price-panel-title"><i class="fas fa-plane-departure"></i> Outbound</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>Supplier</label>
+            <input type="text" name="buy_from" placeholder="Outbound supplier" value="{{ sale.buy_from if sale else '' }}" style="text-transform:uppercase">
           </div>
           <div class="form-group">
-            <label>Outbound Net Cost</label>
-            <input type="number" name="outbound_cost" id="outbound_cost"
-                   step="0.001" min="0" placeholder="0.000"
-                   value="{{ sale.outbound_cost if sale and sale.outbound_cost else (form.outbound_cost or '') }}"
-                   oninput="splitCostCalc()"
-                   style="font-size:16px;font-weight:800;text-align:center">
-            <small>Cost paid to outbound supplier</small>
-          </div>
-        </div>
-        <div class="price-panel ret-panel">
-          <div class="price-panel-title">
-            <i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return Cost (JOD)
+            <label>Departure Date</label>
+            <input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}">
           </div>
           <div class="form-group">
-            <label>Return Net Cost</label>
-            <input type="number" name="return_cost" id="return_cost"
-                   step="0.001" min="0" placeholder="0.000"
-                   value="{{ sale.return_cost if sale and sale.return_cost else (form.return_cost or '') }}"
-                   oninput="splitCostCalc()"
-                   style="font-size:16px;font-weight:800;text-align:center">
-            <small>Cost paid to return supplier (0 if same)</small>
+            <label>Outbound Cost (JOD)</label>
+            <input type="number" name="outbound_cost" step="0.001" min="0" placeholder="0.000" id="outbound_cost" oninput="splitCostCalc()" value="{{ sale.outbound_cost if sale else '' }}">
+          </div>
+          <div class="form-group">
+            <label>Delivery Date</label>
+            <input type="date" name="outbound_delivery" value="{{ sale.outbound_delivery if sale else '' }}">
           </div>
         </div>
       </div>
-
-      {# Total net auto-calculated #}
-      <div class="net-total-row">
-        <span class="net-total-label"><i class="fas fa-sigma" style="margin-right:5px"></i>Total Net Cost</span>
-        <span class="net-total-value" id="net-total-display">
-          JOD {{ "%.3f"|format((sale.net or 0)|float) if sale else '0.000' }}
-        </span>
-      </div>
-
-      {# Sell + Profit #}
-      <div class="form-grid form-grid-3">
-        <div class="form-group">
-          <label>Net Cost (JOD) — Total <span class="req">*</span></label>
-          <input type="number" name="net" id="net" step="0.001" min="0" required
-                 placeholder="0.000"
-                 value="{{ sale.net if sale else (form.net or '') }}"
-                 oninput="calcProfit()"
-                 style="font-size:16px;font-weight:800;background:var(--navy-lt);border-color:rgba(27,58,107,.2)">
-          <small>Auto-filled from outbound + return cost above. Edit manually if needed.</small>
-        </div>
-        <div class="form-group">
-          <label>Sell Price (JOD) <span class="req">*</span></label>
-          <input type="number" name="sell" id="sell" step="0.001" min="0" required
-                 placeholder="0.000"
-                 value="{{ sale.sell if sale else (form.sell or '') }}"
-                 oninput="calcProfit()"
-                 style="font-size:16px;font-weight:800">
-          <small>Total amount charged to the client</small>
-        </div>
-        <div class="form-group">
-          <label>Profit (Auto-calculated)</label>
-          <div class="profit-display" id="profit-display">
-            <i class="fas fa-chart-line"></i>
-            <span id="profit-value">JOD {{ "%.3f"|format((sale.profit or 0)|float) if sale else '0.000' }}</span>
+      <div class="price-panel ret-panel">
+        <div class="price-panel-title"><i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return</div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>Return Supplier</label>
+            <input type="text" name="return_supplier" placeholder="If different" value="{{ sale.return_supplier if sale else '' }}" style="text-transform:uppercase">
           </div>
-          <small>Profit = Sell Price − Total Net Cost</small>
+          <div class="form-group">
+            <label>Return Date</label>
+            <input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}">
+          </div>
+          <div class="form-group">
+            <label>Return Cost (JOD)</label>
+            <input type="number" name="return_cost" step="0.001" min="0" placeholder="0.000" id="return_cost" oninput="splitCostCalc()" value="{{ sale.return_cost if sale else '' }}">
+          </div>
+          <div class="form-group">
+            <label>Delivery Date</label>
+            <input type="date" name="return_delivery" value="{{ sale.return_delivery if sale else '' }}">
+          </div>
         </div>
       </div>
-
-      <div class="form-group" style="margin-top:4px">
-        <label>Remarks</label>
-        <input type="text" name="remarks" placeholder="Optional notes, PNR, reference…"
-               maxlength="200"
-               value="{{ sale.remarks if sale else (form.remarks or '') }}">
-      </div>
-
-      {# Hidden fields for outbound/return cost storage (new columns) #}
-      {# These also need DB columns — added via migration below #}
-
     </div>
   </div>
+</div>
 
-  <div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px">
-    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline">
-      <i class="fas fa-times"></i> Cancel
-    </a>
-    <button type="submit" class="btn btn-red btn-lg">
-      <i class="fas fa-save"></i>
-      {{ 'Save Changes' if edit else 'Add Transaction' }}
-    </button>
+{# ══════════════ HOTEL SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-hotel" data-types="HOTEL PACKAGE">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#3d2800,#6b4400)"><i class="fas fa-hotel" style="color:var(--gold)"></i> Hotel Details</div>
+  <div class="form-section-body" style="background:linear-gradient(180deg,#fffdf5,#fff)">
+    <div class="form-grid form-grid-3">
+      <div class="form-group">
+        <label>Hotel Supplier</label>
+        <input type="text" name="hotel_supplier" placeholder="Who supplies this hotel?" value="{{ sale.hotel_supplier if sale else '' }}" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Hotel Name</label>
+        <input type="text" name="hotel_name" placeholder="e.g. Grand Hyatt Amman" value="{{ sale.hotel_name if sale else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Room Type</label>
+        <select name="hotel_room">
+          <option value="">Select…</option>
+          {% for r in ['Standard','Deluxe','Superior','Suite','Twin','Double','Family','Junior Suite'] %}
+          <option value="{{ r }}" {% if sale and sale.hotel_room==r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Meal Plan</label>
+        <select name="hotel_meal">
+          <option value="">Select…</option>
+          {% for m in ['Room Only','Bed & Breakfast','Half Board','Full Board','All Inclusive'] %}
+          <option value="{{ m }}" {% if sale and sale.hotel_meal==m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Check-In</label>
+        <input type="date" name="hotel_checkin" id="h_ci" onchange="calcNights()" value="{{ sale.hotel_checkin if sale else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Check-Out</label>
+        <input type="date" name="hotel_checkout" id="h_co" onchange="calcNights()" value="{{ sale.hotel_checkout if sale else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Nights</label>
+        <input type="number" name="hotel_nights" id="hotel_nights" min="0" value="{{ sale.hotel_nights if sale else 0 }}" readonly style="background:var(--navy-lt);font-weight:800;font-size:18px;text-align:center">
+      </div>
+      <div class="form-group">
+        <label>Hotel Net Cost (JOD)</label>
+        <input type="number" name="hotel_net" step="0.001" min="0" placeholder="0.000" id="hotel_net" oninput="packageCostCalc()" value="{{ sale.hotel_net if sale else '' }}">
+        <small>Cost paid to hotel supplier</small>
+      </div>
+    </div>
   </div>
+</div>
 
+{# ══════════════ TRANSFER SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-transfer" data-types="TRANSFER PACKAGE">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#1a3a1a,#2d5a2d)"><i class="fas fa-car" style="color:#86efac"></i> Transfer Details</div>
+  <div class="form-section-body" style="background:linear-gradient(180deg,#f0fff4,#fff)">
+    <div class="form-grid form-grid-3">
+      <div class="form-group">
+        <label>Transfer Supplier</label>
+        <input type="text" name="transfer_supplier" placeholder="Transfer company" value="{{ sale.transfer_supplier if sale else '' }}" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Transfer Type</label>
+        <select name="transfer_type">
+          <option value="">Select…</option>
+          {% for t in ['Airport Pickup','Airport Drop-off','Both Ways','City Transfer'] %}
+          <option value="{{ t }}" {% if sale and sale.transfer_type==t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Vehicle Type</label>
+        <select name="transfer_vehicle">
+          <option value="">Select…</option>
+          {% for v in ['Sedan','SUV','Van (7 pax)','Minibus (12 pax)','Bus (20+ pax)'] %}
+          <option value="{{ v }}" {% if sale and sale.transfer_vehicle==v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Pickup Time</label>
+        <input type="time" name="transfer_pickup" value="{{ sale.transfer_pickup if sale else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Transfer Net Cost (JOD)</label>
+        <input type="number" name="transfer_net" step="0.001" min="0" placeholder="0.000" id="transfer_net" oninput="packageCostCalc()" value="{{ sale.transfer_net if sale else '' }}">
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ══════════════ TOURS SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-tours" data-types="TOUR PACKAGE">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#2d1a5a,#4a2d8f)"><i class="fas fa-map-marked-alt" style="color:#c4b5fd"></i> Tours <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:6px">— add one or more</span></div>
+  <div class="form-section-body">
+    <div id="toursContainer">
+      {% set tours = [] %}
+      {% if sale and sale.tours_json %}
+        {% set tours = sale.tours_json | from_json %}
+      {% endif %}
+      {% if tours %}
+        {% for t in tours %}
+        <div class="tour-row">
+          <div class="form-group"><label>Tour Name</label><input type="text" name="tour_name[]" placeholder="e.g. Bosphorus Tour" value="{{ t.name }}"></div>
+          <div class="form-group"><label>Date</label><input type="date" name="tour_date[]" value="{{ t.date }}"></div>
+          <div class="form-group"><label>Pickup</label><input type="time" name="tour_pickup[]" value="{{ t.pickup }}"></div>
+          <div class="form-group"><label>Status</label><select name="tour_status[]"><option value="INCLUDED" {% if t.status=='INCLUDED' %}selected{% endif %}>Included</option><option value="OPTIONAL" {% if t.status=='OPTIONAL' %}selected{% endif %}>Optional</option></select></div>
+          <div class="form-group"><label>Supplier</label><input type="text" name="tour_supplier[]" placeholder="Supplier" value="{{ t.supplier }}"></div>
+          <div class="form-group"><label>Cost (JOD)</label><input type="number" name="tour_cost[]" step="0.001" min="0" placeholder="0" oninput="packageCostCalc()" value="{{ t.cost }}"></div>
+          <div class="form-group"><label>Notes</label><input type="text" name="tour_notes[]" placeholder="Notes" value="{{ t.notes }}"></div>
+          <div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.tour-row').remove();packageCostCalc()"><i class="fas fa-trash"></i></button></div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="tour-row">
+          <div class="form-group"><label>Tour Name</label><input type="text" name="tour_name[]" placeholder="e.g. Bosphorus Tour"></div>
+          <div class="form-group"><label>Date</label><input type="date" name="tour_date[]"></div>
+          <div class="form-group"><label>Pickup</label><input type="time" name="tour_pickup[]"></div>
+          <div class="form-group"><label>Status</label><select name="tour_status[]"><option value="INCLUDED">Included</option><option value="OPTIONAL">Optional</option></select></div>
+          <div class="form-group"><label>Supplier</label><input type="text" name="tour_supplier[]" placeholder="Supplier"></div>
+          <div class="form-group"><label>Cost (JOD)</label><input type="number" name="tour_cost[]" step="0.001" min="0" placeholder="0" oninput="packageCostCalc()"></div>
+          <div class="form-group"><label>Notes</label><input type="text" name="tour_notes[]" placeholder="Notes"></div>
+          <div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.tour-row').remove();packageCostCalc()"><i class="fas fa-trash"></i></button></div>
+        </div>
+      {% endif %}
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="addTourRow()"><i class="fas fa-plus"></i> Add Tour</button>
+  </div>
+</div>
+
+{# ══════════════ VISA SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-visa" data-types="VISA">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#1a0d2e,#3b1a6b)"><i class="fas fa-passport" style="color:#c4b5fd"></i> Visa Details</div>
+  <div class="form-section-body">
+    <div class="form-grid form-grid-4">
+      <div class="form-group"><label>Route (From → To)</label><input type="text" name="from_loc" placeholder="AMM" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;text-align:center"></div>
+      <div class="form-group"><label>To</label><input type="text" name="to_loc" placeholder="e.g. UAE" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;text-align:center"></div>
+      <div class="form-group"><label>Visa Supplier</label><input type="text" name="visa_supplier" placeholder="Visa agency / embassy" value="{{ sale.visa_supplier if sale else '' }}" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Visa Type</label>
+        <select name="visa_type">
+          <option value="">Select…</option>
+          {% for v in ['Tourist','Business','Transit','Student','Work','Residence'] %}
+          <option value="{{ v }}" {% if sale and sale.visa_type==v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Passport Number</label><input type="text" name="passport_number" style="text-transform:uppercase;font-weight:700" placeholder="Passport number" value="{{ sale.passport_number if sale else '' }}"></div>
+      <div class="form-group"><label>Travel Date</label><input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}"></div>
+      <div class="form-group"><label>Visa Status</label>
+        <select name="visa_status">
+          {% for s in ['PENDING','APPROVED','REJECTED','DELIVERED'] %}
+          <option value="{{ s }}" {% if sale and sale.visa_status==s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ══════════════ INSURANCE SECTION ══════════════ #}
+<div class="form-section svc-section" id="sec-insurance" data-types="INSURANCE">
+  <div class="form-section-header" style="background:linear-gradient(90deg,#0f2b1a,#1a5c30)"><i class="fas fa-shield-alt" style="color:#86efac"></i> Insurance Details</div>
+  <div class="form-section-body">
+    <div class="form-grid form-grid-4">
+      <div class="form-group"><label>Insurance Supplier</label><input type="text" name="insurance_supplier" placeholder="Insurance company" value="{{ sale.insurance_supplier if sale else '' }}" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Insurance Type</label>
+        <select name="insurance_type">
+          <option value="">Select…</option>
+          {% for t in ['Travel Insurance','Medical','Cancellation','Comprehensive'] %}
+          <option value="{{ t }}" {% if sale and sale.insurance_type==t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Travel Date (From)</label><input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}"></div>
+      <div class="form-group"><label>Return Date (To)</label><input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}"></div>
+      <div class="form-group"><label>From</label><input type="text" name="from_loc" value="{{ sale.from_loc if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
+      <div class="form-group"><label>To</label><input type="text" name="to_loc" value="{{ sale.to_loc if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
+{# ══════════════ PRICING SECTION (always shown) ══════════════ #}
+<div class="form-section">
+  <div class="form-section-header"><i class="fas fa-coins"></i> Pricing (JOD)</div>
+  <div class="form-section-body">
+    {# Package cost breakdown #}
+    <div id="pkg-cost-breakdown" style="display:none;background:var(--navy-lt);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;font-size:13px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--navy);margin-bottom:8px"><i class="fas fa-calculator" style="margin-right:4px"></i>Package Auto-Cost Breakdown</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+        <div><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">Flight</div><div id="pkg-flight-cost" style="font-weight:700;color:var(--navy)">0.000</div></div>
+        <div><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">Hotel</div><div id="pkg-hotel-cost" style="font-weight:700;color:var(--gold-dk)">0.000</div></div>
+        <div><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">Transfer</div><div id="pkg-transfer-cost" style="font-weight:700;color:var(--green)">0.000</div></div>
+        <div><div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">Tours</div><div id="pkg-tours-cost" style="font-weight:700;color:var(--purple)">0.000</div></div>
+      </div>
+    </div>
+    {# Split outbound/return for non-package #}
+    <div id="split-cost-panel" class="price-split-grid" style="margin-bottom:14px">
+      <div class="price-panel out-panel"><div class="price-panel-title"><i class="fas fa-plane-departure"></i> Outbound Cost</div><div class="form-group"><input type="number" id="oc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('outbound_cost').value=this.value;splitCostCalc()" value="{{ sale.outbound_cost if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
+      <div class="price-panel ret-panel"><div class="price-panel-title"><i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return Cost</div><div class="form-group"><input type="number" id="rc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('return_cost').value=this.value;splitCostCalc()" value="{{ sale.return_cost if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
+    </div>
+    <div class="net-total-row" style="margin-bottom:14px">
+      <span class="net-total-label"><i class="fas fa-sigma" style="margin-right:5px"></i> Total Net Cost</span>
+      <span class="net-total-value" id="net-total-display">JOD {{ "%.3f"|format((sale.net or 0)|float) if sale else '0.000' }}</span>
+    </div>
+    <div class="form-grid form-grid-3">
+      <div class="form-group">
+        <label>Net Cost (JOD) <span class="req">*</span></label>
+        <input type="number" name="net" id="net" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ sale.net if sale else '' }}" style="font-size:16px;font-weight:800;background:var(--navy-lt)">
+        <small>Total cost to you (all suppliers)</small>
+      </div>
+      <div class="form-group">
+        <label>Sell Price (JOD) <span class="req">*</span></label>
+        <input type="number" name="sell" id="sell" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ sale.sell if sale else '' }}" style="font-size:16px;font-weight:800">
+      </div>
+      <div class="form-group">
+        <label>Profit (Auto)</label>
+        <div class="profit-display" id="profit-display">
+          <i class="fas fa-chart-line"></i>
+          <span id="profit-value">JOD {{ "%.3f"|format((sale.profit or 0)|float) if sale else '0.000' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ══════════════ STATUS ══════════════ #}
+<div class="form-section">
+  <div class="form-section-header"><i class="fas fa-check-circle"></i> Booking Status</div>
+  <div class="form-section-body">
+    <div class="form-grid form-grid-4">
+      {% for st, icon, col in [('STILL','clock','orange'),('DONE','check-circle','green'),('CANCEL','times-circle','red'),('REFUND','undo','blue')] %}
+      <label style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:2px solid var(--border-lt);border-radius:var(--radius-sm);cursor:pointer;transition:.15s;{% if (sale and sale.status==st) or (not sale and st=='STILL') %}border-color:var(--{{ col }});background:var(--{{ col }}-lt){% endif %}">
+        <input type="radio" name="status" value="{{ st }}" {% if (sale and sale.status==st) or (not sale and st=='STILL') %}checked{% endif %} style="accent-color:var(--{{ col }})">
+        <i class="fas fa-{{ icon }}" style="color:var(--{{ col }})"></i>
+        <span style="font-weight:700;font-size:13px">{{ st }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px">
+  <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
+  <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if edit else 'Add Transaction' }}</button>
+</div>
 </form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// ── Split cost auto-fill ──────────────────────────────────────
+var currentType = '{{ (sale.service_type if sale else "FLIGHT") }}';
+
+var TYPE_SECTIONS = {
+  FLIGHT:    ['sec-flight'],
+  HOTEL:     ['sec-hotel'],
+  PACKAGE:   ['sec-flight','sec-hotel','sec-transfer','sec-tours'],
+  VISA:      ['sec-visa'],
+  INSURANCE: ['sec-insurance'],
+  TRANSFER:  ['sec-transfer'],
+  TOUR:      ['sec-tours'],
+};
+
+function setType(t) {
+  currentType = t;
+  document.getElementById('service_type').value = t;
+  // Update buttons
+  document.querySelectorAll('.type-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.type === t);
+  });
+  // Show/hide sections
+  document.querySelectorAll('.svc-section').forEach(function(s){ s.classList.remove('visible'); });
+  (TYPE_SECTIONS[t] || []).forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.add('visible'); });
+  // Show/hide package breakdown and split costs
+  var isPkg = (t === 'PACKAGE');
+  document.getElementById('pkg-cost-breakdown').style.display = isPkg ? 'block' : 'none';
+  document.getElementById('split-cost-panel').style.display   = (t==='FLIGHT'||t==='PACKAGE') ? 'grid' : 'none';
+  // Required fields
+  ['from_loc','to_loc'].forEach(function(n){
+    var el=document.querySelector('[name="'+n+'"]');
+    if(el){ if(['FLIGHT','PACKAGE'].includes(t)) el.setAttribute('required',''); else el.removeAttribute('required'); }
+  });
+  packageCostCalc();
+}
+
 function splitCostCalc() {
-  var oc  = parseFloat(document.getElementById('outbound_cost').value) || 0;
-  var rc  = parseFloat(document.getElementById('return_cost').value)   || 0;
+  var oc = parseFloat(document.getElementById('outbound_cost') ? document.getElementById('outbound_cost').value : 0)||0;
+  var rc = parseFloat(document.getElementById('return_cost')   ? document.getElementById('return_cost').value   : 0)||0;
   var tot = oc + rc;
-  document.getElementById('net').value = tot.toFixed(3);
-  document.getElementById('net-total-display').textContent =
-    'JOD ' + tot.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
-  calcProfit();
-}
-
-// ── Profit calculator ─────────────────────────────────────────
-function calcProfit() {
-  var net    = parseFloat(document.getElementById('net').value)  || 0;
-  var sell   = parseFloat(document.getElementById('sell').value) || 0;
-  var profit = sell - net;
-  var el  = document.getElementById('profit-value');
-  var box = document.getElementById('profit-display');
-  el.textContent = 'JOD ' + profit.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
-  // Color: negative = dark red, positive = dark navy
-  box.style.background = profit < 0
-    ? 'linear-gradient(135deg,#5c0f0f,#7f1d1d)'
-    : 'linear-gradient(135deg,#0d1e3f,#192e5a)';
-  // Also update total net display
-  document.getElementById('net-total-display').textContent =
-    'JOD ' + net.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
-}
-
-function onReturnDateChange() {
-  var rd = document.getElementById('returnDate').value;
-  var rs = document.getElementById('returnSupplier');
-  var rc = document.getElementById('return_cost');
-  if (rd) {
-    rs.style.borderColor = 'var(--gold)';
-    rc.style.borderColor = 'var(--gold)';
-  } else {
-    rs.style.borderColor = '';
-    rc.style.borderColor = '';
+  if (['FLIGHT','PACKAGE'].includes(currentType)) {
+    document.getElementById('net').value = tot.toFixed(3);
+    document.getElementById('net-total-display').textContent = 'JOD ' + tot.toLocaleString('en',{minimumFractionDigits:3});
+    if(document.getElementById('pkg-flight-cost')) document.getElementById('pkg-flight-cost').textContent = tot.toFixed(3);
+    calcProfit();
   }
 }
 
+function packageCostCalc() {
+  if (currentType !== 'PACKAGE') return;
+  var flight   = parseFloat(document.getElementById('outbound_cost') ? document.getElementById('outbound_cost').value : 0)||0;
+  var flightR  = parseFloat(document.getElementById('return_cost')   ? document.getElementById('return_cost').value   : 0)||0;
+  var hotel    = parseFloat(document.getElementById('hotel_net')     ? document.getElementById('hotel_net').value     : 0)||0;
+  var transfer = parseFloat(document.getElementById('transfer_net')  ? document.getElementById('transfer_net').value  : 0)||0;
+  var tours = 0;
+  document.querySelectorAll('[name="tour_cost[]"]').forEach(function(el){ tours += parseFloat(el.value)||0; });
+  var total = flight + flightR + hotel + transfer + tours;
+  document.getElementById('net').value = total.toFixed(3);
+  document.getElementById('net-total-display').textContent = 'JOD ' + total.toLocaleString('en',{minimumFractionDigits:3});
+  if(document.getElementById('pkg-flight-cost'))   document.getElementById('pkg-flight-cost').textContent   = (flight+flightR).toFixed(3);
+  if(document.getElementById('pkg-hotel-cost'))    document.getElementById('pkg-hotel-cost').textContent    = hotel.toFixed(3);
+  if(document.getElementById('pkg-transfer-cost')) document.getElementById('pkg-transfer-cost').textContent = transfer.toFixed(3);
+  if(document.getElementById('pkg-tours-cost'))    document.getElementById('pkg-tours-cost').textContent    = tours.toFixed(3);
+  calcProfit();
+}
+
+function calcProfit() {
+  var net  = parseFloat(document.getElementById('net').value) ||0;
+  var sell = parseFloat(document.getElementById('sell').value)||0;
+  var p = sell - net;
+  document.getElementById('profit-value').textContent = 'JOD ' + p.toLocaleString('en',{minimumFractionDigits:3});
+  document.getElementById('profit-display').style.background = p < 0 ? 'linear-gradient(135deg,#5c0f0f,#7f1d1d)' : 'linear-gradient(135deg,#0d1e3f,#192e5a)';
+}
+
+function calcNights() {
+  var ci = new Date(document.getElementById('h_ci').value);
+  var co = new Date(document.getElementById('h_co').value);
+  if(ci && co && co > ci) document.getElementById('hotel_nights').value = Math.round((co-ci)/86400000);
+}
+
+function addTourRow() {
+  var row = document.createElement('div');
+  row.className = 'tour-row';
+  row.innerHTML = '<div class="form-group"><label>Tour Name</label><input type="text" name="tour_name[]" placeholder="e.g. Petra Day Tour"></div>'
+    +'<div class="form-group"><label>Date</label><input type="date" name="tour_date[]"></div>'
+    +'<div class="form-group"><label>Pickup</label><input type="time" name="tour_pickup[]"></div>'
+    +'<div class="form-group"><label>Status</label><select name="tour_status[]"><option value="INCLUDED">Included</option><option value="OPTIONAL">Optional</option></select></div>'
+    +'<div class="form-group"><label>Supplier</label><input type="text" name="tour_supplier[]" placeholder="Supplier"></div>'
+    +'<div class="form-group"><label>Cost (JOD)</label><input type="number" name="tour_cost[]" step="0.001" min="0" placeholder="0" oninput="packageCostCalc()"></div>'
+    +'<div class="form-group"><label>Notes</label><input type="text" name="tour_notes[]" placeholder="Notes"></div>'
+    +'<div class="form-group"><label>&nbsp;</label><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.tour-row\').remove();packageCostCalc()"><i class="fas fa-trash"></i></button></div>';
+  document.getElementById('toursContainer').appendChild(row);
+}
+
 // Init on page load
+setType(currentType);
 calcProfit();
-onReturnDateChange();
 </script>
 {% endblock %}

@@ -41,7 +41,7 @@
 <div class="table-wrap">
   <table>
     <thead><tr>
-      <th>ID</th><th>Date</th><th>Company</th><th>Customer</th>
+      <th>ID</th><th>Type</th><th>Date</th><th>Company</th><th>Customer</th>
       <th>Route</th><th>Tix</th><th>Travel</th>
       <th class="text-right">Sell (JOD)</th><th class="text-right">Profit (JOD)</th>
       <th>Status</th><th>Actions</th>
@@ -50,6 +50,7 @@
       {% for s in sales %}
       <tr>
         <td class="text-muted" style="font-size:11.5px">{{ s.id }}</td>
+          <td><span class="svc-badge svc-{{ (s.service_type or 'FLIGHT') }}"><i class="fas {{ (s.service_type or 'FLIGHT')|svc_icon }}"></i>{{ s.service_type or 'FLIGHT' }}</span></td>
         <td style="font-size:12.5px">{{ s.sale_date }}</td>
         <td><strong>{{ s.company }}</strong></td>
         <td>{{ s.customer }}</td>
@@ -68,13 +69,13 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="11" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
+      <tr><td colspan="12" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
       {% endfor %}
     </tbody>
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="7">TOTALS — {{ totals.count }} transactions</td>
+        <td colspan="8">TOTALS — {{ totals.count }} transactions</td>
         <td class="text-right" style="color:var(--gold);font-size:14px">{{ "%.2f"|format(totals.sell) }}</td>
         <td class="text-right" style="color:#6dd58a;font-size:14px">{{ "%.2f"|format(totals.profit) }}</td>
         <td colspan="2"></td>

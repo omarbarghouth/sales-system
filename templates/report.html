@@ -75,11 +75,20 @@
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
 
+    <div class="form-group" style="min-width:130px">
+      <label>Service Type</label>
+      <select name="svc_type" onchange="this.form.submit()">
+        <option value="">All Types</option>
+        {% for t in ['FLIGHT','HOTEL','PACKAGE','VISA','INSURANCE','TRANSFER','TOUR'] %}
+        <option value="{{ t }}" {% if filters.get('svc_type')==t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div style="display:flex;gap:7px;align-self:flex-end">
       <button type="submit" class="btn btn-primary btn-sm">
         <i class="fas fa-search"></i> Search
       </button>
-      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id %}
+      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') %}
       <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" title="Clear filters">
         <i class="fas fa-times"></i>
       </a>
@@ -175,7 +184,12 @@
       {% for s in sales %}
       <tr>
         <td style="color:var(--muted-lt);font-size:11px">{{ s.id }}</td>
-
+        <td>
+          {% set st = (s.service_type or 'FLIGHT') %}
+          <span class="svc-badge svc-{{ st }}">
+            <i class="fas {{ st|svc_icon }}"></i>{{ st }}
+          </span>
+        </td>
         <td style="white-space:nowrap;font-size:12.5px;color:var(--text-2)">{{ s.sale_date }}</td>
 
         <td>
@@ -277,7 +291,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="{{ 14 if is_admin else 12 }}" class="text-center" style="padding:36px;color:var(--muted)">
+        <td colspan="{{ 15 if is_admin else 13 }}" class="text-center" style="padding:36px;color:var(--muted)">
           <i class="fas fa-inbox" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>
           No transactions found.
           {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to %}

@@ -581,5 +581,38 @@ const BLUE  = '#2980B9';
   });
 })();
 {% endif %}
+
+// ── Service Type Bar Chart ────────────────────────────────────
+{% if svc_labels %}
+(function(){
+  var SVC_COLORS = {
+    'FLIGHT':'rgba(27,58,107,.8)','HOTEL':'rgba(200,168,75,.8)',
+    'PACKAGE':'rgba(139,26,26,.8)','VISA':'rgba(109,40,217,.8)',
+    'INSURANCE':'rgba(30,123,52,.8)','TRANSFER':'rgba(217,119,6,.8)',
+    'TOUR':'rgba(41,128,185,.8)'
+  };
+  var labels = {{ svc_labels | tojson }};
+  new Chart(document.getElementById('svcChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Revenue (JOD)',
+        data: {{ svc_sells | tojson }},
+        backgroundColor: labels.map(function(l){ return SVC_COLORS[l] || 'rgba(107,119,153,.7)'; }),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{display:false} },
+      scales:{
+        y:{ beginAtZero:true, ticks:{ callback:function(v){ return 'JOD '+v.toLocaleString(); }}},
+        x:{ grid:{display:false} }
+      }
+    }
+  });
+})();
+{% endif %}
 </script>
 {% endblock %}
