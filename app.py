@@ -1649,10 +1649,34 @@ except Exception as _ext_err:
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_doc_number(doc_type: str) -> str:
-    """Atomically increment and return formatted doc number e.g. INV-0042"""
+    """
+    Smart document numbering:
+    - Checks the MAX existing id in the target table
+    - If table is empty → resets sequence to 0 and returns DOC-0001
+    - If records exist  → continues from MAX(id) + 1
+    This means deleting all records during testing restarts numbering from 1.
+    """
+    table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
+    table = table_map.get(doc_type)
     try:
         db  = get_db()
         cur = db.cursor()
+
+        if table:
+            # Count active (non-deleted) records to decide whether to reset
+            cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE deleted=FALSE")
+            row = cur.fetchone()
+            active_count = row['cnt'] if row else 0
+
+            if active_count == 0:
+                # No active records — reset sequence to 0 so next is 0001
+                cur.execute(
+                    "UPDATE doc_sequences SET last_num=0 WHERE doc_type=%s",
+                    [doc_type]
+                )
+                db.commit()
+
+        # Now atomically increment
         cur.execute("""
             UPDATE doc_sequences SET last_num = last_num + 1
             WHERE doc_type = %s RETURNING last_num
@@ -1661,7 +1685,8 @@ def next_doc_number(doc_type: str) -> str:
         db.commit()
         num = row['last_num'] if row else 1
         return f"{doc_type}-{str(num).zfill(4)}"
-    except Exception:
+    except Exception as _e:
+        logger.error(f"next_doc_number error: {_e}")
         import uuid
         return f"{doc_type}-{uuid.uuid4().hex[:6].upper()}"
 
