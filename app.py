@@ -2021,8 +2021,25 @@ def new_invoice():
         log_action('CREATE', 'invoices', new_id, f"Invoice {inv_num} | {total} JOD")
         flash(f'Invoice {inv_num} created successfully.', 'success')
         return redirect(url_for('view_invoice', inv_id=new_id))
+    # Load transactions for pre-selected company (from sale or URL param)
+    company_filter = request.args.get('company', '')
+    if sale and sale['company']:
+        company_filter = sale['company']
+    company_transactions = []
+    if company_filter:
+        company_transactions = query_db("""
+            SELECT id, sale_date, customer, from_loc, to_loc, sell, status
+            FROM sales
+            WHERE deleted=FALSE AND is_archived=FALSE
+              AND company=%s
+            ORDER BY sale_date DESC
+            LIMIT 50
+        """, [company_filter]) or []
+
     return render_template('invoice_form.html',
-        sale=sale, companies=companies, today=str(date.today()))
+        sale=sale, companies=companies, today=str(date.today()),
+        company_filter=company_filter,
+        company_transactions=company_transactions)
 
 
 @app.route('/invoices/<int:inv_id>')
@@ -2088,6 +2105,35 @@ def delete_invoice(inv_id):
         flash('Invoice deleted.', 'success')
     return redirect(url_for('invoice_list'))
 
+
+
+@app.route('/api/company-transactions')
+@login_required
+def api_company_transactions():
+    """AJAX: return transactions for a company (for invoice form auto-load)."""
+    company = request.args.get('company', '').strip()
+    if not company:
+        return {'transactions': []}
+    rows = query_db("""
+        SELECT id, sale_date, customer, from_loc, to_loc, via, sell, profit, status, tickets
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE AND company=%s
+        ORDER BY sale_date DESC
+        LIMIT 100
+    """, [company]) or []
+    data = []
+    for r in rows:
+        data.append({
+            'id':         r['id'],
+            'date':       r['sale_date'],
+            'customer':   r['customer'],
+            'route':      f"{r['from_loc'] or ''} → {r['to_loc'] or ''}",
+            'sell':       float(r['sell'] or 0),
+            'status':     r['status'],
+            'tickets':    r['tickets'],
+        })
+    from flask import jsonify
+    return jsonify({'transactions': data, 'company': company})
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  HOTEL VOUCHERS

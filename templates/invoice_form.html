@@ -1,91 +1,282 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit' if inv else 'New' }} Invoice — ALSONDOS{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-file-invoice"></i> {{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
-    <p>{{ 'Update invoice details' if inv else 'Create a professional invoice' }}</p>
+    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
+    <p>{{ 'Update invoice details' if inv else 'Create and connect an invoice to a transaction' }}</p>
   </div>
   <div class="page-header-actions">
     <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
-<div class="card" style="max-width:780px">
-  <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
-  <div class="card-body">
-    <form method="POST">
-      {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
-      {% if inv %}<input type="hidden" name="sale_id" value="{{ inv.sale_id or '' }}">{% endif %}
-      <div class="form-grid form-grid-2" style="margin-bottom:16px">
-        <div class="form-group">
-          <label>Company / Client <span style="color:var(--red)">*</span></label>
-          <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700"
-                 value="{{ inv.company if inv else (sale.company if sale else '') }}">
-          <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
-        </div>
-        <div class="form-group">
-          <label>Customer Name <span style="color:var(--red)">*</span></label>
-          <input type="text" name="customer" required style="text-transform:uppercase"
-                 value="{{ inv.customer if inv else (sale.customer if sale else '') }}">
-        </div>
-        <div class="form-group">
-          <label>Invoice Date <span style="color:var(--red)">*</span></label>
-          <input type="date" name="invoice_date" required
-                 value="{{ inv.invoice_date if inv else today }}">
-        </div>
-        <div class="form-group">
-          <label>Due Date</label>
-          <input type="date" name="due_date" value="{{ inv.due_date if inv else '' }}">
-        </div>
-        <div class="form-group">
-          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
-          <input type="number" name="amount" step="0.001" min="0" required id="inv-amount"
-                 oninput="calcTotal()" style="font-size:16px;font-weight:700"
-                 value="{{ inv.amount if inv else (sale.sell if sale else '') }}">
-        </div>
-        <div class="form-group">
-          <label>Discount (JOD)</label>
-          <input type="number" name="discount" step="0.001" min="0" id="inv-discount"
-                 oninput="calcTotal()" value="{{ inv.discount if inv else 0 }}">
-        </div>
-        <div class="form-group">
-          <label>Invoice Total</label>
-          <div class="profit-display" id="inv-total">JOD {{ "%.3f"|format((inv.total if inv else (sale.sell if sale else 0))|float) }}</div>
-        </div>
-        <div class="form-group">
-          <label>Status</label>
-          <select name="status">
-            <option value="UNPAID"  {% if not inv or inv.status=='UNPAID'  %}selected{% endif %}>Unpaid</option>
-            <option value="PARTIAL" {% if inv and inv.status=='PARTIAL' %}selected{% endif %}>Partial</option>
-            <option value="PAID"    {% if inv and inv.status=='PAID'    %}selected{% endif %}>Paid</option>
-          </select>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+
+  {# ── LEFT: Invoice Form ───────────────────────────────── #}
+  <div>
+    <div class="card">
+      <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
+      <div class="card-body">
+        <form method="POST" id="invoiceForm">
+          {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
+          {% if inv %}<input type="hidden" name="sale_id" value="{{ inv.sale_id or '' }}">{% endif %}
+          <input type="hidden" name="_linked_sale_id" id="linkedSaleId" value="">
+
+          <div class="form-grid form-grid-2" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Company / Client <span class="req">*</span></label>
+              <input type="text" name="company" id="companyInput" list="co-list" required
+                     style="text-transform:uppercase;font-weight:700"
+                     value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
+                     oninput="loadCompanyTxns(this.value)"
+                     autocomplete="off">
+              <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+              <small>Select to auto-load related transactions</small>
+            </div>
+            <div class="form-group">
+              <label>Customer Name <span class="req">*</span></label>
+              <input type="text" name="customer" id="customerInput" required
+                     style="text-transform:uppercase"
+                     value="{{ inv.customer if inv else (sale.customer if sale else '') }}">
+            </div>
+            <div class="form-group">
+              <label>Invoice Date <span class="req">*</span></label>
+              <input type="date" name="invoice_date" required
+                     value="{{ inv.invoice_date if inv else today }}">
+            </div>
+            <div class="form-group">
+              <label>Due Date</label>
+              <input type="date" name="due_date"
+                     value="{{ inv.due_date if inv else '' }}">
+            </div>
+            <div class="form-group">
+              <label>Amount (JOD) <span class="req">*</span></label>
+              <input type="number" name="amount" step="0.001" min="0" required
+                     id="inv-amount" oninput="calcTotal()"
+                     style="font-size:16px;font-weight:700"
+                     value="{{ inv.amount if inv else (sale.sell if sale else '') }}">
+            </div>
+            <div class="form-group">
+              <label>Discount (JOD)</label>
+              <input type="number" name="discount" step="0.001" min="0"
+                     id="inv-discount" oninput="calcTotal()"
+                     value="{{ inv.discount if inv else 0 }}">
+            </div>
+          </div>
+
+          {# Total display #}
+          <div style="margin-bottom:14px">
+            <div class="profit-display" id="inv-total">
+              <i class="fas fa-file-invoice-dollar"></i>
+              <span id="inv-total-val">JOD {{ "%.3f"|format((inv.total if inv else (sale.sell if sale else 0))|float) }}</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Service Description <span class="req">*</span></label>
+            <textarea name="service_desc" id="serviceDesc" rows="3" required
+                      placeholder="e.g. Flight tickets AMM-DXB-AMM for Ahmad Al-Rashid · 2 tickets">{{ inv.service_desc if inv else (sale.from_loc + ' → ' + sale.to_loc + ' | ' + sale.customer + ' · ' + (sale.tickets|string) + ' ticket(s)' if sale else '') }}</textarea>
+          </div>
+
+          <div class="form-grid form-grid-2" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Status</label>
+              <select name="status">
+                <option value="UNPAID"  {% if not inv or inv.status=='UNPAID'  %}selected{% endif %}>Unpaid</option>
+                <option value="PARTIAL" {% if inv and inv.status=='PARTIAL' %}selected{% endif %}>Partial</option>
+                <option value="PAID"    {% if inv and inv.status=='PAID'    %}selected{% endif %}>Paid</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <input type="text" name="notes" placeholder="Additional notes or terms"
+                     value="{{ inv.notes if inv else '' }}">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-red">
+              <i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── RIGHT: Transaction Lookup ────────────────────────── #}
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-search"></i> Transaction Lookup
+        <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:4px">Select a transaction to auto-fill</span>
+      </div>
+      <div style="padding:13px 16px;background:var(--navy-lt);border-bottom:1px solid var(--border-lt)">
+        <div class="form-group" style="margin:0">
+          <label>Search by Company</label>
+          <input type="text" id="companySearch" list="co-list-search"
+                 placeholder="Type company name to load transactions…"
+                 value="{{ company_filter }}"
+                 oninput="loadCompanyTxns(this.value)"
+                 autocomplete="off"
+                 style="background:#fff">
+          <datalist id="co-list-search">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         </div>
       </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Service Description <span style="color:var(--red)">*</span></label>
-        <textarea name="service_desc" rows="3" required
-                  placeholder="e.g. Flight tickets AMM-DXB-AMM, Hotel 3 nights, Transfer...">{{ inv.service_desc if inv else (sale.from_loc + ' → ' + sale.to_loc + ' | ' + sale.customer if sale else '') }}</textarea>
+
+      {# Transactions table (populated by JS or server-side) #}
+      <div id="txnTableWrap" style="overflow-x:auto;min-height:120px">
+        {% if company_transactions %}
+        <table id="txnTable">
+          <thead><tr>
+            <th>Date</th><th>Customer</th><th>Route</th>
+            <th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>
+          </tr></thead>
+          <tbody id="txnBody">
+            {% for t in company_transactions %}
+            <tr>
+              <td style="font-size:12px;white-space:nowrap">{{ t.sale_date }}</td>
+              <td style="font-size:12.5px">{{ t.customer }}</td>
+              <td style="font-size:12px;white-space:nowrap">
+                <strong>{{ t.from_loc }}</strong> <span style="color:var(--gold)">→</span> <strong>{{ t.to_loc }}</strong>
+              </td>
+              <td class="text-right" style="font-weight:700;color:var(--navy-dk)">{{ "%.3f"|format(t.sell|float) }}</td>
+              <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
+              <td>
+                <button type="button" class="btn btn-edit btn-xs"
+                        onclick="fillFromTxn('{{ t.id }}','{{ t.customer }}','{{ t.from_loc }} → {{ t.to_loc }}',{{ t.sell }},{{ t.tickets }})">
+                  <i class="fas fa-arrow-left"></i> Use
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% elif company_filter %}
+        <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">
+          No transactions found for <strong>{{ company_filter }}</strong>
+        </div>
+        {% else %}
+        <div style="padding:28px 16px;text-align:center;color:var(--muted-lt);font-size:13px">
+          <i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:.35"></i>
+          Type a company name above to auto-load related transactions
+        </div>
+        {% endif %}
+        <div id="txnLoading" style="display:none;padding:20px;text-align:center;color:var(--muted)">
+          <i class="fas fa-circle-notch fa-spin" style="margin-right:6px"></i> Loading transactions…
+        </div>
       </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Notes</label>
-        <input type="text" name="notes" placeholder="Additional notes or terms"
-               value="{{ inv.notes if inv else '' }}">
+    </div>
+
+    {% if sale %}
+    <div class="card" style="margin-top:14px">
+      <div class="card-header"><i class="fas fa-link"></i> Linked Transaction</div>
+      <div style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div>
+            <div style="font-weight:700;color:var(--navy-dk);font-size:14px">
+              {{ sale.from_loc }} → {{ sale.to_loc }} &nbsp;·&nbsp; {{ sale.customer }}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">
+              {{ sale.sale_date }} · {{ sale.tickets }} ticket(s) · {{ sale.company }}
+            </div>
+          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy-dk)">JOD {{ "%.3f"|format(sale.sell|float) }}</div>
+        </div>
+        <span class="badge badge-{{ sale.status|lower }}">{{ sale.status }}</span>
       </div>
-      <div style="display:flex;gap:12px;justify-content:flex-end">
-        <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
-        <button type="submit" class="btn btn-red"><i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice</button>
-      </div>
-    </form>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
+
 {% block extra_js %}
 <script>
+var debTimer = null;
+
 function calcTotal(){
   var a=parseFloat(document.getElementById('inv-amount').value)||0;
   var d=parseFloat(document.getElementById('inv-discount').value)||0;
   var t=a-d;
-  document.getElementById('inv-total').textContent='JOD '+t.toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3});
+  document.getElementById('inv-total-val').textContent =
+    'JOD '+t.toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3});
 }
+
+function fillFromTxn(id, customer, route, sell, tickets) {
+  // Fill invoice form from selected transaction
+  document.getElementById('customerInput').value = customer;
+  document.getElementById('inv-amount').value = sell.toFixed(3);
+  document.getElementById('inv-discount').value = '0';
+  document.getElementById('linkedSaleId').value = id;
+  document.querySelector('[name="sale_id"]') && (document.querySelector('[name="sale_id"]').value = id);
+  var desc = 'Flight ' + route + ' | ' + customer + ' · ' + tickets + ' ticket(s)';
+  document.getElementById('serviceDesc').value = desc;
+  calcTotal();
+  // Highlight selected row
+  document.querySelectorAll('#txnBody tr').forEach(function(r){ r.style.background=''; });
+  event.target.closest('tr').style.background='var(--navy-lt)';
+}
+
+function loadCompanyTxns(val) {
+  // Sync both search inputs
+  var company = val.trim().toUpperCase();
+  if (document.getElementById('companyInput').value.toUpperCase() !== company)
+    document.getElementById('companyInput').value = company;
+  if (document.getElementById('companySearch').value.toUpperCase() !== company)
+    document.getElementById('companySearch').value = company;
+
+  clearTimeout(debTimer);
+  if (!company || company.length < 2) return;
+
+  debTimer = setTimeout(function(){
+    var wrap = document.getElementById('txnTableWrap');
+    var loading = document.getElementById('txnLoading');
+    loading.style.display='block';
+
+    fetch('/api/company-transactions?company='+encodeURIComponent(company))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      loading.style.display='none';
+      var txns = data.transactions || [];
+      if (txns.length === 0) {
+        wrap.innerHTML = '<div id="txnLoading" style="display:none"></div><div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No transactions found for <strong>'+company+'</strong></div>';
+        return;
+      }
+      var html = '<div id="txnLoading" style="display:none"></div>'
+               + '<table id="txnTable"><thead><tr>'
+               + '<th>Date</th><th>Customer</th><th>Route</th>'
+               + '<th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>'
+               + '</tr></thead><tbody id="txnBody">';
+      txns.forEach(function(t){
+        var badge = 'badge-navy';
+        if(t.status==='DONE') badge='badge-done';
+        else if(t.status==='STILL') badge='badge-still';
+        else if(t.status==='CANCEL') badge='badge-cancel';
+        html += '<tr>'
+          +'<td style="font-size:12px;white-space:nowrap">'+t.date+'</td>'
+          +'<td style="font-size:12.5px">'+t.customer+'</td>'
+          +'<td style="font-size:12px;white-space:nowrap">'+t.route+'</td>'
+          +'<td class="text-right" style="font-weight:700;color:var(--navy-dk)">'+t.sell.toFixed(3)+'</td>'
+          +'<td><span class="badge '+badge+'">'+t.status+'</span></td>'
+          +'<td><button type="button" class="btn btn-edit btn-xs" '
+          +'onclick="fillFromTxn(\''+t.id+'\',\''+t.customer.replace(/'/g,"\\'")+'\',' 
+          +'\''+t.route+'\','+t.sell+','+t.tickets+')">'
+          +'<i class="fas fa-arrow-left"></i> Use</button></td>'
+          +'</tr>';
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    })
+    .catch(function(){ loading.style.display='none'; });
+  }, 380);
+}
+
+// Init
+calcTotal();
+{% if company_filter %}loadCompanyTxns('{{ company_filter }}');{% endif %}
 </script>
 {% endblock %}

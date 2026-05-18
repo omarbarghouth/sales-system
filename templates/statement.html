@@ -46,31 +46,32 @@
 
 {% if company %}
 
-{# ── Print Header (print only) ────────────────────────────── #}
-<div class="print-only" style="margin-bottom:24px">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1B3A6B">
+{# ── Print Header — Premium layout ────────────────────────── #}
+<div class="print-only" style="margin-bottom:18px">
+  <div id="stmtPrintDate" style="font-size:10px;color:#9ca3af;text-align:right;font-style:italic;margin-bottom:5px"></div>
+  <div style="background:#122850;padding:18px 26px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="display:flex;align-items:center;gap:14px">
-      <img src="{{ url_for('static', filename='logo.png') }}" style="height:48px;width:auto">
+      <img src="{{ url_for('static', filename='logo.png') }}" style="height:50px;width:auto;filter:brightness(10)">
       <div>
-        <div style="font-size:17px;font-weight:800;color:#1B3A6B">Alsondos Travel &amp; Tourism</div>
-        <div style="font-size:11px;color:#6B7A99">Amman, Jordan · Travel &amp; Tourism Agency</div>
+        <div style="font-size:16px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">Alsondos Travel &amp; Tourism</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.55)">Amman, Jordan · B2B Travel Agency</div>
       </div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:24px;font-weight:800;color:#1B3A6B">ACCOUNT STATEMENT</div>
-      <div style="font-size:12px;color:#6B7A99">Generated: {{ today }}</div>
+      <div style="font-size:24px;font-weight:800;color:#fff;font-family:'Playfair Display',serif;line-height:1">ACCOUNT STATEMENT</div>
+      <div style="font-size:10.5px;color:rgba(200,168,75,.8);margin-top:4px;letter-spacing:1px">{{ today }}</div>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:14px 0;border-bottom:1px solid #DDE3EF;margin-bottom:4px">
+  <div style="background:#0d1e3f;padding:12px 26px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-top:2.5px solid #C8A84B;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div>
-      <div style="font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Account</div>
-      <div style="font-size:20px;font-weight:700;color:#1B3A6B">{{ company }}</div>
+      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Account</div>
+      <div style="font-size:19px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">{{ company }}</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px">Summary</div>
-      <div style="font-size:13px;color:#374151"><strong>Invoiced:</strong> JOD {{ "%.3f"|format(total_invoiced) }}</div>
-      <div style="font-size:13px;color:#059669"><strong>Paid:</strong> JOD {{ "%.3f"|format(total_paid) }}</div>
-      <div style="font-size:14px;font-weight:800;color:{% if balance > 0 %}#b91c1c{% else %}#059669{% endif %}"><strong>Outstanding:</strong> JOD {{ "%.3f"|format(balance) }}</div>
+      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Financial Summary</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:2"><strong style="color:#fff">Invoiced:</strong> JOD {{ "%.3f"|format(total_invoiced) }}</div>
+      <div style="font-size:12px;color:#86efac;line-height:1.8"><strong>Paid:</strong> JOD {{ "%.3f"|format(total_paid) }}</div>
+      <div style="font-size:14px;font-weight:800;color:{% if balance > 0.005 %}#fca5a5{% else %}#86efac{% endif %};line-height:1.8"><strong>Outstanding:</strong> JOD {{ "%.3f"|format(balance) }}</div>
     </div>
   </div>
 </div>
@@ -241,7 +242,7 @@
   </div>
   <div style="text-align:center;font-size:10px;color:#9ca3af;line-height:1.7">
     Alsondos Travel &amp; Tourism · Amman, Jordan<br>
-    This statement shows selling amounts only. Generated automatically.
+    This statement shows selling amounts only. For queries contact Alsondos Travel & Tourism, Amman, Jordan.
   </div>
 </div>
 
@@ -267,4 +268,16 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var d=new Date();
+  var dt=d.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  var tm=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  var el=document.getElementById('stmtPrintDate');
+  if(el) el.textContent='Generated on: '+dt+' — '+tm;
+})();
+</script>
 {% endblock %}

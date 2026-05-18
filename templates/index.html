@@ -3,13 +3,13 @@
 
 {% block content %}
 
-{# ── Welcome Banner ──────────────────────────────────────── #}
+{# ── Compact Dashboard Header ─────────────────────────────── #}
 <div class="dash-banner">
   <div class="dash-banner-left">
     <img src="{{ url_for('static', filename='logo_white.png') }}" class="dash-banner-logo" alt="Alsondos"/>
     <div>
-      <div class="dash-banner-title">Alsondos Travel &amp; Tourism</div>
-      <div class="dash-banner-sub">B2B Management ERP · {{ today }} · Welcome, <strong>{{ session.username }}</strong></div>
+      <div class="dash-banner-title">Alsondos Travel &amp; Tourism — ERP</div>
+      <div class="dash-banner-sub">{{ today }} &nbsp;·&nbsp; Welcome back, <strong style="color:var(--gold)">{{ session.username }}</strong></div>
     </div>
   </div>
   <div class="dash-banner-stats">
@@ -22,13 +22,11 @@
       <div class="dash-stat-val">{{ top_companies|length }}</div>
       <div class="dash-stat-lbl">Companies</div>
     </div>
-    {% if tomorrow %}
     <div class="dash-stat-divider"></div>
     <div class="dash-stat">
-      <div class="dash-stat-val" style="color:#ff8080">{{ tomorrow|length }}</div>
-      <div class="dash-stat-lbl">Deliver Tomorrow</div>
+      <div class="dash-stat-val" {% if tomorrow %}style="color:#fb8080"{% endif %}>{{ tomorrow|length }}</div>
+      <div class="dash-stat-lbl">Due Tomorrow</div>
     </div>
-    {% endif %}
   </div>
 </div>
 

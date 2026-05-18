@@ -1,95 +1,150 @@
 {% extends "base.html" %}
-{% block title %}{{ vch.voucher_number }} — Hotel Voucher{% endblock %}
+{% block title %}{{ vch.voucher_number }} — Hotel Voucher — ALSONDOS{% endblock %}
+
 {% block content %}
 <div class="page-header no-print">
   <div class="page-header-left">
-    <h1><i class="fas fa-hotel"></i> {{ vch.voucher_number }}</h1>
-    <p>Hotel Voucher · Created by {{ vch.created_by }}</p>
+    <h1><i class="fas fa-hotel" style="color:var(--gold-dk);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ vch.voucher_number }}</h1>
+    <p>Hotel Voucher · {{ vch.hotel_name }} · Created by {{ vch.created_by }}</p>
   </div>
   <div class="page-header-actions">
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Voucher</button>
+    <a href="{{ url_for('voucher_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
-<div class="card" style="max-width:820px;margin:0 auto">
-  <div style="padding:32px">
-    {# Print Header #}
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #1B3A6B;margin-bottom:22px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <img src="{{ url_for('static', filename='logo.png') }}" style="height:50px;width:auto">
-        <div>
-          <div style="font-size:16px;font-weight:800;color:#1B3A6B">Alsondos Travel & Tourism</div>
-          <div style="font-size:11px;color:#6B7A99">Amman, Jordan · Travel Agency ERP</div>
+
+<div class="doc-print-wrap">
+  <div class="doc-print-date print-only" id="printDate"></div>
+
+  {# Header #}
+  <div class="doc-header">
+    <div class="doc-logo-section">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Alsondos"/>
+      <div class="doc-company-info">
+        Alsondos Travel &amp; Tourism<br>Amman, Jordan
+        {% if vch.emergency_contact %}<br><strong style="color:rgba(255,255,255,.7)">Emergency: {{ vch.emergency_contact }}</strong>{% endif %}
+      </div>
+    </div>
+    <div class="doc-title-section">
+      <div class="doc-type">HOTEL VOUCHER</div>
+      <div class="doc-number">{{ vch.voucher_number }}</div>
+      <div class="doc-date">{{ vch.checkin_date }} — {{ vch.checkout_date }}</div>
+    </div>
+  </div>
+
+  {# Guest + Hotel #}
+  <div class="doc-meta">
+    <div>
+      <div class="doc-meta-block-label">Guest Information</div>
+      <div class="doc-meta-name">{{ vch.guest_name }}</div>
+      <div class="doc-meta-detail">{{ vch.num_guests }} Guest(s)</div>
+    </div>
+    <div>
+      <div class="doc-meta-block-label">Hotel Information</div>
+      <div class="doc-meta-name">{{ vch.hotel_name }}</div>
+      <div class="doc-meta-detail">
+        {% if vch.hotel_address %}{{ vch.hotel_address }}<br>{% endif %}
+        {% if vch.hotel_phone %}☎ {{ vch.hotel_phone }}<br>{% endif %}
+        {% if vch.hotel_contact %}Contact: {{ vch.hotel_contact }}{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-body">
+
+    {# Stay Details #}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;background:linear-gradient(135deg,#e8eef8,#f0f4fc);border-radius:var(--radius-sm);padding:16px;border:1px solid var(--border-lt)">
+      <div style="text-align:center">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Check-In</div>
+        <div style="font-size:16px;font-weight:800;color:var(--navy-dk);font-family:var(--font-hd)">{{ vch.checkin_date }}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Check-Out</div>
+        <div style="font-size:16px;font-weight:800;color:var(--navy-dk);font-family:var(--font-hd)">{{ vch.checkout_date }}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Nights</div>
+        <div style="font-size:24px;font-weight:900;color:var(--navy-dk);font-family:var(--font-hd)">{{ vch.nights }}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Room / Board</div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy-dk)">{{ vch.room_type or '—' }}</div>
+        <div style="font-size:11.5px;color:var(--muted)">{{ vch.meal_plan or '' }}</div>
+      </div>
+    </div>
+
+    {# Inclusions #}
+    {% if vch.include_transfer or vch.include_tours or vch.include_insurance %}
+    <div style="margin-bottom:16px">
+      <div style="font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Package Inclusions</div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap">
+        {% if vch.include_transfer %}<span class="badge badge-done" style="font-size:12px;padding:5px 14px">✓ Airport Transfer</span>{% endif %}
+        {% if vch.include_tours    %}<span class="badge badge-done" style="font-size:12px;padding:5px 14px">✓ Tours</span>{% endif %}
+        {% if vch.include_insurance%}<span class="badge badge-done" style="font-size:12px;padding:5px 14px">✓ Insurance</span>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Transfer Details #}
+    {% if vch.arrival_flight or vch.driver_contact or vch.pickup_time %}
+    <div class="doc-info-grid" style="grid-template-columns:1fr;margin-bottom:16px">
+      <div class="doc-info-box" style="border-left:4px solid var(--gold)">
+        <div class="doc-info-box-header" style="background:var(--gold-lt);color:var(--gold-dk)">🚗 Transfer &amp; Pickup Details</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0">
+          {% if vch.arrival_flight %}
+          <div class="doc-info-row"><span class="k">Flight</span><span class="v">{{ vch.arrival_flight }}</span></div>{% endif %}
+          {% if vch.pickup_time %}
+          <div class="doc-info-row"><span class="k">Pickup Time</span><span class="v">{{ vch.pickup_time }}</span></div>{% endif %}
+          {% if vch.vehicle_type %}
+          <div class="doc-info-row"><span class="k">Vehicle</span><span class="v">{{ vch.vehicle_type }}</span></div>{% endif %}
+          {% if vch.pickup_sign %}
+          <div class="doc-info-row"><span class="k">Sign Name</span><span class="v">{{ vch.pickup_sign }}</span></div>{% endif %}
+          {% if vch.driver_contact %}
+          <div class="doc-info-row"><span class="k">Driver</span><span class="v">{{ vch.driver_contact }}</span></div>{% endif %}
         </div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:26px;font-weight:800;color:#1B3A6B">HOTEL VOUCHER</div>
-        <div style="font-size:13px;font-weight:700;color:#8b1a1a">{{ vch.voucher_number }}</div>
-        {% if vch.emergency_contact %}
-        <div style="font-size:11px;color:#6B7A99;margin-top:3px">Emergency: {{ vch.emergency_contact }}</div>
-        {% endif %}
-      </div>
-    </div>
-    {# Guest + Hotel side by side #}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px">
-      <div>
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Guest Information</div>
-        <div style="font-size:19px;font-weight:800;color:var(--navy)">{{ vch.guest_name }}</div>
-        <div style="font-size:13px;color:var(--muted)">{{ vch.num_guests }} Guest(s)</div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">Hotel Information</div>
-        <div style="font-size:17px;font-weight:800;color:var(--navy)">{{ vch.hotel_name }}</div>
-        {% if vch.hotel_address %}<div style="font-size:12.5px;color:var(--muted)">{{ vch.hotel_address }}</div>{% endif %}
-        {% if vch.hotel_phone %}<div style="font-size:12.5px;color:var(--muted)">☎ {{ vch.hotel_phone }}</div>{% endif %}
-        {% if vch.hotel_contact %}<div style="font-size:12.5px;color:var(--muted)">Contact: {{ vch.hotel_contact }}</div>{% endif %}
-      </div>
-    </div>
-    {# Stay details #}
-    <div style="background:#eef4ff;border-radius:var(--radius);padding:18px;margin-bottom:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-      <div><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:3px">Check-In</div><div style="font-size:15px;font-weight:800;color:var(--navy)">{{ vch.checkin_date }}</div></div>
-      <div><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:3px">Check-Out</div><div style="font-size:15px;font-weight:800;color:var(--navy)">{{ vch.checkout_date }}</div></div>
-      <div><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:3px">Nights</div><div style="font-size:22px;font-weight:900;color:var(--navy)">{{ vch.nights }}</div></div>
-      <div><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:3px">Room / Meal</div><div style="font-size:13px;font-weight:600;color:var(--navy)">{{ vch.room_type or '—' }}<br>{{ vch.meal_plan or '—' }}</div></div>
-    </div>
-    {# Inclusions #}
-    {% set has_inc = vch.include_transfer or vch.include_tours or vch.include_insurance %}
-    {% if has_inc %}
-    <div style="margin-bottom:18px">
-      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:8px">Package Inclusions</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        {% if vch.include_transfer %}<span class="badge badge-done" style="font-size:12px;padding:5px 13px">✓ Airport Transfer</span>{% endif %}
-        {% if vch.include_tours    %}<span class="badge badge-done" style="font-size:12px;padding:5px 13px">✓ Tours</span>{% endif %}
-        {% if vch.include_insurance%}<span class="badge badge-done" style="font-size:12px;padding:5px 13px">✓ Insurance</span>{% endif %}
-      </div>
     </div>
     {% endif %}
-    {# Transfer details #}
-    {% if vch.arrival_flight or vch.driver_contact %}
-    <div style="background:#fff8ee;border-left:4px solid var(--gold);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin-bottom:18px">
-      <div style="font-size:10px;color:var(--gold-dk);font-weight:700;text-transform:uppercase;margin-bottom:8px">Transfer & Pickup Details</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;font-size:13px">
-        {% if vch.arrival_flight %}<div><strong>Arrival Flight:</strong> {{ vch.arrival_flight }}</div>{% endif %}
-        {% if vch.pickup_time    %}<div><strong>Pickup Time:</strong> {{ vch.pickup_time }}</div>{% endif %}
-        {% if vch.vehicle_type   %}<div><strong>Vehicle:</strong> {{ vch.vehicle_type }}</div>{% endif %}
-        {% if vch.pickup_sign    %}<div><strong>Sign Name:</strong> {{ vch.pickup_sign }}</div>{% endif %}
-        {% if vch.driver_contact %}<div><strong>Driver:</strong> {{ vch.driver_contact }}</div>{% endif %}
-      </div>
-    </div>
-    {% endif %}
+
+    {# Notes #}
     {% if vch.cancellation_policy %}
-    <div style="font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
-      <strong>Cancellation Policy:</strong> {{ vch.cancellation_policy }}
+    <div style="background:#fff8f0;border-left:3px solid var(--orange);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 14px;margin-bottom:10px;font-size:12.5px">
+      <strong style="color:var(--orange)">Cancellation Policy:</strong> {{ vch.cancellation_policy }}
     </div>
     {% endif %}
     {% if vch.remarks %}
-    <div style="font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px">
+    <div style="background:var(--navy-lt);border-radius:var(--radius-sm);padding:10px 14px;font-size:12.5px;color:var(--text-2)">
       <strong>Remarks:</strong> {{ vch.remarks }}
     </div>
     {% endif %}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;padding-top:16px;border-top:1px solid var(--border)">
-      <div><div style="height:1px;background:var(--muted);margin-bottom:4px"></div><div style="font-size:11px;color:var(--muted);text-align:center">Authorized — Alsondos Travel</div></div>
-      <div><div style="height:1px;background:var(--muted);margin-bottom:4px"></div><div style="font-size:11px;color:var(--muted);text-align:center">Hotel Confirmation</div></div>
+  </div>
+
+  <div class="doc-sigs">
+    <div>
+      <div class="doc-sig-line"></div>
+      <div class="doc-sig-label">Authorized — Alsondos Travel &amp; Tourism</div>
+    </div>
+    <div>
+      <div class="doc-sig-line"></div>
+      <div class="doc-sig-label">Hotel Confirmation Stamp &amp; Signature</div>
     </div>
   </div>
+
+  <div class="doc-footer">
+    Alsondos Travel &amp; Tourism · Amman, Jordan · Voucher {{ vch.voucher_number }}<br>
+    This voucher must be presented at hotel check-in
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var d=new Date();
+  var dt=d.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  var tm=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  var el=document.getElementById('printDate');
+  if(el) el.textContent='Generated on: '+dt+' — '+tm;
+})();
+</script>
 {% endblock %}
