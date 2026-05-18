@@ -2,6 +2,8 @@
 {% block title %}{{ inv.invoice_number }} — Invoice — ALSONDOS{% endblock %}
 
 {% block content %}
+
+{# ── Screen actions (hidden on print) ───────────────────────── #}
 <div class="page-header no-print">
   <div class="page-header-left">
     <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ inv.invoice_number }}</h1>
@@ -14,130 +16,137 @@
   </div>
 </div>
 
-{# Status badge outside print wrap #}
-<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px" class="no-print">
-  <span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}" style="font-size:12px;padding:5px 14px">
-    {{ inv.status }}
-  </span>
-  {% if inv.due_date %}
-  <span style="font-size:13px;color:var(--muted)"><i class="fas fa-calendar-alt" style="margin-right:4px"></i>Due: <strong>{{ inv.due_date }}</strong></span>
-  {% endif %}
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px" class="no-print">
+  <span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}" style="font-size:12.5px;padding:5px 16px">{{ inv.status }}</span>
+  {% if inv.due_date %}<span style="font-size:13px;color:var(--muted)"><i class="fas fa-calendar-alt" style="margin-right:4px"></i>Due: <strong>{{ inv.due_date }}</strong></span>{% endif %}
   <span style="font-size:13px;color:var(--muted)">Agent: <strong>{{ inv.created_by }}</strong></span>
 </div>
 
-{# ── PRINTABLE DOCUMENT ──────────────────────────────────────── #}
+{# ══════════════════════════════════════════════════════════════
+   PRINTABLE INVOICE DOCUMENT
+   ══════════════════════════════════════════════════════════════ #}
 <div class="doc-print-wrap">
 
-  {# Print-only date stamp #}
-  <div class="doc-print-date print-only" id="printDate"></div>
+  {# Generated stamp — print only #}
+  <div class="print-only" id="genStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;padding:8px 36px 0"></div>
 
-  {# Header #}
-  <div class="doc-header">
-    <div class="doc-logo-section">
-      <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel"/>
-      <div class="doc-company-info">
+  {# ── HEADER ──────────────────────────────────────────────── #}
+  <div style="background:linear-gradient(135deg,#0d1e3f 0%,#1a2f52 55%,#1a3360 100%);padding:30px 36px 26px;display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;border-bottom:3px solid #C8A84B">
+
+    {# Logo + Company #}
+    <div>
+      <img src="{{ url_for('static', filename='logo_white.png') }}"
+           alt="Alsondos Travel & Tourism"
+           style="height:72px;width:auto;display:block;margin-bottom:12px;
+                  filter:drop-shadow(0 2px 10px rgba(0,0,0,.25))">
+      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.7">
         Alsondos Travel &amp; Tourism<br>
-        Amman, Jordan · Travel Agency
+        Amman, Jordan &nbsp;·&nbsp; Travel Agency
       </div>
     </div>
-    <div class="doc-title-section">
-      <div class="doc-type">INVOICE</div>
-      <div class="doc-number">{{ inv.invoice_number }}</div>
-      <div class="doc-date">{{ inv.invoice_date }}</div>
+
+    {# Document type + number #}
+    <div style="text-align:right">
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:36px;font-weight:800;color:#fff;line-height:1;letter-spacing:-.5px">INVOICE</div>
+      <div style="font-size:16px;font-weight:700;color:#C8A84B;margin-top:7px;letter-spacing:.5px">{{ inv.invoice_number }}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:4px">{{ inv.invoice_date }}</div>
+      {% if inv.due_date %}
+      <div style="font-size:11px;color:rgba(255,200,100,.6);margin-top:2px">Due: {{ inv.due_date }}</div>
+      {% endif %}
     </div>
   </div>
 
-  {# Meta — Billed To + Details #}
-  <div class="doc-meta">
-    <div>
-      <div class="doc-meta-block-label">Billed To</div>
-      <div class="doc-meta-name">{{ inv.company }}</div>
-      <div class="doc-meta-detail">{{ inv.customer }}</div>
+  {# ── BILLED TO + INVOICE META ─────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #e2e8f0">
+    <div style="padding:22px 36px;border-right:1px solid #e2e8f0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #f1f5f9">Billed To</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:19px;font-weight:700;color:#0f1d35;line-height:1.2">{{ inv.company }}</div>
+      <div style="font-size:13px;color:#64748b;margin-top:5px">{{ inv.customer }}</div>
     </div>
-    <div>
-      <div class="doc-meta-block-label">Invoice Details</div>
-      <div style="font-size:13px;line-height:2">
-        <span style="color:var(--muted)">Invoice Date:</span> <strong>{{ inv.invoice_date }}</strong><br>
-        {% if inv.due_date %}
-        <span style="color:var(--muted)">Due Date:</span> <strong>{{ inv.due_date }}</strong><br>
-        {% endif %}
-        <span style="color:var(--muted)">Status:</span>
-        <span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}">{{ inv.status }}</span><br>
-        <span style="color:var(--muted)">Agent:</span> <strong>{{ inv.created_by }}</strong>
+    <div style="padding:22px 36px">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #f1f5f9">Invoice Details</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Invoice No.</span><strong style="color:#0f1d35">{{ inv.invoice_number }}</strong></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Date</span><strong>{{ inv.invoice_date }}</strong></div>
+        {% if inv.due_date %}<div style="display:flex;justify-content:space-between"><span style="color:#64748b">Due Date</span><strong style="color:#8b1a1a">{{ inv.due_date }}</strong></div>{% endif %}
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Status</span>
+          <span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}">{{ inv.status }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Prepared by</span><strong>{{ inv.created_by }}</strong></div>
       </div>
     </div>
   </div>
 
-  {# Services table #}
-  <div class="doc-body">
-    <table style="margin-bottom:0">
+  {# ── SERVICES TABLE ───────────────────────────────────────── #}
+  <div style="padding:24px 36px">
+    <table style="margin-bottom:0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">
       <thead>
         <tr>
-          <th>Description of Services</th>
-          <th class="text-right" style="min-width:130px">Amount (JOD)</th>
+          <th style="background:#0f1d35;color:rgba(255,255,255,.85);padding:11px 16px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Description of Services</th>
+          <th style="background:#0f1d35;color:rgba(255,255,255,.85);padding:11px 16px;text-align:right;font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:700;min-width:130px">Amount (JOD)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td style="padding:16px 14px;font-size:13.5px;line-height:1.6;max-width:500px">
+          <td style="padding:18px 16px;font-size:13.5px;line-height:1.65;border-bottom:1px solid #f1f5f9;color:#1e293b">
             {{ inv.service_desc or 'Travel Services' }}
             {% if sale %}
-            <div style="font-size:11.5px;color:var(--muted);margin-top:6px">
-              Transaction Ref: #{{ sale.id }} · {{ sale.from_loc }} → {{ sale.to_loc }}
-              · {{ sale.sale_date }} · {{ sale.tickets }} ticket(s)
+            <div style="margin-top:7px;font-size:11.5px;color:#94a3b8;padding:6px 10px;background:#f8fafc;border-radius:5px;border-left:3px solid #C8A84B">
+              Ref #{{ sale.id }} &nbsp;·&nbsp; {{ sale.from_loc }} → {{ sale.to_loc }}
+              &nbsp;·&nbsp; {{ sale.sale_date }} &nbsp;·&nbsp; {{ sale.tickets }} ticket(s)
             </div>
             {% endif %}
           </td>
-          <td class="text-right" style="font-size:15px;font-weight:700;color:var(--navy-dk);vertical-align:middle">
+          <td style="padding:18px 16px;text-align:right;font-size:15px;font-weight:700;color:#0f1d35;vertical-align:middle;border-bottom:1px solid #f1f5f9">
             {{ "%.3f"|format((inv.amount or 0)|float) }}
           </td>
         </tr>
       </tbody>
     </table>
 
-    {# Totals #}
-    <div style="display:flex;justify-content:flex-end">
-      <div class="doc-totals-box">
-        <div class="doc-total-row">
-          <span class="k" style="color:var(--muted)">Subtotal</span>
-          <span class="v" style="font-weight:600">JOD {{ "%.3f"|format((inv.amount or 0)|float) }}</span>
+    {# Totals box #}
+    <div style="display:flex;justify-content:flex-end;margin-top:18px">
+      <div style="min-width:270px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;border-bottom:1px solid #e2e8f0;color:#64748b">
+          <span>Subtotal</span>
+          <span style="font-weight:600;color:#0f1d35">JOD {{ "%.3f"|format((inv.amount or 0)|float) }}</span>
         </div>
         {% if inv.discount and inv.discount|float > 0 %}
-        <div class="doc-total-row">
-          <span class="k" style="color:var(--green)">Discount</span>
-          <span class="v" style="color:var(--green)">− JOD {{ "%.3f"|format((inv.discount or 0)|float) }}</span>
+        <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;border-bottom:1px solid #e2e8f0">
+          <span style="color:#1e7b34">Discount</span>
+          <span style="color:#1e7b34;font-weight:600">− JOD {{ "%.3f"|format((inv.discount or 0)|float) }}</span>
         </div>
         {% endif %}
-        <div class="doc-total-row grand">
-          <span>TOTAL DUE</span>
-          <span class="val">JOD {{ "%.3f"|format((inv.total or 0)|float) }}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:linear-gradient(90deg,#0f1d35,#1a2f52);color:#fff">
+          <span style="font-size:13px;font-weight:700;letter-spacing:.5px">TOTAL DUE</span>
+          <span style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:800;color:#C8A84B">JOD {{ "%.3f"|format((inv.total or 0)|float) }}</span>
         </div>
       </div>
     </div>
 
     {% if inv.notes %}
-    <div style="margin-top:18px;background:var(--navy-lt);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--text-2)">
-      <strong style="color:var(--navy)">Notes:</strong> {{ inv.notes }}
+    <div style="margin-top:18px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1B3A6B;border-radius:0 8px 8px 0;padding:12px 16px;font-size:13px;color:#374151">
+      <strong style="color:#0f1d35">Notes:</strong> {{ inv.notes }}
     </div>
     {% endif %}
   </div>
 
-  {# Signatures #}
-  <div class="doc-sigs">
+  {# ── SIGNATURES ───────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:22px 36px;border-top:1px solid #e2e8f0;margin-top:8px">
     <div>
-      <div class="doc-sig-line"></div>
-      <div class="doc-sig-label">Authorized Signature — Alsondos Travel &amp; Tourism</div>
+      <div style="height:1.5px;background:#cbd5e1;margin-bottom:6px"></div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center">Authorized Signature — Alsondos Travel &amp; Tourism</div>
     </div>
     <div>
-      <div class="doc-sig-line"></div>
-      <div class="doc-sig-label">Client Signature &amp; Stamp · Date: _______________</div>
+      <div style="height:1.5px;background:#cbd5e1;margin-bottom:6px"></div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature &amp; Stamp &nbsp;·&nbsp; Date: _______________</div>
     </div>
   </div>
 
-  {# Footer #}
-  <div class="doc-footer">
-    Alsondos Travel &amp; Tourism · Amman, Jordan · This invoice is computer-generated<br>
-    Please retain a copy for your records · Payment due as specified above
+  {# ── FOOTER ───────────────────────────────────────────────── #}
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:12px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
+    Alsondos Travel &amp; Tourism &nbsp;·&nbsp; Amman, Jordan &nbsp;·&nbsp; This invoice is computer-generated<br>
+    Please retain a copy for your records &nbsp;·&nbsp; Payment due as specified above
   </div>
 
 </div>
@@ -145,14 +154,17 @@
 
 {% block extra_js %}
 <script>
-// Auto-set print date/time
 (function(){
   var d = new Date();
-  var opts = {day:'2-digit',month:'long',year:'numeric'};
-  var dateStr = d.toLocaleDateString('en-GB', opts);
-  var timeStr = d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
-  var el = document.getElementById('printDate');
-  if (el) el.textContent = 'Generated on: ' + dateStr + ' — ' + timeStr;
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var day  = String(d.getDate()).padStart(2,'0');
+  var mon  = months[d.getMonth()];
+  var yr   = d.getFullYear();
+  var hh   = String(d.getHours()).padStart(2,'0');
+  var mm   = String(d.getMinutes()).padStart(2,'0');
+  var stamp = 'Generated on: ' + day + ' ' + mon + ' ' + yr + ' \u2014 ' + hh + ':' + mm;
+  var el = document.getElementById('genStamp');
+  if (el) el.textContent = stamp;
 })();
 </script>
 {% endblock %}
