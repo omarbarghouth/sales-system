@@ -1,154 +1,216 @@
 {% extends "base.html" %}
-{% block title %}User Management — ALSONDOS TRAVEL{% endblock %}
+{% block title %}User Management — ALSONDOS Admin{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1>👥 User Management</h1>
-  <p>Add, remove, and manage system users and their roles</p>
+  <div class="page-header-left">
+    <h1><i class="fas fa-users-cog" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:7px"></i>User Management</h1>
+    <p>Create and manage employee accounts, roles, and access permissions</p>
+  </div>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for category, message in messages %}
-    <div style="padding:12px 16px;border-radius:7px;margin-bottom:16px;font-weight:500;font-size:13px;
-      {% if category=='success' %}background:#D5F0DD;color:#1E7B34;border:1px solid #c3e8cf;
-      {% elif category=='danger' %}background:#FAD7D3;color:#C0392B;border:1px solid #f5c6c2;
-      {% else %}background:#D6EAF8;color:#2980B9;border:1px solid #c5dff5;{% endif %}">
-      {{ message }}
-    </div>
-  {% endfor %}
-{% endwith %}
+<div class="grid-2 mb-6">
 
-<div class="grid-2" style="align-items:start;margin-bottom:24px">
-
-  <!-- Add User Form -->
+  {# ── Add New User ──────────────────────────────────────── #}
   <div class="card">
-    <div class="card-header">➕ Add New User</div>
+    <div class="card-header"><i class="fas fa-user-plus"></i> Create New Account</div>
     <div class="card-body">
       <form method="POST" action="{{ url_for('add_user') }}">
-        <div class="form-grid" style="grid-template-columns:1fr;gap:14px">
+        <div class="form-grid form-grid-2" style="margin-bottom:14px">
           <div class="form-group">
-            <label>Username *</label>
-            <input type="text" name="username" placeholder="e.g. omar" required
-                   style="text-transform:lowercase">
+            <label>Username <span class="req">*</span></label>
+            <input type="text" name="username" required placeholder="e.g. omar.sales"
+                   autocomplete="off" style="text-transform:lowercase">
+            <small>Lowercase, no spaces</small>
           </div>
           <div class="form-group">
-            <label>Password *</label>
-            <input type="password" name="password" placeholder="Min 6 characters" required>
+            <label>Password <span class="req">*</span></label>
+            <input type="password" name="password" required placeholder="Min 6 characters"
+                   autocomplete="new-password">
           </div>
           <div class="form-group">
-            <label>Role *</label>
+            <label>Role</label>
             <select name="role">
-              <option value="user">👤 User — View Only</option>
-              <option value="admin">👑 Admin — Full Access</option>
+              <option value="user">👤 Employee / Sales Agent</option>
+              <option value="admin">👑 Admin (full access)</option>
             </select>
           </div>
-          <button type="submit" class="btn btn-success">✓ Create User</button>
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" name="full_name" placeholder="Omar Al-Ahmad">
+          </div>
         </div>
+        <button type="submit" class="btn btn-red" style="width:100%">
+          <i class="fas fa-plus-circle"></i> Create Account
+        </button>
       </form>
     </div>
   </div>
 
-  <!-- Change Password Form -->
+  {# ── Change Own Password ───────────────────────────────── #}
   <div class="card">
-    <div class="card-header">🔑 Change My Password</div>
+    <div class="card-header"><i class="fas fa-lock"></i> Change My Password</div>
     <div class="card-body">
-      <form method="POST" action="{{ url_for('change_password') }}">
-        <div class="form-grid" style="grid-template-columns:1fr;gap:14px">
+      <form method="POST" action="{{ url_for('change_password') }}" autocomplete="off">
+        <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:14px">
           <div class="form-group">
-            <label>Current Password *</label>
-            <input type="password" name="current_password" required>
+            <label>Current Password <span class="req">*</span></label>
+            <input type="password" name="current_password" required autocomplete="current-password">
           </div>
           <div class="form-group">
-            <label>New Password *</label>
-            <input type="password" name="new_password" placeholder="Min 6 characters" required>
+            <label>New Password <span class="req">*</span></label>
+            <input type="password" name="new_password" required placeholder="Min 6 characters" autocomplete="new-password">
           </div>
           <div class="form-group">
-            <label>Confirm New Password *</label>
-            <input type="password" name="confirm_password" required>
+            <label>Confirm New Password <span class="req">*</span></label>
+            <input type="password" name="confirm_password" required autocomplete="new-password">
           </div>
-          <button type="submit" class="btn btn-primary">🔑 Change Password</button>
         </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">
+          <i class="fas fa-key"></i> Update Password
+        </button>
       </form>
     </div>
   </div>
 
 </div>
 
-<!-- Users Table -->
+{# ── Staff Table ────────────────────────────────────────────── #}
 <div class="card">
-  <div class="card-header">👥 All Users ({{ users|length }})</div>
-  <div class="table-wrap">
+  <div class="card-header">
+    <i class="fas fa-table"></i> All Accounts
+    <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ users|length }} total accounts</span>
+  </div>
+  <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Username</th>
+          <th>#</th>
+          <th>User</th>
           <th>Role</th>
+          <th>Transactions</th>
+          <th class="text-right">Revenue</th>
+          <th class="text-right">Profit</th>
+          <th class="text-right">Commission</th>
           <th>Created</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for u in users %}
+        {% set first_letter = u.username[0]|upper %}
         <tr>
-          <td class="text-muted">{{ u.id }}</td>
+          <td style="color:var(--muted-lt);font-size:11px">{{ loop.index }}</td>
           <td>
-            <strong>{{ u.username }}</strong>
-            {% if u.id == current_user.id %}
-              <span style="background:#D6EAF8;color:#2980B9;padding:2px 8px;border-radius:20px;font-size:11px;margin-left:6px">You</span>
-            {% endif %}
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="staff-avatar {% if u.role=='admin' %}admin-av{% endif %}">
+                {{ first_letter }}
+              </div>
+              <div>
+                <div style="font-weight:700;color:var(--navy-dk)">{{ u.full_name or u.username }}</div>
+                <div style="font-size:11px;color:var(--muted-lt)">@{{ u.username }}</div>
+              </div>
+            </div>
           </td>
           <td>
-            {% if u.role == 'admin' %}
-              <span class="badge" style="background:#1B3A6B;color:#fff">👑 Admin</span>
-            {% else %}
-              <span class="badge badge-still">👤 User</span>
-            {% endif %}
+            <span class="badge badge-{% if u.role=='admin' %}pending{% else %}navy{% endif %}">
+              {% if u.role == 'admin' %}👑 Admin{% else %}👤 Agent{% endif %}
+            </span>
           </td>
-          <td class="text-muted">{{ u.created_at }}</td>
+          <td class="text-center">
+            <span style="font-weight:700;color:var(--navy)">{{ u.txn_count or 0 }}</span>
+          </td>
+          <td class="text-right text-gold">{{ "%.2f"|format((u.total_sell or 0)|float) }}</td>
+          <td class="text-right text-green">{{ "%.2f"|format((u.total_profit or 0)|float) }}</td>
+          <td class="text-right text-purple">{{ "%.2f"|format((u.commission or 0)|float) }}</td>
+          <td style="font-size:11.5px;color:var(--muted-lt)">{{ u.created_at[:10] if u.created_at else '—' }}</td>
           <td>
-            {% if u.id != current_user.id %}
-            <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
-                  onsubmit="return confirm('Delete user {{ u.username }}?')">
-              <button type="submit" class="btn btn-danger">🗑 Delete</button>
-            </form>
-            {% else %}
-            <span class="text-muted" style="font-size:12px">Current session</span>
-            {% endif %}
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+              {# View sales #}
+              <a href="{{ url_for('admin_employee_sales', uid=u.id) }}"
+                 class="btn btn-edit btn-xs" title="View Sales">
+                <i class="fas fa-chart-bar"></i>
+              </a>
+
+              {# Reset password modal trigger #}
+              <button type="button" class="btn btn-warning btn-xs"
+                      title="Reset Password"
+                      onclick="openResetPw({{ u.id }}, '{{ u.username }}')">
+                <i class="fas fa-key"></i>
+              </button>
+
+              {# Toggle active/inactive #}
+              {% if u.is_active != False %}
+              <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}" style="display:inline">
+                <input type="hidden" name="action" value="disable">
+                <button type="submit" class="btn btn-xs btn-warning" title="Disable" {% if u.id == session.user_id %}disabled{% endif %}>
+                  <i class="fas fa-ban"></i>
+                </button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}" style="display:inline">
+                <input type="hidden" name="action" value="enable">
+                <button type="submit" class="btn btn-xs btn-success" title="Enable">
+                  <i class="fas fa-check"></i>
+                </button>
+              </form>
+              {% endif %}
+
+              {# Delete #}
+              {% if u.id != session.user_id %}
+              <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
+                    onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
+                <button type="submit" class="btn btn-danger btn-xs" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-center text-muted" style="padding:28px">No users found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<!-- Role explanation -->
-<div class="grid-2" style="margin-top:20px">
-  <div class="card">
-    <div class="card-header" style="background:#1E7B34">👑 Admin — Full Access</div>
-    <div class="card-body" style="font-size:13px;line-height:2">
-      ✅ View all pages<br>
-      ✅ Add new sales<br>
-      ✅ Edit & delete sales<br>
-      ✅ Record & edit payments<br>
-      ✅ Export to Excel<br>
-      ✅ Access Admin DB page<br>
-      ✅ Manage users
+{# ── Reset Password Modal ───────────────────────────────────── #}
+<div id="resetPwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:var(--radius-lg);padding:32px;max-width:420px;width:90%;box-shadow:var(--sh-xl);border:1px solid var(--border-lt)">
+    <div style="font-family:var(--font-hd);font-size:18px;font-weight:700;color:var(--navy-dk);margin-bottom:4px">
+      <i class="fas fa-key" style="color:var(--orange);margin-right:7px"></i>Reset Password
     </div>
-  </div>
-  <div class="card">
-    <div class="card-header" style="background:#6B7A99">👤 User — View Only</div>
-    <div class="card-body" style="font-size:13px;line-height:2">
-      ✅ View dashboard<br>
-      ✅ View sales report<br>
-      ✅ View statements<br>
-      ✅ View payments<br>
-      ✅ View deliver tomorrow<br>
-      ❌ Cannot add/edit/delete<br>
-      ❌ Cannot access Admin DB
-    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:22px" id="resetPwDesc">Set a new password for this user.</div>
+    <form method="POST" id="resetPwForm" action="">
+      <div class="form-group" style="margin-bottom:16px">
+        <label>New Password <span class="req">*</span></label>
+        <input type="password" name="new_password" id="newPwInput" required minlength="6" placeholder="Min 6 characters" autocomplete="new-password">
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" onclick="closeResetPw()" class="btn btn-outline">Cancel</button>
+        <button type="submit" class="btn btn-warning"><i class="fas fa-save"></i> Set Password</button>
+      </div>
+    </form>
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openResetPw(uid, uname) {
+  document.getElementById('resetPwModal').style.display = 'flex';
+  document.getElementById('resetPwDesc').textContent = 'Setting new password for: @' + uname;
+  document.getElementById('resetPwForm').action = '/users/reset-pw/' + uid;
+  document.getElementById('newPwInput').focus();
+}
+function closeResetPw() {
+  document.getElementById('resetPwModal').style.display = 'none';
+}
+document.getElementById('resetPwModal').addEventListener('click', function(e) {
+  if (e.target === this) closeResetPw();
+});
+</script>
 {% endblock %}

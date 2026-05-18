@@ -1,52 +1,54 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit Sale' if edit else 'New Sale' }} — ALSONDOS TRAVEL{% endblock %}
+{% block title %}{{ 'Edit Transaction' if edit else 'New Transaction' }} — ALSONDOS TRAVEL{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1>{{ '✏️ Edit Transaction' if edit else '➕ New Transaction' }}</h1>
-    <p>{{ 'Update the transaction details below' if edit else 'Fill in all required fields to record a new sale' }}</p>
+    <h1>
+      <i class="fas fa-{{ 'edit' if edit else 'plus-circle' }}" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:6px"></i>
+      {{ 'Edit Transaction' if edit else 'New Transaction' }}
+    </h1>
+    <p>{{ 'Update the booking details below' if edit else 'Record a new sale with full outbound and return details' }}</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('sales_report') }}" class="btn btn-outline">
-      <i class="fas fa-arrow-left"></i> Back to Sales
+    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline">
+      <i class="fas fa-arrow-left"></i> Back
     </a>
   </div>
 </div>
 
-<form method="POST" id="saleForm">
+<form method="POST" id="saleForm" autocomplete="off">
 
-  {# ── 1. Route & Basic Info ─────────────────────────────── #}
+  {# ── 1. Route ─────────────────────────────────────────────── #}
   <div class="form-section">
     <div class="form-section-header">
-      <i class="fas fa-map-marker-alt" style="color:var(--gold)"></i>
-      Route &amp; Basic Information
+      <i class="fas fa-route"></i> Route &amp; Basic Information
     </div>
     <div class="form-section-body">
-      <div class="form-grid">
+      <div class="form-grid form-grid-4">
         <div class="form-group">
-          <label>From (Airport/City) <span style="color:var(--red)">*</span></label>
-          <input type="text" name="from_loc" placeholder="e.g. AMM" required
+          <label>From <span class="req">*</span></label>
+          <input type="text" name="from_loc" placeholder="AMM" required
                  value="{{ sale.from_loc if sale else (form.from_loc or '') }}"
-                 style="text-transform:uppercase; letter-spacing:1px; font-weight:700">
+                 style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
         </div>
         <div class="form-group">
-          <label>To (Airport/City) <span style="color:var(--red)">*</span></label>
-          <input type="text" name="to_loc" placeholder="e.g. IST" required
+          <label>To <span class="req">*</span></label>
+          <input type="text" name="to_loc" placeholder="DXB" required
                  value="{{ sale.to_loc if sale else (form.to_loc or '') }}"
-                 style="text-transform:uppercase; letter-spacing:1px; font-weight:700">
+                 style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
         </div>
         <div class="form-group">
-          <label>Via (optional)</label>
+          <label>Via</label>
           <input type="text" name="via" placeholder="e.g. CAI"
                  value="{{ sale.via if sale else (form.via or '') }}"
-                 style="text-transform:uppercase">
+                 style="text-transform:uppercase;letter-spacing:1px;text-align:center">
         </div>
         <div class="form-group">
           <label>Trip Type</label>
           <select name="trip_type">
-            <option value="RETURN"   {% if (sale and sale.trip_type=='RETURN') or (not sale and (form.trip_type or 'RETURN')=='RETURN') %}selected{% endif %}>✈ Return</option>
-            <option value="ONE WAY"  {% if (sale and sale.trip_type=='ONE WAY') or (not sale and form.trip_type=='ONE WAY') %}selected{% endif %}>→ One Way</option>
+            <option value="RETURN"   {% if (sale and sale.trip_type=='RETURN')   or (not sale and (form.trip_type or 'RETURN')=='RETURN')   %}selected{% endif %}>✈ Return</option>
+            <option value="ONE WAY"  {% if (sale and sale.trip_type=='ONE WAY')  or (not sale and form.trip_type=='ONE WAY')  %}selected{% endif %}>→ One Way</option>
             <option value="OPEN JAW" {% if (sale and sale.trip_type=='OPEN JAW') or (not sale and form.trip_type=='OPEN JAW') %}selected{% endif %}>⇄ Open Jaw</option>
           </select>
         </div>
@@ -54,28 +56,27 @@
     </div>
   </div>
 
-  {# ── 2. Company & Customer ─────────────────────────────── #}
+  {# ── 2. Company & Customer ─────────────────────────────────── #}
   <div class="form-section">
     <div class="form-section-header">
-      <i class="fas fa-building" style="color:var(--gold)"></i>
-      Company &amp; Customer
+      <i class="fas fa-building"></i> Company &amp; Customer
     </div>
     <div class="form-section-body">
-      <div class="form-grid">
+      <div class="form-grid form-grid-4">
         <div class="form-group">
-          <label>Sell To (Company) <span style="color:var(--red)">*</span></label>
+          <label>Company <span class="req">*</span></label>
           <input type="text" name="company" list="company-list" required
-                 placeholder="Select or type company name"
+                 placeholder="Type or select company"
                  value="{{ sale.company if sale else (form.company or '') }}"
-                 style="text-transform:uppercase">
+                 style="text-transform:uppercase;font-weight:700">
           <datalist id="company-list">
             {% for co in companies %}<option value="{{ co }}">{% endfor %}
           </datalist>
-          <small>Start typing to see existing companies</small>
+          <small>Existing companies auto-suggested</small>
         </div>
         <div class="form-group">
-          <label>Customer Full Name <span style="color:var(--red)">*</span></label>
-          <input type="text" name="customer" placeholder="e.g. AHMED AL-RASHID" required
+          <label>Customer Full Name <span class="req">*</span></label>
+          <input type="text" name="customer" placeholder="AHMAD AL-RASHID" required
                  value="{{ sale.customer if sale else (form.customer or '') }}"
                  style="text-transform:uppercase" maxlength="120">
         </div>
@@ -83,10 +84,10 @@
           <label>No. of Tickets</label>
           <input type="number" name="tickets" min="1" max="99"
                  value="{{ sale.tickets if sale else (form.tickets or 1) }}"
-                 style="font-weight:700; font-size:15px">
+                 style="font-weight:800;font-size:18px;text-align:center">
         </div>
         <div class="form-group">
-          <label>Sale Date <span style="color:var(--red)">*</span></label>
+          <label>Sale Date <span class="req">*</span></label>
           <input type="date" name="sale_date" required
                  value="{{ sale.sale_date if sale else (form.sale_date or today) }}">
         </div>
@@ -94,20 +95,19 @@
     </div>
   </div>
 
-  {# ── 3. Outbound Sector ────────────────────────────────── #}
+  {# ── 3. Outbound Sector ────────────────────────────────────── #}
   <div class="form-section">
-    <div class="form-section-header">
-      <i class="fas fa-plane-departure" style="color:var(--gold)"></i>
-      Outbound Sector
+    <div class="form-section-header" style="background:linear-gradient(90deg,#0d2048,var(--navy))">
+      <i class="fas fa-plane-departure"></i> Outbound Sector
     </div>
     <div class="form-section-body">
-      <div class="form-grid">
+      <div class="form-grid form-grid-4">
         <div class="form-group">
-          <label>Outbound Supplier (Buy From)</label>
-          <input type="text" name="buy_from" placeholder="e.g. ROYAL JORDANIAN, EMA"
+          <label>Outbound Supplier</label>
+          <input type="text" name="buy_from" placeholder="e.g. ROYAL JORDANIAN"
                  value="{{ sale.buy_from if sale else (form.buy_from or '') }}"
                  style="text-transform:uppercase">
-          <small>Who you buy the outbound ticket from</small>
+          <small>Airline / GDS / consolidator</small>
         </div>
         <div class="form-group">
           <label>Departure Date</label>
@@ -118,119 +118,159 @@
           <label>Outbound Delivery Date</label>
           <input type="date" name="outbound_delivery"
                  value="{{ sale.outbound_delivery if sale else (form.outbound_delivery or '') }}">
-          <small>When to deliver this ticket to client</small>
+          <small>When ticket delivered to client</small>
         </div>
         <div class="form-group">
           <label>Outbound Status</label>
-          <div style="padding:9px 13px; border-radius:8px; font-size:13px; font-weight:700;
-            {% if sale and sale.outbound_status=='DONE' %}
-              background:var(--green-lt); color:var(--green); border:1.5px solid var(--green);
-            {% else %}
-              background:var(--orange-lt); color:var(--orange); border:1.5px solid var(--orange);
-            {% endif %}">
+          <div style="padding:9px 13px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
+            {% if sale and sale.outbound_status=='DONE' %}background:var(--green-lt);color:var(--green);border:1.5px solid rgba(30,123,52,.25);
+            {% else %}background:var(--orange-lt);color:var(--orange);border:1.5px solid rgba(217,119,6,.25);{% endif %}
+            display:flex;align-items:center;gap:6px">
             <i class="fas fa-{% if sale and sale.outbound_status=='DONE' %}check-circle{% else %}clock{% endif %}"></i>
             {% if sale %}{{ sale.outbound_status or 'PENDING' }}{% else %}AUTO{% endif %}
           </div>
-          <small>Auto-calculated from delivery date</small>
+          <small>Auto-set from delivery date</small>
         </div>
       </div>
     </div>
   </div>
 
-  {# ── 4. Return Sector ──────────────────────────────────── #}
+  {# ── 4. Return Sector ──────────────────────────────────────── #}
   <div class="form-section">
-    <div class="form-section-header" style="background:linear-gradient(90deg,#0d2048,var(--navy))">
-      <i class="fas fa-plane-arrival" style="color:var(--gold)"></i>
-      Return Sector
-      <span style="font-size:11px; font-weight:400; color:rgba(255,255,255,.55); margin-left:6px">(optional — for round trips with different return supplier)</span>
+    <div class="form-section-header" style="background:linear-gradient(90deg,#3d2800,#6b4400)">
+      <i class="fas fa-plane-arrival"></i> Return Sector
+      <span style="font-size:10.5px;font-weight:400;color:rgba(255,255,255,.5);margin-left:6px">(optional — fill if different supplier for return leg)</span>
     </div>
-    <div class="form-section-body" style="background:#fffdf4">
-      <div class="form-grid">
+    <div class="form-section-body" style="background:linear-gradient(180deg,#fffdf5,#fff)">
+      <div class="form-grid form-grid-4">
         <div class="form-group">
           <label>Return Supplier</label>
           <input type="text" name="return_supplier" id="returnSupplier"
-                 placeholder="Who supplied return ticket? (if different)"
+                 placeholder="Different return supplier?"
                  value="{{ sale.return_supplier if sale else (form.return_supplier or '') }}"
                  style="text-transform:uppercase">
-          <small>Only fill if different from outbound supplier</small>
+          <small>Leave empty if same as outbound</small>
         </div>
         <div class="form-group">
           <label>Return Date</label>
           <input type="date" name="return_date" id="returnDate"
                  value="{{ sale.return_date if sale else (form.return_date or '') }}"
-                 onchange="toggleReturnSupplier()">
+                 onchange="onReturnDateChange()">
         </div>
         <div class="form-group">
           <label>Return Delivery Date</label>
           <input type="date" name="return_delivery"
                  value="{{ sale.return_delivery if sale else (form.return_delivery or '') }}">
-          <small>When to deliver return ticket to client</small>
+          <small>When return ticket delivered</small>
         </div>
         <div class="form-group">
           <label>Return Status</label>
-          <div style="padding:9px 13px; border-radius:8px; font-size:13px; font-weight:700;
-            {% if sale and sale.return_status=='DONE' and sale.return_date %}
-              background:var(--green-lt); color:var(--green); border:1.5px solid var(--green);
-            {% elif sale and sale.return_date %}
-              background:var(--orange-lt); color:var(--orange); border:1.5px solid var(--orange);
-            {% else %}
-              background:#f7f7f7; color:var(--muted); border:1.5px solid var(--border);
-            {% endif %}">
+          <div style="padding:9px 13px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;
+            {% if sale and sale.return_status=='DONE' and sale.return_date %}background:var(--green-lt);color:var(--green);border:1.5px solid rgba(30,123,52,.25);
+            {% elif sale and sale.return_date %}background:var(--orange-lt);color:var(--orange);border:1.5px solid rgba(217,119,6,.25);
+            {% else %}background:var(--bg);color:var(--muted);border:1.5px solid var(--border-lt);{% endif %}
+            display:flex;align-items:center;gap:6px">
+            <i class="fas fa-{% if sale and sale.return_date and sale.return_status=='DONE' %}check-circle{% elif sale and sale.return_date %}clock{% else %}minus-circle{% endif %}"></i>
             {% if sale and sale.return_date %}{{ sale.return_status or 'PENDING' }}{% else %}N/A{% endif %}
           </div>
-          <small>Auto-calculated from return delivery date</small>
+          <small>Auto-set from delivery date</small>
         </div>
       </div>
     </div>
   </div>
 
-  {# ── 5. Pricing — JOD ──────────────────────────────────── #}
+  {# ── 5. PRICING — Split outbound + return costs ────────────── #}
   <div class="form-section">
     <div class="form-section-header">
-      <i class="fas fa-coins" style="color:var(--gold)"></i>
-      Pricing (JOD) &amp; Remarks
+      <i class="fas fa-coins"></i> Pricing (JOD) — Split Cost Accounting
     </div>
     <div class="form-section-body">
-      <div class="form-grid">
+
+      {# Split supplier cost panels #}
+      <div class="price-split-grid">
+        <div class="price-panel out-panel">
+          <div class="price-panel-title">
+            <i class="fas fa-plane-departure"></i> Outbound Cost (JOD)
+          </div>
+          <div class="form-group">
+            <label>Outbound Net Cost</label>
+            <input type="number" name="outbound_cost" id="outbound_cost"
+                   step="0.001" min="0" placeholder="0.000"
+                   value="{{ sale.outbound_cost if sale and sale.outbound_cost else (form.outbound_cost or '') }}"
+                   oninput="splitCostCalc()"
+                   style="font-size:16px;font-weight:800;text-align:center">
+            <small>Cost paid to outbound supplier</small>
+          </div>
+        </div>
+        <div class="price-panel ret-panel">
+          <div class="price-panel-title">
+            <i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return Cost (JOD)
+          </div>
+          <div class="form-group">
+            <label>Return Net Cost</label>
+            <input type="number" name="return_cost" id="return_cost"
+                   step="0.001" min="0" placeholder="0.000"
+                   value="{{ sale.return_cost if sale and sale.return_cost else (form.return_cost or '') }}"
+                   oninput="splitCostCalc()"
+                   style="font-size:16px;font-weight:800;text-align:center">
+            <small>Cost paid to return supplier (0 if same)</small>
+          </div>
+        </div>
+      </div>
+
+      {# Total net auto-calculated #}
+      <div class="net-total-row">
+        <span class="net-total-label"><i class="fas fa-sigma" style="margin-right:5px"></i>Total Net Cost</span>
+        <span class="net-total-value" id="net-total-display">
+          JOD {{ "%.3f"|format((sale.net or 0)|float) if sale else '0.000' }}
+        </span>
+      </div>
+
+      {# Sell + Profit #}
+      <div class="form-grid form-grid-3">
         <div class="form-group">
-          <label>Net Cost (JOD) <span style="color:var(--red)">*</span></label>
+          <label>Net Cost (JOD) — Total <span class="req">*</span></label>
           <input type="number" name="net" id="net" step="0.001" min="0" required
                  placeholder="0.000"
                  value="{{ sale.net if sale else (form.net or '') }}"
                  oninput="calcProfit()"
-                 style="font-size:16px; font-weight:700">
-          <small>What you pay the supplier — not shown to clients</small>
+                 style="font-size:16px;font-weight:800;background:var(--navy-lt);border-color:rgba(27,58,107,.2)">
+          <small>Auto-filled from outbound + return cost above. Edit manually if needed.</small>
         </div>
         <div class="form-group">
-          <label>Sell Price (JOD) <span style="color:var(--red)">*</span></label>
+          <label>Sell Price (JOD) <span class="req">*</span></label>
           <input type="number" name="sell" id="sell" step="0.001" min="0" required
                  placeholder="0.000"
                  value="{{ sale.sell if sale else (form.sell or '') }}"
                  oninput="calcProfit()"
-                 style="font-size:16px; font-weight:700">
-          <small>Amount charged to the client</small>
+                 style="font-size:16px;font-weight:800">
+          <small>Total amount charged to the client</small>
         </div>
         <div class="form-group">
           <label>Profit (Auto-calculated)</label>
           <div class="profit-display" id="profit-display">
-            <i class="fas fa-coins"></i>
-            <span id="profit-value">JOD {{ "%.3f"|format(sale.profit if sale else 0) }}</span>
+            <i class="fas fa-chart-line"></i>
+            <span id="profit-value">JOD {{ "%.3f"|format((sale.profit or 0)|float) if sale else '0.000' }}</span>
           </div>
-          <small>Profit = Sell Price − Net Cost</small>
-        </div>
-        <div class="form-group">
-          <label>Remarks</label>
-          <input type="text" name="remarks" placeholder="Optional notes or reference"
-                 maxlength="200"
-                 value="{{ sale.remarks if sale else (form.remarks or '') }}">
+          <small>Profit = Sell Price − Total Net Cost</small>
         </div>
       </div>
+
+      <div class="form-group" style="margin-top:4px">
+        <label>Remarks</label>
+        <input type="text" name="remarks" placeholder="Optional notes, PNR, reference…"
+               maxlength="200"
+               value="{{ sale.remarks if sale else (form.remarks or '') }}">
+      </div>
+
+      {# Hidden fields for outbound/return cost storage (new columns) #}
+      {# These also need DB columns — added via migration below #}
+
     </div>
   </div>
 
-  {# ── Actions ───────────────────────────────────────────── #}
-  <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:4px">
-    <a href="{{ url_for('sales_report') }}" class="btn btn-outline">
+  <div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px">
+    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline">
       <i class="fas fa-times"></i> Cancel
     </a>
     <button type="submit" class="btn btn-red btn-lg">
@@ -244,24 +284,49 @@
 
 {% block extra_js %}
 <script>
+// ── Split cost auto-fill ──────────────────────────────────────
+function splitCostCalc() {
+  var oc  = parseFloat(document.getElementById('outbound_cost').value) || 0;
+  var rc  = parseFloat(document.getElementById('return_cost').value)   || 0;
+  var tot = oc + rc;
+  document.getElementById('net').value = tot.toFixed(3);
+  document.getElementById('net-total-display').textContent =
+    'JOD ' + tot.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
+  calcProfit();
+}
+
+// ── Profit calculator ─────────────────────────────────────────
 function calcProfit() {
-  var net  = parseFloat(document.getElementById('net').value)  || 0;
-  var sell = parseFloat(document.getElementById('sell').value) || 0;
+  var net    = parseFloat(document.getElementById('net').value)  || 0;
+  var sell   = parseFloat(document.getElementById('sell').value) || 0;
   var profit = sell - net;
-  var el = document.getElementById('profit-value');
+  var el  = document.getElementById('profit-value');
   var box = document.getElementById('profit-display');
   el.textContent = 'JOD ' + profit.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
-  if (profit < 0) {
-    box.style.background = 'linear-gradient(135deg,#7f1d1d,#991b1b)';
-  } else {
-    box.style.background = 'linear-gradient(135deg,#122850,#1B3A6B)';
-  }
+  // Color: negative = dark red, positive = dark navy
+  box.style.background = profit < 0
+    ? 'linear-gradient(135deg,#5c0f0f,#7f1d1d)'
+    : 'linear-gradient(135deg,#0d1e3f,#192e5a)';
+  // Also update total net display
+  document.getElementById('net-total-display').textContent =
+    'JOD ' + net.toLocaleString('en', {minimumFractionDigits:3, maximumFractionDigits:3});
 }
-function toggleReturnSupplier() {
+
+function onReturnDateChange() {
   var rd = document.getElementById('returnDate').value;
   var rs = document.getElementById('returnSupplier');
-  rs.style.borderColor = rd ? 'var(--gold)' : '';
+  var rc = document.getElementById('return_cost');
+  if (rd) {
+    rs.style.borderColor = 'var(--gold)';
+    rc.style.borderColor = 'var(--gold)';
+  } else {
+    rs.style.borderColor = '';
+    rc.style.borderColor = '';
+  }
 }
+
+// Init on page load
 calcProfit();
+onReturnDateChange();
 </script>
 {% endblock %}

@@ -343,7 +343,29 @@ def logout():
 @app.route('/users')
 @admin_required
 def manage_users():
-    users = query_db('SELECT id, username, role, created_at FROM users ORDER BY id')
+    users = query_db("""
+        SELECT u.id, u.username, u.role, u.created_at,
+               COALESCE(u.full_name,'') as full_name,
+               COALESCE(u.is_active, TRUE) as is_active,
+               COALESCE(u.commission_rate, 20.0) as commission_rate,
+               COALESCE(s.txn_count, 0)     as txn_count,
+               COALESCE(s.total_sell, 0)    as total_sell,
+               COALESCE(s.total_profit, 0)  as total_profit
+        FROM users u
+        LEFT JOIN (
+            SELECT created_by_user_id,
+                   COUNT(*) as txn_count,
+                   SUM(sell) as total_sell,
+                   SUM(profit) as total_profit
+            FROM sales WHERE deleted=FALSE
+            GROUP BY created_by_user_id
+        ) s ON u.id = s.created_by_user_id
+        ORDER BY u.id
+    """)
+    users = [dict(u) for u in users]
+    for u in users:
+        r = float(u.get('commission_rate') or 20)
+        u['commission'] = round(float(u.get('total_profit') or 0) * r / 100, 2)
     return render_template('users.html', users=users)
 
 @app.route('/users/add', methods=['POST'])
@@ -398,6 +420,35 @@ def change_password():
         execute_db('UPDATE users SET password_hash=%s WHERE id=%s', (pw_hash, session['user_id']))
         log_action('UPDATE', 'users', session['user_id'], "Password changed")
         flash('Password changed successfully.', 'success')
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/reset-pw/<int:uid>', methods=['POST'])
+@admin_required
+def admin_reset_pw(uid):
+    new_pw = request.form.get('new_password','')
+    if len(new_pw) < 6:
+        flash('Password must be at least 6 characters.', 'danger')
+        return redirect(url_for('manage_users'))
+    pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
+    execute_db('UPDATE users SET password_hash=%s WHERE id=%s', (pw_hash, uid))
+    u = query_db('SELECT username FROM users WHERE id=%s', [uid], one=True)
+    log_action('UPDATE', 'users', uid, f"Password reset for {u['username'] if u else uid}")
+    flash(f'Password reset successfully.', 'success')
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/toggle/<int:uid>', methods=['POST'])
+@admin_required
+def toggle_user(uid):
+    if uid == session.get('user_id'):
+        flash('You cannot disable your own account.', 'danger')
+        return redirect(url_for('manage_users'))
+    action = request.form.get('action', 'disable')
+    active = (action == 'enable')
+    execute_db('UPDATE users SET is_active=%s WHERE id=%s', (active, uid))
+    u = query_db('SELECT username FROM users WHERE id=%s', [uid], one=True)
+    msg = 'enabled' if active else 'disabled'
+    log_action('UPDATE', 'users', uid, f"Account {msg}: {u['username'] if u else uid}")
+    flash(f'Account {msg} successfully.', 'success')
     return redirect(url_for('manage_users'))
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -1393,6 +1444,12 @@ def init_extension_db():
                 REFERENCES users(id) ON DELETE SET NULL;
         EXCEPTION WHEN duplicate_column THEN NULL; END $$;
     """)
+    # ── Add split cost columns ────────────────────────────────────────────────
+    for _col in [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS outbound_cost REAL DEFAULT 0",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_cost   REAL DEFAULT 0",
+    ]:
+        cur.execute(f"DO $$ BEGIN {_col}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
     cur.execute("""
         DO $$ BEGIN
             ALTER TABLE sales ADD COLUMN IF NOT EXISTS created_by_username TEXT DEFAULT '';
@@ -1756,14 +1813,17 @@ def add_sale_v2():
         return_supplier   = request.form.get('return_supplier','').upper().strip()
         outbound_status, return_status, overall = compute_ticket_status(
             outbound_delivery, return_delivery)
+        _oc = float(request.form.get('outbound_cost', 0) or 0)
+        _rc = float(request.form.get('return_cost', 0) or 0)
         new_id = execute_db('''
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
              customer,sale_date,travel_date,return_date,return_supplier,
              outbound_delivery,return_delivery,outbound_status,return_status,
              net,sell,profit,status,remarks,
+             outbound_cost,return_cost,
              created_by_user_id,created_by_username)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ''', (
             request.form.get('from_loc','').upper().strip(),
             request.form.get('to_loc','').upper().strip(),
@@ -1780,6 +1840,7 @@ def add_sale_v2():
             outbound_status, return_status,
             net, sell, sell - net, overall,
             request.form.get('remarks','').strip(),
+            _oc, _rc,
             session.get('user_id'), session.get('username','')
         ))
         log_action('CREATE', 'sales', new_id,
