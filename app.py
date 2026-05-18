@@ -50,19 +50,25 @@ def query_db(query, args=(), one=False):
         raise
 
 def execute_db(query, args=()):
+    """Execute INSERT/UPDATE/DELETE. For INSERT returns the new row id."""
     try:
-        db = get_db()
+        db  = get_db()
         cur = db.cursor()
-        cur.execute(query, args)
+        # For INSERT statements, append RETURNING id to get the new id back
+        returning_query = query
+        is_insert = query.strip().upper().startswith('INSERT')
+        if is_insert and 'RETURNING' not in query.upper():
+            returning_query = query.rstrip().rstrip(';') + ' RETURNING id'
+        cur.execute(returning_query, args)
         db.commit()
-        try:
-            cur.execute("SELECT lastval()")
-            return cur.fetchone()['lastval']
-        except Exception:
-            db.commit()
-            return None
+        if is_insert:
+            row = cur.fetchone()
+            return row['id'] if row else None
+        return None
     except Exception as e:
-        logger.error(f"execute_db error: {e} | query: {query}")
+        try: get_db().rollback()
+        except: pass
+        logger.error(f"execute_db error: {e} | query: {query[:120]}")
         raise
 
 def paginate(query, params, page, per_page=PER_PAGE):
@@ -2028,31 +2034,40 @@ def new_invoice():
         'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
     )]
     if request.method == 'POST':
-        amount    = float(request.form.get('amount', 0))
-        discount  = float(request.form.get('discount', 0))
-        total     = round(amount - discount, 3)
-        inv_num   = next_doc_number('INV')
-        sid       = request.form.get('sale_id') or None
-        new_id = execute_db("""
-            INSERT INTO invoices
-            (invoice_number,sale_id,created_by_id,created_by,company,customer,
-             service_desc,amount,discount,total,status,invoice_date,due_date,notes)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            inv_num, sid,
-            session['user_id'], session.get('username',''),
-            request.form.get('company','').upper().strip(),
-            request.form.get('customer','').upper().strip(),
-            request.form.get('service_desc','').strip(),
-            amount, discount, total,
-            request.form.get('status','UNPAID'),
-            request.form.get('invoice_date', str(date.today())),
-            request.form.get('due_date',''),
-            request.form.get('notes','').strip()
-        ))
-        log_action('CREATE', 'invoices', new_id, f"Invoice {inv_num} | {total} JOD")
-        flash(f'Invoice {inv_num} created successfully.', 'success')
-        return redirect(url_for('view_invoice', inv_id=new_id))
+        try:
+            amount   = float(request.form.get('amount') or 0)
+            discount = float(request.form.get('discount') or 0)
+            total    = round(amount - discount, 3)
+            inv_num  = next_doc_number('INV')
+            # sale_id: convert empty string to None for FK constraint
+            raw_sid  = request.form.get('sale_id','').strip()
+            sid      = int(raw_sid) if raw_sid and raw_sid.isdigit() else None
+            # due_date: convert empty string to None
+            due_date_val = request.form.get('due_date','').strip() or None
+
+            new_id = execute_db("""
+                INSERT INTO invoices
+                (invoice_number,sale_id,created_by_id,created_by,company,customer,
+                 service_desc,amount,discount,total,status,invoice_date,due_date,notes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                inv_num, sid,
+                session['user_id'], session.get('username',''),
+                request.form.get('company','').upper().strip(),
+                request.form.get('customer','').upper().strip(),
+                request.form.get('service_desc','').strip(),
+                amount, discount, total,
+                request.form.get('status','UNPAID'),
+                request.form.get('invoice_date', str(date.today())),
+                due_date_val,
+                request.form.get('notes','').strip()
+            ))
+            log_action('CREATE', 'invoices', new_id or 0, f"Invoice {inv_num} | {total} JOD")
+            flash(f'Invoice {inv_num} created successfully.', 'success')
+            return redirect(url_for('view_invoice', inv_id=new_id))
+        except Exception as ex:
+            logger.error(f"new_invoice POST error: {ex}", exc_info=True)
+            flash(f'Error creating invoice: {ex}', 'danger')
     # Load transactions for pre-selected company (from sale or URL param)
     company_filter = request.args.get('company', '')
     if sale and sale['company']:
@@ -2194,8 +2209,9 @@ def new_voucher():
     sale_id = request.args.get('sale_id', '')
     sale    = query_db('SELECT * FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True) if sale_id else None
     if request.method == 'POST':
-        vcn    = next_doc_number('VCH')
-        sid    = request.form.get('sale_id') or None
+        vcn     = next_doc_number('VCH')
+        raw_sid = request.form.get('sale_id','').strip()
+        sid     = int(raw_sid) if raw_sid and raw_sid.isdigit() else None
         new_id = execute_db("""
             INSERT INTO vouchers
             (voucher_number,sale_id,created_by_id,created_by,
@@ -2294,7 +2310,8 @@ def new_package():
         net  = float(request.form.get('net_cost', 0) or 0)
         sell = float(request.form.get('sell_price', 0) or 0)
         pkg_num = next_doc_number('PKG')
-        sid     = request.form.get('sale_id') or None
+        raw_sid = request.form.get('sale_id','').strip()
+        sid     = int(raw_sid) if raw_sid and raw_sid.isdigit() else None
         new_id  = execute_db("""
             INSERT INTO packages
             (package_number,sale_id,created_by_id,created_by,company,customer,package_date,
