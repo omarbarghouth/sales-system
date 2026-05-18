@@ -1656,14 +1656,13 @@ except Exception as _ext_err:
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_doc_number(doc_type: str) -> str:
     """
-    Smart document numbering using a FRESH dedicated connection.
-    Uses its own connection so it never conflicts with the request's g._database.
-    If table is empty → resets sequence to 0 → next number is 0001.
-    If records exist  → continues from current sequence.
+    Safe document numbering using a dedicated connection.
+    Always uses MAX(id) across ALL rows (including deleted) to avoid
+    duplicate key errors from soft-deleted records.
+    If no rows exist at all → starts from 1.
     """
     table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
     table = table_map.get(doc_type)
-    # Always open a dedicated connection — never share with the request connection
     conn = None
     try:
         conn = psycopg2.connect(
@@ -1674,14 +1673,16 @@ def next_doc_number(doc_type: str) -> str:
         cur = conn.cursor()
 
         if table:
-            cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE deleted=FALSE")
+            # Use MAX(id) across ALL rows including soft-deleted
+            # to guarantee no duplicate invoice_number collision
+            cur.execute(f"SELECT COALESCE(MAX(id), 0) as max_id FROM {table}")
             row = cur.fetchone()
-            active_count = int(row['cnt']) if row else 0
-            if active_count == 0:
-                cur.execute(
-                    "UPDATE doc_sequences SET last_num=0 WHERE doc_type=%s",
-                    [doc_type]
-                )
+            max_id = int(row['max_id']) if row else 0
+            # Sync the sequence to max_id so next number = max_id + 1
+            cur.execute(
+                "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s AND last_num < %s",
+                [max_id, doc_type, max_id]
+            )
 
         cur.execute("""
             UPDATE doc_sequences SET last_num = last_num + 1
@@ -2505,4 +2506,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
