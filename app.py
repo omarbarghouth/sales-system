@@ -2321,6 +2321,7 @@ def new_invoice():
                 (invoice_number,sale_id,created_by_id,created_by,company,customer,
                  service_desc,amount,discount,total,status,invoice_date,due_date,notes)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
             """, (
                 inv_num, sid,
                 session['user_id'], session.get('username',''),
@@ -2335,7 +2336,10 @@ def new_invoice():
             ))
             log_action('CREATE', 'invoices', new_id or 0, f"Invoice {inv_num} | {total} JOD")
             flash(f'Invoice {inv_num} created successfully.', 'success')
-            return redirect(url_for('view_invoice', inv_id=new_id))
+            if new_id:
+                return redirect(url_for('view_invoice', inv_id=new_id))
+            else:
+                return redirect(url_for('invoice_list'))
         except Exception as ex:
             logger.error(f"new_invoice POST error: {ex}", exc_info=True)
             flash(f'Error creating invoice: {ex}', 'danger')
@@ -2354,10 +2358,59 @@ def new_invoice():
             LIMIT 50
         """, [company_filter]) or []
 
+    # Auto-build service description from sale details
+    auto_desc = ''
+    if sale:
+        svc = (sale.get('service_type') or 'FLIGHT').upper()
+        parts = []
+        if svc in ('FLIGHT', 'PACKAGE'):
+            fl = f"✈ Flight: {sale.get('from_loc','')} → {sale.get('to_loc','')} | {sale.get('airline','') or ''}"
+            if sale.get('pnr'):    fl += f" | PNR: {sale['pnr']}"
+            if sale.get('travel_date'): fl += f" | Dep: {sale['travel_date']}"
+            if sale.get('return_date'): fl += f" | Ret: {sale['return_date']}"
+            if sale.get('baggage'):     fl += f" | Bag: {sale['baggage']}"
+            parts.append(fl.strip(' |'))
+        if svc in ('HOTEL', 'PACKAGE') and sale.get('hotel_name'):
+            ht = f"🏨 Hotel: {sale['hotel_name']}"
+            if sale.get('hotel_room'):     ht += f" | {sale['hotel_room']}"
+            if sale.get('hotel_meal'):     ht += f" | {sale['hotel_meal']}"
+            if sale.get('hotel_checkin'):  ht += f" | CI: {sale['hotel_checkin']}"
+            if sale.get('hotel_checkout'): ht += f" | CO: {sale['hotel_checkout']}"
+            if sale.get('hotel_nights'):   ht += f" | {sale['hotel_nights']} nights"
+            parts.append(ht)
+        if svc in ('TRANSFER', 'PACKAGE') and sale.get('transfer_type'):
+            tr = f"🚗 Transfer: {sale['transfer_type']}"
+            if sale.get('transfer_vehicle'): tr += f" | {sale['transfer_vehicle']}"
+            if sale.get('transfer_pickup'):  tr += f" | {sale['transfer_pickup']}"
+            parts.append(tr)
+        if svc == 'VISA':
+            parts.append(f"📋 Visa: {sale.get('visa_type','')} | Passport: {sale.get('passport_number','')}")
+        if svc == 'INSURANCE':
+            parts.append(f"🛡 Insurance: {sale.get('insurance_type','')}")
+        # Passengers
+        import json as _j
+        pax = []
+        try: pax = _j.loads(sale.get('passengers_json') or '[]')
+        except: pass
+        if pax:
+            names = ', '.join(p.get('name','') for p in pax if p.get('name'))
+            if names: parts.append(f"👥 Passengers: {names}")
+        # Tours
+        tours = []
+        try: tours = _j.loads(sale.get('tours_json') or '[]')
+        except: pass
+        if tours:
+            tnames = ', '.join(t.get('name','') for t in tours if t.get('name'))
+            if tnames: parts.append(f"🗺 Tours: {tnames}")
+        if svc == 'FLIGHT' and not parts:
+            parts.append(f"Flight {sale.get('from_loc','')} → {sale.get('to_loc','')} | {sale.get('customer','')}")
+        auto_desc = '\n'.join(parts) if parts else f"{svc} — {sale.get('customer','')}"
+
     return render_template('invoice_form.html',
         sale=sale, companies=companies, today=str(date.today()),
         company_filter=company_filter,
-        company_transactions=company_transactions)
+        company_transactions=company_transactions,
+        auto_desc=auto_desc)
 
 
 @app.route('/invoices/<int:inv_id>')
