@@ -2894,7 +2894,7 @@ def delete_supplier_payment(pay_id):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_companies_list():
-    """All active companies — safe fallback if master_companies doesn't exist yet."""
+    """All companies. Falls back to sales table if master_companies not yet created."""
     try:
         rows = query_db("""
             SELECT name FROM (
@@ -2906,6 +2906,9 @@ def get_companies_list():
         """) or []
         return [r['name'] for r in rows]
     except Exception:
+        # master_companies may not exist yet — rollback aborted txn then use sales only
+        try: get_db().rollback()
+        except: pass
         try:
             rows = query_db(
                 "SELECT DISTINCT UPPER(TRIM(company)) as name FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>'' ORDER BY name"
@@ -2915,7 +2918,7 @@ def get_companies_list():
             return []
 
 def get_suppliers_list(svc_type=None):
-    """All active suppliers — safe fallback if master_suppliers doesn't exist yet."""
+    """All active suppliers. Falls back to empty list if master_suppliers not yet created."""
     try:
         q = """
             SELECT DISTINCT name, service_type FROM (
@@ -2939,6 +2942,8 @@ def get_suppliers_list(svc_type=None):
         q += " ORDER BY name"
         return query_db(q, params) or []
     except Exception:
+        try: get_db().rollback()
+        except: pass
         return []
 def api_companies():
     """AJAX: return company list as JSON."""
