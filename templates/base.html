@@ -56,6 +56,10 @@
        class="sb-link {% if request.endpoint=='statement' %}active{% endif %}">
       <i class="fas fa-file-invoice-dollar"></i> Statements
     </a>
+    <a href="{{ url_for('supplier_statement') }}"
+       class="sb-link {% if request.endpoint=='supplier_statement' %}active{% endif %}">
+      <i class="fas fa-truck"></i> Supplier Statements
+    </a>
     <a href="{{ url_for('payments') }}"
        class="sb-link {% if request.endpoint=='payments' %}active{% endif %}">
       <i class="fas fa-money-bill-wave"></i> Payments
