@@ -87,27 +87,28 @@
         <tr>
           <td style="padding:16px;vertical-align:top;border-bottom:1px solid #f1f5f9">
 
-            {# ── STRUCTURED PACKAGE SECTIONS ─────────────────── #}
-            {% if sale and svc == 'PACKAGE' %}
+            {# ── STRUCTURED SERVICE SECTIONS (all types) ─────── #}
+            {% if sale %}
 
-              {# Flight section #}
-              {% if sale.from_loc or sale.airline %}
+              {# Flight section — shown for any type with flight/route data #}
+              {% if sale.from_loc or sale.airline or svc in ('FLIGHT','PACKAGE') %}
               <div style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1B3A6B;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8eef8">✈ FLIGHT DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   {% if sale.airline %}<div><span style="color:#94a3b8">Airline:</span> <strong>{{ sale.airline }}</strong></div>{% endif %}
-                  {% if sale.from_loc %}<div><span style="color:#94a3b8">Route:</span> <strong>{{ sale.from_loc }} → {{ sale.to_loc }}</strong></div>{% endif %}
+                  {% if sale.from_loc and sale.from_loc != '-' %}<div><span style="color:#94a3b8">Route:</span> <strong>{{ sale.from_loc }} → {{ sale.to_loc }}</strong></div>{% endif %}
                   {% if sale.pnr %}<div><span style="color:#94a3b8">PNR:</span> <strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.pnr }}</strong></div>{% endif %}
                   {% if sale.travel_date %}<div><span style="color:#94a3b8">Departure:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
                   {% if sale.return_date %}<div><span style="color:#94a3b8">Return:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
                   {% if sale.baggage %}<div><span style="color:#94a3b8">Baggage:</span> <strong>{{ sale.baggage }}</strong></div>{% endif %}
-                  {% if sale.trip_type %}<div><span style="color:#94a3b8">Trip:</span> <strong>{{ sale.trip_type }}</strong></div>{% endif %}
-                  <div><span style="color:#94a3b8">Tickets:</span> <strong>{{ sale.tickets }}</strong></div>
+                  {% if sale.trip_type %}<div><span style="color:#94a3b8">Trip Type:</span> <strong>{{ sale.trip_type }}</strong></div>{% endif %}
+                  {% if sale.buy_from %}<div><span style="color:#94a3b8">Supplier:</span> <strong>{{ sale.buy_from }}</strong></div>{% endif %}
+                  <div><span style="color:#94a3b8">Tickets / Pax:</span> <strong>{{ sale.tickets }}</strong></div>
                 </div>
               </div>
               {% endif %}
 
-              {# Hotel section #}
+              {# Hotel section — shown when hotel data exists #}
               {% if sale.hotel_name %}
               <div style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8B6914;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fff8e7">🏨 HOTEL DETAILS</div>
@@ -121,8 +122,8 @@
                 </div>
               </div>
               {% endif %}
-
-              {# Transfer section #}
+              {# Transfer section — show for TRANSFER or PACKAGE, or when transfer data exists #}
+              {% if svc in ('TRANSFER','PACKAGE') or sale.transfer_type %}
               {% if sale.transfer_type %}
               <div style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#D97706;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fffbf0">🚗 TRANSFER DETAILS</div>
@@ -134,7 +135,9 @@
               </div>
               {% endif %}
 
-              {# Tours section #}
+              {% endif %}{# end transfer wrapper #}
+
+              {# Tours section — show when tour data exists #}
               {% if tours %}
               <div style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">🗺 TOURS</div>
@@ -152,6 +155,33 @@
                     {% endfor %}
                   </tbody>
                 </table>
+              </div>
+              {% endif %}
+
+              {# Visa section — show for VISA type #}
+              {% if svc == 'VISA' and (sale.visa_type or sale.passport_number) %}
+              <div style="margin-bottom:12px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">📋 VISA DETAILS</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
+                  {% if sale.visa_type %}<div><span style="color:#94a3b8">Visa Type:</span> <strong>{{ sale.visa_type }}</strong></div>{% endif %}
+                  {% if sale.passport_number %}<div><span style="color:#94a3b8">Passport:</span> <strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.passport_number }}</strong></div>{% endif %}
+                  {% if sale.visa_status %}<div><span style="color:#94a3b8">Status:</span> <strong>{{ sale.visa_status }}</strong></div>{% endif %}
+                  {% if sale.visa_supplier %}<div><span style="color:#94a3b8">Supplier:</span> <strong>{{ sale.visa_supplier }}</strong></div>{% endif %}
+                  {% if sale.travel_date %}<div><span style="color:#94a3b8">Travel Date:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
+                </div>
+              </div>
+              {% endif %}
+
+              {# Insurance section — show for INSURANCE type #}
+              {% if svc == 'INSURANCE' and (sale.insurance_type or sale.insurance_supplier) %}
+              <div style="margin-bottom:12px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">🛡 INSURANCE DETAILS</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
+                  {% if sale.insurance_type %}<div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.insurance_type }}</strong></div>{% endif %}
+                  {% if sale.insurance_supplier %}<div><span style="color:#94a3b8">Provider:</span> <strong>{{ sale.insurance_supplier }}</strong></div>{% endif %}
+                  {% if sale.travel_date %}<div><span style="color:#94a3b8">From:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
+                  {% if sale.return_date %}<div><span style="color:#94a3b8">To:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
+                </div>
               </div>
               {% endif %}
 
@@ -176,15 +206,21 @@
               </div>
               {% endif %}
 
-            {% else %}
-              {# Non-package: show plain description #}
-              <div style="font-size:13.5px;line-height:1.7;color:#1e293b;white-space:pre-line">{{ inv.service_desc or 'Travel Services' }}</div>
-              {% if sale %}
-              <div style="margin-top:8px;font-size:11.5px;color:#94a3b8;padding:5px 10px;background:#f8fafc;border-radius:5px;border-left:3px solid #C8A84B">
-                Ref #{{ sale.id }} &nbsp;·&nbsp; {{ sale.from_loc }} → {{ sale.to_loc }}
-                &nbsp;·&nbsp; {{ sale.sale_date }} &nbsp;·&nbsp; {{ sale.tickets }} ticket(s)
+              {# Notes / Remarks #}
+              {% if sale.remarks %}
+              <div style="margin-top:8px;background:#f8fafc;border-left:3px solid #94a3b8;padding:8px 12px;font-size:12.5px;color:#374151;border-radius:0 6px 6px 0">
+                <strong>Remarks:</strong> {{ sale.remarks }}
               </div>
               {% endif %}
+
+              {# Ref line at bottom #}
+              <div style="margin-top:10px;font-size:11px;color:#94a3b8;padding:5px 10px;background:#f8fafc;border-radius:5px;border-left:3px solid #C8A84B">
+                Transaction Ref #{{ sale.id }} &nbsp;·&nbsp; {{ sale.sale_date }}
+              </div>
+
+            {% else %}
+              {# No linked sale — show plain description only #}
+              <div style="font-size:13.5px;line-height:1.7;color:#1e293b;white-space:pre-line">{{ inv.service_desc or 'Travel Services' }}</div>
             {% endif %}
 
           </td>
