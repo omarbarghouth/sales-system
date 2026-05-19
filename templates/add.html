@@ -583,44 +583,28 @@ function addTourRow() {
 setType(currentType);
 calcProfit();
 
-// ── Live search dropdown (ERP-style, compact) ───────────────
+// ── Live search dropdown ─────────────────────────────────────
 var _lsT = {};
 function lsSearch(inp, dropId, url, key, nameKey) {
   clearTimeout(_lsT[dropId]);
   var drop = document.getElementById(dropId);
   if (!drop) return;
-  var q = inp.value.trim();
   _lsT[dropId] = setTimeout(function(){
     fetch(url).then(function(r){return r.json();}).then(function(d){
       var items = d[key]||[];
       if(!items.length){drop.style.display='none';return;}
-      drop.innerHTML = items.slice(0,30).map(function(item){
+      drop.innerHTML = items.slice(0,40).map(function(item){
         var label = nameKey ? item[nameKey] : item;
-        var badge = (nameKey && item.service_type) ? ' <span style="font-size:9px;opacity:.55;margin-left:4px">'+item.service_type+'</span>' : '';
-        return '<div class="live-dropdown-item" data-val="'+label.replace(/"/g,'&quot;')+'">' +label+badge+'</div>';
+        var sub   = nameKey && item.service_type ? ' <small style="opacity:.6">'+item.service_type+'</small>' : '';
+        return '<div class="live-dropdown-item" onmousedown="(function(e){e.preventDefault();document.getElementById(\''+inp.id+'\').value=\''+label.replace(/'/g,"\'")+'\';document.getElementById(\''+dropId+'\').style.display=\'none\';})(event)">'+label+sub+'</div>';
       }).join('');
-      // Attach click handlers
-      drop.querySelectorAll('.live-dropdown-item').forEach(function(el){
-        el.addEventListener('mousedown', function(e){
-          e.preventDefault();
-          inp.value = el.dataset.val;
-          drop.style.display = 'none';
-          inp.dispatchEvent(new Event('change'));
-        });
-      });
-      drop.style.display = 'block';
+      drop.style.display='block';
     }).catch(function(){drop.style.display='none';});
-  }, q.length > 0 ? 200 : 60);
+  }, inp.value.trim().length>0 ? 200 : 40);
 }
-// Close on outside click or Escape
-document.addEventListener('click', function(e){
+document.addEventListener('click',function(e){
   if(!e.target.closest('.form-group'))
     document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
-});
-document.addEventListener('keydown', function(e){
-  if(e.key==='Escape')
-    document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
-});
 });
 
 </script>
