@@ -2894,52 +2894,52 @@ def delete_supplier_payment(pay_id):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_companies_list():
-    """All active companies — from master table + any in sales not yet seeded."""
-    rows = query_db("""
-        SELECT name FROM (
-            SELECT name FROM master_companies WHERE is_active=TRUE
-            UNION
-            SELECT UPPER(TRIM(company)) FROM sales
-            WHERE deleted=FALSE AND TRIM(company)<>''
-        ) t ORDER BY name
-    """) or []
-    return [r['name'] for r in rows]
+    """All active companies — safe fallback if master_companies doesn't exist yet."""
+    try:
+        rows = query_db("""
+            SELECT name FROM (
+                SELECT name FROM master_companies WHERE is_active=TRUE
+                UNION
+                SELECT UPPER(TRIM(company)) FROM sales
+                WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>''
+            ) t ORDER BY name
+        """) or []
+        return [r['name'] for r in rows]
+    except Exception:
+        try:
+            rows = query_db(
+                "SELECT DISTINCT UPPER(TRIM(company)) as name FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>'' ORDER BY name"
+            ) or []
+            return [r['name'] for r in rows]
+        except Exception:
+            return []
 
 def get_suppliers_list(svc_type=None):
-    """All active suppliers — from master table + any in sales not yet seeded."""
-    q = """
-        SELECT name, service_type FROM (
-            SELECT name, service_type FROM master_suppliers WHERE is_active=TRUE
-            UNION
-            SELECT supplier, svc FROM (
-                SELECT UPPER(TRIM(buy_from)) AS supplier, 'FLIGHT' AS svc
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
+    """All active suppliers — safe fallback if master_suppliers doesn't exist yet."""
+    try:
+        q = """
+            SELECT DISTINCT name, service_type FROM (
+                SELECT name, service_type FROM master_suppliers WHERE is_active=TRUE
                 UNION
-                SELECT UPPER(TRIM(hotel_supplier)), 'HOTEL'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''
+                SELECT UPPER(TRIM(buy_from)),'FLIGHT' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
                 UNION
-                SELECT UPPER(TRIM(transfer_supplier)), 'TRANSFER'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>''
+                SELECT UPPER(TRIM(hotel_supplier)),'HOTEL' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''
                 UNION
-                SELECT UPPER(TRIM(visa_supplier)), 'VISA'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>''
+                SELECT UPPER(TRIM(transfer_supplier)),'TRANSFER' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>''
                 UNION
-                SELECT UPPER(TRIM(insurance_supplier)), 'INSURANCE'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>''
-            ) s2 WHERE supplier<>''
-        ) t
-    """
-    params = []
-    if svc_type:
-        q += " WHERE service_type=%s"
-        params.append(svc_type.upper())
-    q += " ORDER BY name"
-    rows = query_db(q, params) or []
-    return rows
-
-
-@app.route('/api/companies')
-@login_required
+                SELECT UPPER(TRIM(visa_supplier)),'VISA' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>''
+                UNION
+                SELECT UPPER(TRIM(insurance_supplier)),'INSURANCE' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>''
+            ) t WHERE name IS NOT NULL AND name<>''
+        """
+        params = []
+        if svc_type:
+            q += " AND service_type=%s"
+            params.append(svc_type.upper())
+        q += " ORDER BY name"
+        return query_db(q, params) or []
+    except Exception:
+        return []
 def api_companies():
     """AJAX: return company list as JSON."""
     from flask import jsonify
