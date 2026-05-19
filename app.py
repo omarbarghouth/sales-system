@@ -2431,7 +2431,7 @@ def delete_invoice(inv_id):
 #  AUTO-GENERATE VOUCHER FROM PACKAGE TRANSACTION
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.route('/vouchers/from-sale/<int:sale_id>', methods=['POST'])
+@app.route('/vouchers/from-sale/<int:sale_id>', methods=['GET', 'POST'])
 @login_required
 def auto_generate_voucher(sale_id):
     """One-click: create a full voucher from a PACKAGE transaction — no re-entry."""
@@ -2440,66 +2440,104 @@ def auto_generate_voucher(sale_id):
         flash('Transaction not found.', 'danger')
         return redirect(url_for('voucher_list'))
 
-    # Check ownership for non-admins
     if session.get('user_role') != 'admin' and sale['created_by_user_id'] != session['user_id']:
         flash('Access denied.', 'danger')
         return redirect(url_for('voucher_list'))
 
     vcn = next_doc_number('VCH')
 
-    new_id = execute_db("""
-        INSERT INTO vouchers
-        (voucher_number,sale_id,created_by_id,created_by,
-         guest_name,num_guests,hotel_name,hotel_address,hotel_phone,hotel_contact,
-         room_type,meal_plan,checkin_date,checkout_date,nights,
-         include_transfer,include_tours,include_insurance,
-         arrival_flight,pickup_sign,driver_contact,pickup_time,vehicle_type,
-         emergency_contact,cancellation_policy,remarks,
-         passengers_json,tours_json,airline,pnr,baggage,from_loc,to_loc,departure_date,return_date)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (
-        vcn, sale_id,
-        session['user_id'], session.get('username',''),
-        # Guest name = first passenger or customer
-        sale['customer'] or '',
-        sale['tickets'] or 1,
-        # Hotel details from transaction
-        sale.get('hotel_name','') or '',
-        '',  # hotel_address
-        '',  # hotel_phone
-        sale.get('hotel_supplier','') or '',  # hotel_contact = supplier
-        sale.get('hotel_room','') or '',
-        sale.get('hotel_meal','') or '',
-        sale.get('hotel_checkin','') or '',
-        sale.get('hotel_checkout','') or '',
-        sale.get('hotel_nights',0) or 0,
-        # Include flags
-        bool(sale.get('transfer_type')),
-        bool(sale.get('tours_json') and sale.get('tours_json') != '[]'),
-        False,  # insurance
-        # Transfer / flight
-        sale.get('airline','') or '',   # arrival_flight
-        sale['customer'] or '',          # pickup_sign
-        sale.get('transfer_supplier','') or '',  # driver_contact
-        sale.get('transfer_pickup','') or '',
-        sale.get('transfer_vehicle','') or '',
-        '',  # emergency_contact
-        '',  # cancellation_policy
-        sale.get('remarks','') or '',
-        # Extended fields
-        sale.get('passengers_json','[]') or '[]',
-        sale.get('tours_json','[]') or '[]',
-        sale.get('airline','') or '',
-        sale.get('pnr','') or '',
-        sale.get('baggage','') or '',
-        sale.get('from_loc','') or '',
-        sale.get('to_loc','') or '',
-        sale.get('travel_date','') or '',
-        sale.get('return_date','') or '',
-    ))
+    # Try with extended columns first; fall back to base columns if migration pending
+    try:
+        new_id = execute_db("""
+            INSERT INTO vouchers
+            (voucher_number,sale_id,created_by_id,created_by,
+             guest_name,num_guests,hotel_name,hotel_address,hotel_phone,hotel_contact,
+             room_type,meal_plan,checkin_date,checkout_date,nights,
+             include_transfer,include_tours,include_insurance,
+             arrival_flight,pickup_sign,driver_contact,pickup_time,vehicle_type,
+             emergency_contact,cancellation_policy,remarks,
+             passengers_json,tours_json,airline,pnr,baggage,from_loc,to_loc,departure_date,return_date)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            vcn, sale_id,
+            session['user_id'], session.get('username',''),
+            sale['customer'] or '',
+            sale['tickets'] or 1,
+            sale.get('hotel_name','') or '',
+            '',
+            '',
+            sale.get('hotel_supplier','') or '',
+            sale.get('hotel_room','') or '',
+            sale.get('hotel_meal','') or '',
+            sale.get('hotel_checkin','') or '',
+            sale.get('hotel_checkout','') or '',
+            int(sale.get('hotel_nights') or 0),
+            bool(sale.get('transfer_type')),
+            bool(sale.get('tours_json') and sale.get('tours_json') != '[]'),
+            False,
+            sale.get('airline','') or '',
+            sale['customer'] or '',
+            sale.get('transfer_supplier','') or '',
+            sale.get('transfer_pickup','') or '',
+            sale.get('transfer_vehicle','') or '',
+            '',
+            '',
+            sale.get('remarks','') or '',
+            sale.get('passengers_json','[]') or '[]',
+            sale.get('tours_json','[]') or '[]',
+            sale.get('airline','') or '',
+            sale.get('pnr','') or '',
+            sale.get('baggage','') or '',
+            sale.get('from_loc','') or '',
+            sale.get('to_loc','') or '',
+            sale.get('travel_date','') or '',
+            sale.get('return_date','') or '',
+        ))
+    except Exception as _ve:
+        logger.warning(f"Extended voucher INSERT failed ({_ve}), using base columns")
+        # Rollback and retry with only the original base columns
+        try: get_db().rollback()
+        except: pass
+        new_id = execute_db("""
+            INSERT INTO vouchers
+            (voucher_number,sale_id,created_by_id,created_by,
+             guest_name,num_guests,hotel_name,hotel_address,hotel_phone,hotel_contact,
+             room_type,meal_plan,checkin_date,checkout_date,nights,
+             include_transfer,include_tours,include_insurance,
+             arrival_flight,pickup_sign,driver_contact,pickup_time,vehicle_type,
+             emergency_contact,cancellation_policy,remarks)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            vcn, sale_id,
+            session['user_id'], session.get('username',''),
+            sale['customer'] or '',
+            sale['tickets'] or 1,
+            sale.get('hotel_name','') or '',
+            '',
+            '',
+            sale.get('hotel_supplier','') or '',
+            sale.get('hotel_room','') or '',
+            sale.get('hotel_meal','') or '',
+            sale.get('hotel_checkin','') or '',
+            sale.get('hotel_checkout','') or '',
+            int(sale.get('hotel_nights') or 0),
+            bool(sale.get('transfer_type')),
+            bool(sale.get('tours_json') and sale.get('tours_json') != '[]'),
+            False,
+            sale.get('airline','') or '',
+            sale['customer'] or '',
+            sale.get('transfer_supplier','') or '',
+            sale.get('transfer_pickup','') or '',
+            sale.get('transfer_vehicle','') or '',
+            '',
+            '',
+            sale.get('remarks','') or '',
+        ))
 
-    log_action('CREATE', 'vouchers', new_id, f"Auto-voucher {vcn} from sale #{sale_id}")
-    flash(f'Voucher {vcn} generated automatically from transaction.', 'success')
+    log_action('CREATE', 'vouchers', new_id or 0, f"Auto-voucher {vcn} from sale #{sale_id}")
+    flash(f'Voucher {vcn} generated automatically! ✓', 'success')
     return redirect(url_for('view_voucher', vch_id=new_id))
 
 
@@ -2883,3 +2921,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
