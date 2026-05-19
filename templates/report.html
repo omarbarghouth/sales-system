@@ -280,9 +280,11 @@
               <i class="fas fa-pencil-alt"></i>
             </a>
             {% if (s.service_type or '') == 'PACKAGE' %}
-            <form method="POST" action="{{ url_for('auto_generate_voucher', sale_id=s.id) }}" style="display:inline" onsubmit="return confirm('Auto-generate voucher from this package?')">
-              <button type="submit" class="btn btn-gold btn-xs" title="Generate Voucher"><i class="fas fa-magic"></i></button>
-            </form>
+            <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
+               onclick="return confirm('Auto-generate voucher from this package?')"
+               class="btn btn-gold btn-xs" title="Generate Voucher">
+              <i class="fas fa-magic"></i>
+            </a>
             {% endif %}
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
                   onsubmit="return confirm('Delete transaction #{{ s.id }}? This cannot be undone.')">

@@ -120,7 +120,7 @@
         <span style="background:#D97706;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">04</span> Transfer Details
       </div>
       <div style="background:#fffbf0;border:1px solid #fde68a;border-top:none;padding:14px 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-        {% for label, val in [('Transfer Type',vch.transfer_type if hasattr(vch,'transfer_type') else (sale.transfer_type if sale else '')),('Pickup Time',vch.pickup_time),('Vehicle',vch.vehicle_type),('Sign Name',vch.pickup_sign),('Driver/Contact',vch.driver_contact),('Arrival Flight',vch.arrival_flight)] if val %}
+        {% for label, val in [('Transfer Type',(vch.transfer_type if vch.transfer_type else (sale.transfer_type if sale and sale.transfer_type else ''))),('Pickup Time',vch.pickup_time),('Vehicle',vch.vehicle_type),('Sign Name',vch.pickup_sign),('Driver/Contact',vch.driver_contact),('Arrival Flight',vch.arrival_flight)] if val %}
         <div>
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:3px">{{ label }}</div>
           <div style="font-size:13px;font-weight:700;color:#0f1d35">{{ val }}</div>
