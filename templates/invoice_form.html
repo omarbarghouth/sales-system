@@ -212,19 +212,19 @@ function calcTotal(){
 var txnCache = {};
 
 function buildServiceDesc(t) {
+  // Builds client-facing invoice description — NO supplier names included
   var parts = [];
   var svc = (t.svc || 'FLIGHT').toUpperCase();
 
   if (svc === 'FLIGHT' || svc === 'PACKAGE' || t.route || t.airline) {
     var fl = 'FLIGHT: ' + (t.route || '');
-    if (t.airline)      fl += ' | Airline: ' + t.airline;
-    if (t.buy_from)     fl += ' | Supplier: ' + t.buy_from;
+    if (t.airline)      fl += ' | ' + t.airline;
     if (t.pnr)          fl += ' | PNR: ' + t.pnr;
     if (t.travel_date)  fl += ' | Dep: ' + t.travel_date;
     if (t.return_date)  fl += ' | Ret: ' + t.return_date;
     if (t.baggage)      fl += ' | Bag: ' + t.baggage;
     if (t.trip_type)    fl += ' | ' + t.trip_type;
-    fl += ' | Pax: ' + (t.tickets || 1);
+    fl += ' | ' + (t.tickets || 1) + ' Pax';
     parts.push(fl);
   }
   if (t.hotel_name) {
@@ -233,7 +233,7 @@ function buildServiceDesc(t) {
     if (t.hotel_meal)     ht += ' | ' + t.hotel_meal;
     if (t.hotel_checkin)  ht += ' | Check-In: ' + t.hotel_checkin;
     if (t.hotel_checkout) ht += ' | Check-Out: ' + t.hotel_checkout;
-    if (t.hotel_nights)   ht += ' | ' + t.hotel_nights + ' nights';
+    if (t.hotel_nights)   ht += ' | ' + t.hotel_nights + ' Nights';
     parts.push(ht);
   }
   if (t.transfer_type) {
@@ -252,7 +252,7 @@ function buildServiceDesc(t) {
   }
   if (t.tours && t.tours.length) {
     var tourLines = t.tours.filter(function(x){return x.name;}).map(function(x){
-      return x.name + (x.date ? ' (' + x.date + ')' : '') + (x.pickup ? ' Pickup:' + x.pickup : '');
+      return x.name + (x.date ? ' (' + x.date + ')' : '');
     }).join(', ');
     if (tourLines) parts.push('TOURS: ' + tourLines);
   }

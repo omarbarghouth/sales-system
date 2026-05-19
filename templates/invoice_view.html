@@ -102,7 +102,6 @@
                   {% if sale.return_date %}<div><span style="color:#94a3b8">Return:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
                   {% if sale.baggage %}<div><span style="color:#94a3b8">Baggage:</span> <strong>{{ sale.baggage }}</strong></div>{% endif %}
                   {% if sale.trip_type %}<div><span style="color:#94a3b8">Trip Type:</span> <strong>{{ sale.trip_type }}</strong></div>{% endif %}
-                  {% if sale.buy_from %}<div><span style="color:#94a3b8">Supplier:</span> <strong>{{ sale.buy_from }}</strong></div>{% endif %}
                   <div><span style="color:#94a3b8">Tickets / Pax:</span> <strong>{{ sale.tickets }}</strong></div>
                 </div>
               </div>
@@ -166,19 +165,17 @@
                   {% if sale.visa_type %}<div><span style="color:#94a3b8">Visa Type:</span> <strong>{{ sale.visa_type }}</strong></div>{% endif %}
                   {% if sale.passport_number %}<div><span style="color:#94a3b8">Passport:</span> <strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.passport_number }}</strong></div>{% endif %}
                   {% if sale.visa_status %}<div><span style="color:#94a3b8">Status:</span> <strong>{{ sale.visa_status }}</strong></div>{% endif %}
-                  {% if sale.visa_supplier %}<div><span style="color:#94a3b8">Supplier:</span> <strong>{{ sale.visa_supplier }}</strong></div>{% endif %}
                   {% if sale.travel_date %}<div><span style="color:#94a3b8">Travel Date:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
                 </div>
               </div>
               {% endif %}
 
               {# Insurance section — show for INSURANCE type #}
-              {% if svc == 'INSURANCE' and (sale.insurance_type or sale.insurance_supplier) %}
+              {% if svc == 'INSURANCE' and sale.insurance_type %}
               <div style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">🛡 INSURANCE DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   {% if sale.insurance_type %}<div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.insurance_type }}</strong></div>{% endif %}
-                  {% if sale.insurance_supplier %}<div><span style="color:#94a3b8">Provider:</span> <strong>{{ sale.insurance_supplier }}</strong></div>{% endif %}
                   {% if sale.travel_date %}<div><span style="color:#94a3b8">From:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
                   {% if sale.return_date %}<div><span style="color:#94a3b8">To:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
                 </div>
