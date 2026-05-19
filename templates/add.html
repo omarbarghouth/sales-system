@@ -600,7 +600,7 @@ function lsSearch(inp, dropId, url, key, nameKey) {
       }).join('');
       drop.style.display='block';
     }).catch(function(){drop.style.display='none';});
-  }, inp.value.length>0 ? 220 : 50);
+  }, inp.value.trim().length>0 ? 200 : 40);
 }
 document.addEventListener('click',function(e){
   if(!e.target.closest('.form-group'))
