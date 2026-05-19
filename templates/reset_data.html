@@ -1,115 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Reset All Data — ALSONDOS TRAVEL{% endblock %}
+{% block title %}Reset Test Data — ALSONDOS{% endblock %}
 
 {% block content %}
-<div style="max-width:600px;margin:40px auto">
-
-  <!-- WARNING BANNER -->
-  <div style="background:#C0392B;color:#fff;border-radius:12px 12px 0 0;padding:28px 32px;text-align:center">
-    <div style="font-size:52px;margin-bottom:8px">⚠️</div>
-    <h1 style="font-size:22px;font-weight:900;margin-bottom:4px">DANGER — DELETE ALL DATA</h1>
-    <p style="opacity:.85;font-size:14px">This action is PERMANENT and cannot be undone</p>
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-trash-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Reset Test Data</h1>
+    <p>Development / Testing mode only — clears all transactional data and resets numbering</p>
   </div>
+</div>
 
-  <!-- CURRENT DATA SUMMARY -->
-  <div style="background:#fff;border:2px solid #C0392B;padding:24px 32px">
-    <h3 style="color:#C0392B;margin-bottom:16px;font-size:15px">📊 Data that will be PERMANENTLY deleted:</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
-      <div style="background:#FAD7D3;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#C0392B;margin-bottom:6px">Sales Records</div>
-        <div style="font-size:32px;font-weight:900;color:#C0392B">{{ stats.sales_count }}</div>
-        <div style="font-size:12px;color:#922B21">Total: JOD {{ "%.2f"|format(stats.total_sell or 0) }}</div>
+{# ── Current data stats ───────────────────────────────────────────────────── #}
+<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
+    <div class="kpi-label">Transactions</div>
+    <div class="kpi-value navy">{{ stats.sales_count or 0 }}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-file-invoice"></i></div>
+    <div class="kpi-label">Invoices</div>
+    <div class="kpi-value navy">{{ stats.inv_count or 0 }}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-hotel"></i></div>
+    <div class="kpi-label">Vouchers</div>
+    <div class="kpi-value navy">{{ stats.vch_count or 0 }}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-money-bill-wave"></i></div>
+    <div class="kpi-label">Payments</div>
+    <div class="kpi-value navy">{{ stats.payments_count or 0 }}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+  {# ── What will be deleted ────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header" style="background:linear-gradient(90deg,#7f1d1d,var(--red))">
+      <i class="fas fa-exclamation-triangle"></i> What Will Be Deleted
+    </div>
+    <div class="card-body">
+      <div style="font-size:13px;line-height:2.2;color:var(--text)">
+        {% for item in [
+          ('Transactions (sales)', stats.sales_count or 0, 'fa-exchange-alt'),
+          ('Invoices',             stats.inv_count or 0,   'fa-file-invoice'),
+          ('Hotel Vouchers',       stats.vch_count or 0,   'fa-hotel'),
+          ('Payments',             stats.payments_count or 0,'fa-money-bill-wave'),
+          ('Supplier Payments',    stats.sp_count or 0,    'fa-truck'),
+          ('Audit Logs',           '—',                    'fa-clipboard-list'),
+        ] %}
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-lt)">
+          <span><i class="fas {{ item[2] }}" style="color:var(--red);width:18px;margin-right:8px"></i>{{ item[0] }}</span>
+          <strong style="color:var(--red)">{{ item[1] }}</strong>
+        </div>
+        {% endfor %}
       </div>
-      <div style="background:#FAD7D3;border-radius:8px;padding:16px;text-align:center">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#C0392B;margin-bottom:6px">Payment Records</div>
-        <div style="font-size:32px;font-weight:900;color:#C0392B">{{ stats.payments_count }}</div>
-        <div style="font-size:12px;color:#922B21">Total: JOD {{ "%.2f"|format(stats.total_paid or 0) }}</div>
+      <div style="margin-top:14px;padding:10px 14px;background:#fef2f2;border-radius:var(--radius-sm);border-left:3px solid var(--red);font-size:12.5px;color:#7f1d1d">
+        <strong>Also resets:</strong> INV/VCH/PKG numbering to 0001 · Companies/Suppliers master cache
       </div>
     </div>
-
-    <!-- CHECKLIST -->
-    <div style="background:#FEF9E7;border:1px solid #F39C12;border-radius:8px;padding:16px;margin-bottom:24px">
-      <div style="font-weight:700;color:#E67E22;margin-bottom:10px">⚠️ Before you continue — confirm you have:</div>
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="chk1" onchange="checkAll()">
-          <span>✅ Downloaded the Excel export with ALL data</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="chk2" onchange="checkAll()">
-          <span>✅ Verified the Excel file opens correctly</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="chk3" onchange="checkAll()">
-          <span>✅ Saved the Excel file in a safe location</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="chk4" onchange="checkAll()">
-          <span>✅ I understand this CANNOT be undone</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- EXPORT BUTTON -->
-    <a href="{{ url_for('export_excel') }}"
-       style="display:block;text-align:center;background:#1E7B34;color:#fff;padding:12px;border-radius:8px;font-weight:700;text-decoration:none;margin-bottom:20px;font-size:14px">
-      ⬇️ Download Excel Backup First (RECOMMENDED)
-    </a>
-
-    <!-- CONFIRMATION FORM -->
-    <form method="POST" id="resetForm">
-      <div style="margin-bottom:16px">
-        <label style="display:block;font-size:13px;font-weight:700;color:#C0392B;margin-bottom:8px">
-          Type exactly: <strong>DELETE ALL DATA</strong>
-        </label>
-        <input type="text" name="confirm_text" id="confirmInput"
-               placeholder="Type here to confirm..."
-               style="width:100%;padding:12px 14px;border:2px solid #C0392B;border-radius:7px;font-size:14px;font-weight:600;color:#C0392B"
-               oninput="checkAll()" autocomplete="off">
-      </div>
-
-      <button type="submit" id="submitBtn" disabled
-              style="width:100%;padding:14px;background:#7f8c8d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:900;cursor:not-allowed;letter-spacing:.5px;transition:all .2s">
-        🗑️ DELETE ALL DATA PERMANENTLY
-      </button>
-    </form>
   </div>
 
-  <!-- CANCEL -->
-  <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:0 0 12px 12px;padding:16px;text-align:center">
-    <a href="{{ url_for('admin') }}"
-       style="color:#2980B9;font-weight:600;text-decoration:none;font-size:14px">
-      ← Cancel — Go Back to Admin
-    </a>
+  {# ── Confirmation form ───────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><i class="fas fa-shield-alt"></i> Confirm Reset</div>
+    <div class="card-body">
+      <div style="padding:14px;background:var(--navy-lt);border-radius:var(--radius-sm);margin-bottom:18px;font-size:13px;color:var(--navy-dk);line-height:1.7">
+        <strong>⚠ This action cannot be undone.</strong><br>
+        All transactional data will be permanently deleted.<br>
+        The ERP structure, routes, and settings are preserved.
+      </div>
+      <form method="POST">
+        <div class="form-group" style="margin-bottom:18px">
+          <label>Type <strong style="color:var(--red)">DELETE ALL DATA</strong> to confirm</label>
+          <input type="text" name="confirm_text" required
+                 placeholder="DELETE ALL DATA"
+                 style="font-family:monospace;font-size:14px;font-weight:700;letter-spacing:.5px"
+                 autocomplete="off">
+        </div>
+        <div style="display:flex;gap:10px">
+          <a href="{{ url_for('admin') }}" class="btn btn-outline" style="flex:1;text-align:center">
+            <i class="fas fa-times"></i> Cancel
+          </a>
+          <button type="submit" class="btn btn-red" style="flex:1"
+                  onclick="return confirm('FINAL WARNING: Delete all test data and reset sequences?')">
+            <i class="fas fa-trash-alt"></i> Reset All Data
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
 </div>
-{% endblock %}
-
-{% block extra_js %}
-function checkAll() {
-  var chk1 = document.getElementById('chk1').checked;
-  var chk2 = document.getElementById('chk2').checked;
-  var chk3 = document.getElementById('chk3').checked;
-  var chk4 = document.getElementById('chk4').checked;
-  var txt  = document.getElementById('confirmInput').value.trim();
-  var btn  = document.getElementById('submitBtn');
-  var allChecked = chk1 && chk2 && chk3 && chk4;
-  var textCorrect = (txt === 'DELETE ALL DATA');
-
-  if (allChecked && textCorrect) {
-    btn.disabled = false;
-    btn.style.background = '#C0392B';
-    btn.style.cursor = 'pointer';
-  } else {
-    btn.disabled = true;
-    btn.style.background = '#7f8c8d';
-    btn.style.cursor = 'not-allowed';
-  }
-}
-
-// Double confirmation on submit
-document.getElementById('resetForm').onsubmit = function(e) {
-  return confirm('🚨 FINAL WARNING\n\nYou are about to delete ALL sales and payments data permanently.\n\nThis CANNOT be undone.\n\nAre you 100% sure?');
-};
 {% endblock %}
