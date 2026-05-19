@@ -214,7 +214,11 @@ def init_db():
     cur.close()
     db.close()
 
-init_db()
+try:
+    init_db()
+    logger.info("DB initialised OK")
+except Exception as _db_err:
+    logger.error(f"init_db error: {_db_err}")
 
 # ── Audit log helper ──────────────────────────────────────────────────────────
 def log_action(action, table_name, record_id=None, detail=''):
@@ -1838,35 +1842,31 @@ def init_extension_db():
             created_at     TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
         )
     """)
-    # Auto-seed master_companies from existing sales data (one-time backfill)
-    cur.execute("""
-        INSERT INTO master_companies (name)
-        SELECT DISTINCT UPPER(TRIM(company))
-        FROM sales
-        WHERE deleted=FALSE AND TRIM(company) <> ''
-        ON CONFLICT (name) DO NOTHING
-    """)
-    # Auto-seed master_suppliers from existing sales data
-    cur.execute("""
-        INSERT INTO master_suppliers (name, service_type)
-        SELECT DISTINCT supplier, svc FROM (
-            SELECT UPPER(TRIM(buy_from)) AS supplier, 'FLIGHT' AS svc
-              FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,'')) <> ''
-            UNION
-            SELECT UPPER(TRIM(hotel_supplier)), 'HOTEL'
-              FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,'')) <> ''
-            UNION
-            SELECT UPPER(TRIM(transfer_supplier)), 'TRANSFER'
-              FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,'')) <> ''
-            UNION
-            SELECT UPPER(TRIM(visa_supplier)), 'VISA'
-              FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,'')) <> ''
-            UNION
-            SELECT UPPER(TRIM(insurance_supplier)), 'INSURANCE'
-              FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,'')) <> ''
-        ) t WHERE supplier <> ''
-        ON CONFLICT (name) DO NOTHING
-    """)
+    # Auto-seed master_companies from existing sales data (safe — ignore errors)
+    try:
+        cur.execute("""
+            INSERT INTO master_companies (name)
+            SELECT DISTINCT UPPER(TRIM(company))
+            FROM sales
+            WHERE deleted=FALSE AND TRIM(COALESCE(company,'')) <> ''
+            ON CONFLICT (name) DO NOTHING
+        """)
+    except Exception:
+        db.rollback()
+
+    # Auto-seed master_suppliers (each supplier type separately so one failure
+    # doesn't block the others — some columns may not exist on first deploy)
+    for _supp_sql in [
+        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(buy_from)),'FLIGHT' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>'' ON CONFLICT(name) DO NOTHING",
+        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(hotel_supplier)),'HOTEL' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
+        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(transfer_supplier)),'TRANSFER' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
+        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(visa_supplier)),'VISA' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
+        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(insurance_supplier)),'INSURANCE' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
+    ]:
+        try:
+            cur.execute(_supp_sql)
+        except Exception:
+            db.rollback()
 
     # ── Supplier payments table ──────────────────────────────────────────────
     cur.execute("""
@@ -3351,4 +3351,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
