@@ -1399,34 +1399,61 @@ def reset_data():
         cur.execute('SELECT COUNT(*) FROM payments')
         pay_count = cur.fetchone()[0]
 
-        # Hard delete everything — permanent, not soft delete
-        cur.execute('DELETE FROM sales')
-        cur.execute('DELETE FROM payments')
-        cur.execute('DELETE FROM audit_logs')
+        # ── Hard delete ALL transactional data ──────────────────────────────
+        tables_to_clear = [
+            'invoices', 'vouchers', 'packages',
+            'sales', 'payments', 'supplier_payments', 'audit_logs',
+        ]
+        counts = {}
+        for t in tables_to_clear:
+            try:
+                cur.execute(f'SELECT COUNT(*) FROM {t}')
+                row = cur.fetchone(); counts[t] = row[0] if row else 0
+            except: counts[t] = 0
+        for t in tables_to_clear:
+            try: cur.execute(f'DELETE FROM {t}')
+            except: db.rollback()
 
-        # Reset auto-increment sequences so IDs start from 1 again
-        cur.execute("ALTER SEQUENCE sales_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE payments_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE audit_logs_id_seq RESTART WITH 1")
+        # ── Reset table ID sequences ──────────────────────────────────────────
+        for seq in ['sales_id_seq','payments_id_seq','audit_logs_id_seq',
+                    'invoices_id_seq','vouchers_id_seq','packages_id_seq',
+                    'supplier_payments_id_seq']:
+            try: cur.execute(f'ALTER SEQUENCE {seq} RESTART WITH 1')
+            except: pass
+
+        # ── Reset document number sequences (INV/VCH/PKG) ────────────────────
+        try:
+            cur.execute("UPDATE doc_sequences SET last_num=0")
+        except: pass
+
+        # ── Reset master data (companies/suppliers seeded from sales) ─────────
+        try:
+            cur.execute("DELETE FROM master_companies")
+            cur.execute("DELETE FROM master_suppliers")
+        except: pass
 
         db.commit()
 
-        # Log the reset action (this will be the first entry in fresh audit log)
+        total_deleted = sum(counts.values())
         log_action('RESET', 'system', None,
-                   f"Full data reset by {session.get('username')} — "
-                   f"deleted {sales_count} sales and {pay_count} payments")
+                   f"Full test data reset by {session.get('username')} — {total_deleted} total records deleted")
 
-        flash(f'✅ All data cleared successfully. {sales_count} sales and {pay_count} payments deleted. System starts fresh from today.', 'success')
+        flash(f'✅ Test data cleared. {counts.get("sales",0)} transactions, '
+              f'{counts.get("invoices",0)} invoices, {counts.get("vouchers",0)} vouchers, '
+              f'{counts.get("payments",0)} payments deleted. Numbering reset to 0001.', 'success')
         return redirect(url_for('index'))
 
-    # GET — show confirmation page
-    stats = query_db('''
+    # GET — show confirmation page with full stats
+    stats = query_db("""
         SELECT
-            (SELECT COUNT(*) FROM sales) as sales_count,
-            (SELECT COUNT(*) FROM payments) as payments_count,
-            (SELECT COALESCE(SUM(sell),0) FROM sales) as total_sell,
-            (SELECT COALESCE(SUM(amount),0) FROM payments) as total_paid
-    ''', one=True)
+            (SELECT COUNT(*) FROM sales)            as sales_count,
+            (SELECT COUNT(*) FROM payments)         as payments_count,
+            (SELECT COUNT(*) FROM invoices WHERE deleted=FALSE) as inv_count,
+            (SELECT COUNT(*) FROM vouchers WHERE deleted=FALSE) as vch_count,
+            (SELECT COUNT(*) FROM supplier_payments WHERE deleted=FALSE) as sp_count,
+            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE deleted=FALSE) as total_sell,
+            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted=FALSE) as total_paid
+    """, one=True)
     return render_template('reset_data.html', stats=stats)
 
 @app.route('/archive', methods=['GET'])
