@@ -1,38 +1,5 @@
-{% extends "base.html" %}
-{% block title %}Hotel Vouchers — ALSONDOS{% endblock %}
-{% block content %}
-<div class="page-header">
-  <div class="page-header-left"><h1><i class="fas fa-hotel"></i> Hotel Vouchers</h1><p>{{ total_rows }} vouchers</p></div>
-  <div class="page-header-actions"><a href="{{ url_for('new_voucher') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Voucher</a></div>
-</div>
-<div class="table-wrap">
-  <table>
-    <thead><tr><th>Voucher #</th><th>Guest</th><th>Hotel</th><th>Room</th><th>Check-In</th><th>Check-Out</th><th>Nights</th>{% if is_admin %}<th>Agent</th>{% endif %}<th>Actions</th></tr></thead>
-    <tbody>
-      {% for v in vouchers %}
-      <tr>
-        <td><a href="{{ url_for('view_voucher', vch_id=v.id) }}" style="color:var(--navy);font-weight:800">{{ v.voucher_number }}</a></td>
-        <td><strong>{{ v.guest_name }}</strong></td>
-        <td>{{ v.hotel_name }}</td>
-        <td style="font-size:12px">{{ v.room_type or '—' }}</td>
-        <td style="font-size:12.5px">{{ v.checkin_date }}</td>
-        <td style="font-size:12.5px">{{ v.checkout_date }}</td>
-        <td class="text-center"><strong>{{ v.nights }}</strong></td>
-        {% if is_admin %}<td style="font-size:12px;color:var(--muted)">{{ v.created_by }}</td>{% endif %}
-        <td>
-          <div style="display:flex;gap:4px">
-            <a href="{{ url_for('view_voucher', vch_id=v.id) }}" class="btn btn-edit"><i class="fas fa-eye"></i></a>
-            <form method="POST" action="{{ url_for('delete_voucher', vch_id=v.id) }}" onsubmit="return confirm('Delete this voucher?')">
-              <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
-            </form>
-          </div>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="{{ 9 if is_admin else 8 }}" class="text-center text-muted" style="padding:32px">No vouchers found. <a href="{{ url_for('new_voucher') }}" style="color:var(--red);font-weight:700">Create one →</a></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% from 'pagination_macro.html' import render_pagination %}{{ render_pagination(page, total_pages, total_rows) }}
-{% endblock %}
+flask==3.0.0
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+openpyxl==3.1.2
+bcrypt==4.1.2
