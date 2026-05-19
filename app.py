@@ -1817,6 +1817,21 @@ def init_extension_db():
         ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS return_date     TEXT DEFAULT '';
     EXCEPTION WHEN duplicate_column THEN NULL; END $$;""")
 
+    # ── Supplier payments table ──────────────────────────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS supplier_payments (
+            id           SERIAL PRIMARY KEY,
+            supplier     TEXT NOT NULL,
+            amount       REAL NOT NULL DEFAULT 0,
+            pay_date     TEXT NOT NULL,
+            service_type TEXT DEFAULT 'FLIGHT',
+            notes        TEXT DEFAULT '',
+            deleted      BOOLEAN DEFAULT FALSE,
+            is_archived  BOOLEAN DEFAULT FALSE,
+            created_at   TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    """)
+
     # ── Indexes ───────────────────────────────────────────────────────────────
     for idx in [
         "CREATE INDEX IF NOT EXISTS idx_sales_user ON sales(created_by_user_id)",
@@ -1826,6 +1841,7 @@ def init_extension_db():
         "CREATE INDEX IF NOT EXISTS idx_vouchers_user ON vouchers(created_by_id)",
         "CREATE INDEX IF NOT EXISTS idx_vouchers_sale ON vouchers(sale_id)",
         "CREATE INDEX IF NOT EXISTS idx_packages_user ON packages(created_by_id)",
+        "CREATE INDEX IF NOT EXISTS idx_supp_pay ON supplier_payments(supplier)",
     ]:
         cur.execute(idx)
 
@@ -1843,10 +1859,10 @@ except Exception as _ext_err:
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_doc_number(doc_type: str) -> str:
     """
-    Safe document numbering using a dedicated connection.
-    Always uses MAX(id) across ALL rows (including deleted) to avoid
-    duplicate key errors from soft-deleted records.
-    If no rows exist at all → starts from 1.
+    Smart document numbering with TESTING MODE reset support.
+    - If ALL records in the table are deleted (soft-deleted), resets to 0001.
+    - If records still exist, syncs to MAX(id) to avoid duplicate key errors.
+    - Uses a dedicated connection to avoid interfering with the request connection.
     """
     table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
     table = table_map.get(doc_type)
@@ -1860,16 +1876,21 @@ def next_doc_number(doc_type: str) -> str:
         cur = conn.cursor()
 
         if table:
-            # Use MAX(id) across ALL rows including soft-deleted
-            # to guarantee no duplicate invoice_number collision
-            cur.execute(f"SELECT COALESCE(MAX(id), 0) as max_id FROM {table}")
-            row = cur.fetchone()
-            max_id = int(row['max_id']) if row else 0
-            # Sync the sequence to max_id so next number = max_id + 1
-            cur.execute(
-                "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s AND last_num < %s",
-                [max_id, doc_type, max_id]
-            )
+            # Count ALL rows (including soft-deleted) to detect true empty state
+            cur.execute(f"SELECT COUNT(*) as total, COALESCE(MAX(id),0) as max_id FROM {table}")
+            row     = cur.fetchone()
+            total   = int(row['total'])  if row else 0
+            max_id  = int(row['max_id']) if row else 0
+
+            if total == 0:
+                # Table is truly empty — reset sequence so next = 0001
+                cur.execute("UPDATE doc_sequences SET last_num=0 WHERE doc_type=%s", [doc_type])
+            else:
+                # Records exist — sync sequence to MAX(id) to avoid duplicate key
+                cur.execute(
+                    "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s AND last_num < %s",
+                    [max_id, doc_type, max_id]
+                )
 
         cur.execute("""
             UPDATE doc_sequences SET last_num = last_num + 1
@@ -2622,6 +2643,176 @@ def payment_receipt(pay_id):
         total_paid_all=float(total_paid['s'] or 0),
         today=date.today().strftime('%d %B %Y'),
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SUPPLIER STATEMENTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _get_supplier_list():
+    """Aggregate all unique suppliers from the sales table across all types."""
+    rows = query_db("""
+        SELECT DISTINCT supplier, svc FROM (
+            SELECT NULLIF(TRIM(buy_from),'')      AS supplier, 'FLIGHT'    AS svc FROM sales WHERE deleted=FALSE AND buy_from IS NOT NULL AND buy_from <> ''
+            UNION
+            SELECT NULLIF(TRIM(return_supplier),''), 'FLIGHT'               FROM sales WHERE deleted=FALSE AND return_supplier IS NOT NULL AND return_supplier <> ''
+            UNION
+            SELECT NULLIF(TRIM(hotel_supplier),''), 'HOTEL'                 FROM sales WHERE deleted=FALSE AND hotel_supplier IS NOT NULL AND hotel_supplier <> ''
+            UNION
+            SELECT NULLIF(TRIM(transfer_supplier),''), 'TRANSFER'           FROM sales WHERE deleted=FALSE AND transfer_supplier IS NOT NULL AND transfer_supplier <> ''
+            UNION
+            SELECT NULLIF(TRIM(visa_supplier),''), 'VISA'                   FROM sales WHERE deleted=FALSE AND visa_supplier IS NOT NULL AND visa_supplier <> ''
+            UNION
+            SELECT NULLIF(TRIM(insurance_supplier),''), 'INSURANCE'         FROM sales WHERE deleted=FALSE AND insurance_supplier IS NOT NULL AND insurance_supplier <> ''
+        ) t WHERE supplier IS NOT NULL
+        ORDER BY supplier
+    """) or []
+    return rows
+
+
+@app.route('/supplier-statement')
+@login_required
+def supplier_statement():
+    supplier    = request.args.get('supplier', '').strip()
+    svc_type    = request.args.get('svc_type', '').strip()
+    date_from   = request.args.get('date_from', '').strip()
+    date_to     = request.args.get('date_to', '').strip()
+
+    # Build the purchases query — one row per purchase line from sales
+    q_parts = []
+    params  = []
+
+    base = """
+        SELECT s.id, s.sale_date, s.company, s.customer,
+               s.service_type,
+               %s AS supplier_name,
+               %s AS purchase_type,
+               %s AS net_cost
+        FROM sales s
+        WHERE s.deleted=FALSE AND s.is_archived=FALSE
+          AND NULLIF(TRIM(%s),'') IS NOT NULL
+    """
+
+    # Outbound flight supplier
+    q_parts.append(base % ("s.buy_from","'FLIGHT'","s.outbound_cost","s.buy_from"))
+    # Return flight supplier (if different)
+    q_parts.append("""
+        SELECT s.id, s.sale_date, s.company, s.customer,
+               s.service_type,
+               s.return_supplier AS supplier_name,
+               'FLIGHT' AS purchase_type,
+               s.return_cost AS net_cost
+        FROM sales s
+        WHERE s.deleted=FALSE AND s.is_archived=FALSE
+          AND NULLIF(TRIM(s.return_supplier),'') IS NOT NULL
+          AND TRIM(s.return_supplier) <> TRIM(COALESCE(s.buy_from,''))
+    """)
+    # Hotel supplier
+    q_parts.append(base % ("s.hotel_supplier","'HOTEL'","s.hotel_net","s.hotel_supplier"))
+    # Transfer supplier
+    q_parts.append(base % ("s.transfer_supplier","'TRANSFER'","s.transfer_net","s.transfer_supplier"))
+    # Visa supplier
+    q_parts.append(base % ("s.visa_supplier","'VISA'","s.net","s.visa_supplier"))
+    # Insurance supplier
+    q_parts.append(base % ("s.insurance_supplier","'INSURANCE'","s.net","s.insurance_supplier"))
+
+    union_q = " UNION ALL ".join(q_parts)
+    full_q  = f"SELECT * FROM ({union_q}) t WHERE supplier_name IS NOT NULL AND TRIM(supplier_name)<>''"
+
+    filters = []
+    fparams = []
+    if supplier:
+        filters.append("UPPER(supplier_name) = UPPER(%s)")
+        fparams.append(supplier)
+    if svc_type:
+        filters.append("purchase_type = %s")
+        fparams.append(svc_type.upper())
+    if date_from:
+        filters.append("sale_date >= %s")
+        fparams.append(date_from)
+    if date_to:
+        filters.append("sale_date <= %s")
+        fparams.append(date_to)
+    if filters:
+        full_q += " AND " + " AND ".join(filters)
+    full_q += " ORDER BY sale_date DESC, id DESC"
+
+    purchases = query_db(full_q, fparams) or []
+
+    # Total net cost purchased from this supplier
+    total_net = sum(float(p['net_cost'] or 0) for p in purchases)
+
+    # Total paid to this supplier (from supplier_payments table)
+    paid_q = "SELECT COALESCE(SUM(amount),0) as s FROM supplier_payments WHERE deleted=FALSE"
+    paid_params = []
+    if supplier:
+        paid_q += " AND UPPER(supplier)=UPPER(%s)"
+        paid_params.append(supplier)
+    paid_row   = query_db(paid_q, paid_params, one=True)
+    total_paid = float(paid_row['s'] if paid_row else 0)
+    balance    = round(total_net - total_paid, 3)
+
+    # Payments list for this supplier
+    pay_q = "SELECT * FROM supplier_payments WHERE deleted=FALSE"
+    pay_p = []
+    if supplier:
+        pay_q += " AND UPPER(supplier)=UPPER(%s)"; pay_p.append(supplier)
+    pay_q += " ORDER BY pay_date DESC"
+    supplier_pays = query_db(pay_q, pay_p) or []
+
+    # Supplier list for dropdown
+    all_suppliers = _get_supplier_list()
+
+    return render_template('supplier_statement.html',
+        purchases=purchases,
+        supplier_pays=supplier_pays,
+        all_suppliers=all_suppliers,
+        total_net=total_net,
+        total_paid=total_paid,
+        balance=balance,
+        filters={'supplier':supplier,'svc_type':svc_type,'date_from':date_from,'date_to':date_to},
+        today=date.today().strftime('%d %B %Y'),
+    )
+
+
+@app.route('/supplier-payment/add', methods=['POST'])
+@admin_required
+def add_supplier_payment():
+    supplier   = request.form.get('supplier','').strip()
+    amount_raw = request.form.get('amount','').strip()
+    pay_date   = request.form.get('pay_date', str(date.today())).strip()
+    svc_type   = request.form.get('svc_type','FLIGHT').strip()
+    notes      = request.form.get('notes','').strip()
+    if not supplier or not amount_raw:
+        flash('Supplier and amount are required.', 'danger')
+        return redirect(url_for('supplier_statement'))
+    try:
+        amount = float(amount_raw)
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        flash('Invalid payment amount.', 'danger')
+        return redirect(url_for('supplier_statement'))
+    execute_db("""
+        INSERT INTO supplier_payments (supplier, amount, pay_date, service_type, notes)
+        VALUES (%s,%s,%s,%s,%s)
+    """, (supplier.upper(), amount, pay_date, svc_type.upper(), notes))
+    log_action('CREATE', 'supplier_payments', 0,
+               f"Supplier payment: {supplier.upper()} JOD {amount}")
+    flash(f'Payment of JOD {amount:.3f} recorded for {supplier.upper()}.', 'success')
+    # Return to same supplier filter
+    return redirect(url_for('supplier_statement', supplier=supplier.upper(),
+                            svc_type=svc_type))
+
+
+@app.route('/supplier-payment/<int:pay_id>/delete', methods=['POST'])
+@admin_required
+def delete_supplier_payment(pay_id):
+    execute_db('UPDATE supplier_payments SET deleted=TRUE WHERE id=%s', [pay_id])
+    log_action('DELETE', 'supplier_payments', pay_id, 'Supplier payment deleted')
+    flash('Payment deleted.', 'success')
+    supplier = request.form.get('supplier','')
+    return redirect(url_for('supplier_statement', supplier=supplier))
 
 @app.route('/api/company-transactions')
 @login_required
