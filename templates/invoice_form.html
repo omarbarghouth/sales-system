@@ -148,7 +148,7 @@
               <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
               <td>
                 <button type="button" class="btn btn-edit btn-xs"
-                        onclick="fillFromTxn('{{ t.id }}','{{ t.customer }}','{{ t.from_loc }} → {{ t.to_loc }}',{{ t.sell }},{{ t.tickets }})">
+                        onclick="fillFromTxnById({{ t.id }})">
                   <i class="fas fa-arrow-left"></i> Use
                 </button>
               </td>
@@ -207,19 +207,83 @@ function calcTotal(){
     'JOD '+t.toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3});
 }
 
-function fillFromTxn(id, customer, route, sell, tickets) {
-  // Fill invoice form from selected transaction
-  document.getElementById('customerInput').value = customer;
-  document.getElementById('inv-amount').value = sell.toFixed(3);
-  document.getElementById('inv-discount').value = '0';
-  document.getElementById('linkedSaleId').value = id;
-  document.querySelector('[name="sale_id"]') && (document.querySelector('[name="sale_id"]').value = id);
-  var desc = 'Flight ' + route + ' | ' + customer + ' · ' + tickets + ' ticket(s)';
-  document.getElementById('serviceDesc').value = desc;
+// Cache of full transaction objects loaded from API
+var txnCache = {};
+
+function buildServiceDesc(t) {
+  var parts = [];
+  var svc = (t.svc || 'FLIGHT').toUpperCase();
+
+  if (svc === 'FLIGHT' || svc === 'PACKAGE' || t.route || t.airline) {
+    var fl = 'FLIGHT: ' + (t.route || '');
+    if (t.airline)      fl += ' | Airline: ' + t.airline;
+    if (t.buy_from)     fl += ' | Supplier: ' + t.buy_from;
+    if (t.pnr)          fl += ' | PNR: ' + t.pnr;
+    if (t.travel_date)  fl += ' | Dep: ' + t.travel_date;
+    if (t.return_date)  fl += ' | Ret: ' + t.return_date;
+    if (t.baggage)      fl += ' | Bag: ' + t.baggage;
+    if (t.trip_type)    fl += ' | ' + t.trip_type;
+    fl += ' | Pax: ' + (t.tickets || 1);
+    parts.push(fl);
+  }
+  if (t.hotel_name) {
+    var ht = 'HOTEL: ' + t.hotel_name;
+    if (t.hotel_room)     ht += ' | ' + t.hotel_room;
+    if (t.hotel_meal)     ht += ' | ' + t.hotel_meal;
+    if (t.hotel_checkin)  ht += ' | Check-In: ' + t.hotel_checkin;
+    if (t.hotel_checkout) ht += ' | Check-Out: ' + t.hotel_checkout;
+    if (t.hotel_nights)   ht += ' | ' + t.hotel_nights + ' nights';
+    parts.push(ht);
+  }
+  if (t.transfer_type) {
+    var tr = 'TRANSFER: ' + t.transfer_type;
+    if (t.transfer_vehicle) tr += ' | ' + t.transfer_vehicle;
+    if (t.transfer_pickup)  tr += ' | Pickup: ' + t.transfer_pickup;
+    parts.push(tr);
+  }
+  if (svc === 'VISA' && (t.visa_type || t.passport_number)) {
+    var vi = 'VISA: ' + (t.visa_type || '');
+    if (t.passport_number) vi += ' | Passport: ' + t.passport_number;
+    parts.push(vi);
+  }
+  if (svc === 'INSURANCE' && t.insurance_type) {
+    parts.push('INSURANCE: ' + t.insurance_type);
+  }
+  if (t.tours && t.tours.length) {
+    var tourLines = t.tours.filter(function(x){return x.name;}).map(function(x){
+      return x.name + (x.date ? ' (' + x.date + ')' : '') + (x.pickup ? ' Pickup:' + x.pickup : '');
+    }).join(', ');
+    if (tourLines) parts.push('TOURS: ' + tourLines);
+  }
+  if (t.passengers && t.passengers.length) {
+    var paxLines = t.passengers.filter(function(p){return p.name;}).map(function(p){
+      return p.name + (p.passport ? ' [' + p.passport + ']' : '');
+    }).join(', ');
+    if (paxLines) parts.push('PASSENGERS: ' + paxLines);
+  }
+  if (t.remarks) parts.push('Note: ' + t.remarks);
+  return parts.join('\n');
+}
+
+function fillFromTxn(t) {
+  document.getElementById('customerInput').value = t.customer || '';
+  document.getElementById('inv-amount').value    = (t.sell || 0).toFixed(3);
+  document.getElementById('inv-discount').value  = '0';
+  document.getElementById('linkedSaleId').value  = t.id;
+  var sf = document.querySelector('[name="sale_id"]'); if (sf) sf.value = t.id;
+  document.getElementById('serviceDesc').value   = buildServiceDesc(t);
   calcTotal();
-  // Highlight selected row
   document.querySelectorAll('#txnBody tr').forEach(function(r){ r.style.background=''; });
-  event.target.closest('tr').style.background='var(--navy-lt)';
+  if (event && event.target) { var row = event.target.closest('tr'); if (row) row.style.background='var(--navy-lt)'; }
+}
+
+function fillFromTxnById(id) {
+  if (txnCache[id]) { fillFromTxn(txnCache[id]); return; }
+  fetch('/api/company-transactions?company='+encodeURIComponent((document.getElementById('companyInput')||{value:''}).value))
+  .then(function(r){return r.json();}).then(function(d){
+    (d.transactions||[]).forEach(function(t){txnCache[t.id]=t;});
+    if (txnCache[id]) fillFromTxn(txnCache[id]);
+  });
 }
 
 function loadCompanyTxns(val) {
@@ -252,6 +316,7 @@ function loadCompanyTxns(val) {
                + '<th>Date</th><th>Customer</th><th>Route</th>'
                + '<th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>'
                + '</tr></thead><tbody id="txnBody">';
+      txns.forEach(function(t){ txnCache[t.id] = t; });
       txns.forEach(function(t){
         var badge = 'badge-navy';
         if(t.status==='DONE') badge='badge-done';
