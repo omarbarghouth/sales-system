@@ -726,7 +726,7 @@ tfoot td {
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .form-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 
-.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; position: relative; }
 .form-group label {
   font-size: 10.5px;
   font-weight: 700;
