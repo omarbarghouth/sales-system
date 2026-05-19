@@ -61,10 +61,18 @@
         <td class="text-right text-green">{{ "%.2f"|format(s.profit|float) }}</td>
         <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
         <td>
-          <div style="display:flex;gap:4px">
-            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit" title="Edit"><i class="fas fa-pencil-alt"></i></a>
-            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-sm btn-outline" title="Invoice" style="font-size:11px;padding:5px 8px"><i class="fas fa-file-invoice"></i></a>
-            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-sm btn-outline" title="Voucher" style="font-size:11px;padding:5px 8px"><i class="fas fa-hotel"></i></a>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Invoice"><i class="fas fa-file-invoice"></i></a>
+            {% if (s.service_type or 'FLIGHT') == 'PACKAGE' %}
+            <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
+               onclick="return confirm('Auto-generate voucher from this package?')"
+               class="btn btn-gold btn-xs" title="Auto Generate Package Voucher">
+              <i class="fas fa-magic"></i>
+            </a>
+            {% else %}
+            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Voucher"><i class="fas fa-hotel"></i></a>
+            {% endif %}
           </div>
         </td>
       </tr>

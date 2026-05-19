@@ -76,8 +76,9 @@
 
           <div class="form-group" style="margin-bottom:14px">
             <label>Service Description <span class="req">*</span></label>
-            <textarea name="service_desc" id="serviceDesc" rows="3" required
-                      placeholder="e.g. Flight tickets AMM-DXB-AMM for Ahmad Al-Rashid · 2 tickets">{{ inv.service_desc if inv else (sale.from_loc + ' → ' + sale.to_loc + ' | ' + sale.customer + ' · ' + (sale.tickets|string) + ' ticket(s)' if sale else '') }}</textarea>
+            <textarea name="service_desc" id="serviceDesc" rows="5" required
+                      placeholder="Service details auto-filled from transaction…">{{ inv.service_desc if inv else (auto_desc if auto_desc else '') }}</textarea>
+            <small>Auto-filled from transaction. Edit if needed.</small>
           </div>
 
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
