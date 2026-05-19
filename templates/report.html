@@ -238,19 +238,7 @@
         <td class="text-right text-green" style="font-size:13px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
 
         <td>
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
-            {% if s.outbound_status %}
-            <span class="badge badge-{% if s.outbound_status=='DONE' %}done{% else %}still{% endif %}" style="font-size:9px">
-              ✈ {{ s.outbound_status }}
-            </span>
-            {% endif %}
-            {% if s.return_date and s.return_status %}
-            <span class="badge badge-{% if s.return_status=='DONE' %}done{% else %}pending{% endif %}" style="font-size:9px">
-              ↩ {{ s.return_status }}
-            </span>
-            {% endif %}
-          </div>
+          <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
         </td>
 
         {% if is_admin %}

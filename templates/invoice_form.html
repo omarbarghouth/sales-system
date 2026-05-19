@@ -279,7 +279,8 @@ function fillFromTxn(t) {
 
 function fillFromTxnById(id) {
   if (txnCache[id]) { fillFromTxn(txnCache[id]); return; }
-  fetch('/api/company-transactions?company='+encodeURIComponent((document.getElementById('companyInput')||{value:''}).value))
+  var _co=(document.getElementById('companyInput')||{value:''}).value||(document.getElementById('companySearch')||{value:''}).value||'';
+  fetch('/api/company-transactions?company='+encodeURIComponent(_co))
   .then(function(r){return r.json();}).then(function(d){
     (d.transactions||[]).forEach(function(t){txnCache[t.id]=t;});
     if (txnCache[id]) fillFromTxn(txnCache[id]);
@@ -329,8 +330,7 @@ function loadCompanyTxns(val) {
           +'<td class="text-right" style="font-weight:700;color:var(--navy-dk)">'+t.sell.toFixed(3)+'</td>'
           +'<td><span class="badge '+badge+'">'+t.status+'</span></td>'
           +'<td><button type="button" class="btn btn-edit btn-xs" '
-          +'onclick="fillFromTxn(\''+t.id+'\',\''+t.customer.replace(/'/g,"\\'")+'\',' 
-          +'\''+t.route+'\','+t.sell+','+t.tickets+')">'
+          +'onclick="fillFromTxn(txnCache['+t.id+'])">'
           +'<i class="fas fa-arrow-left"></i> Use</button></td>'
           +'</tr>';
       });
