@@ -154,11 +154,36 @@
 </div>
 
 {# ── Transactions Table ────────────────────────────────────────── #}
-<div class="table-wrap">
-  <table>
+<style>
+.report-table td { vertical-align: middle !important; padding: 10px 12px !important; }
+.report-table th { vertical-align: middle; white-space: nowrap; }
+.report-table td .supp-line { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:108px; font-size:11.5px; line-height:1.5; }
+</style>
+<div class="table-wrap" style="overflow-x:auto">
+  <table class="report-table" style="table-layout:fixed;width:100%;min-width:960px">
+    <colgroup>
+      <col style="width:36px">   {# ID #}
+      <col style="width:80px">   {# Type #}
+      <col style="width:92px">   {# Date #}
+      <col style="width:110px">  {# Company #}
+      <col style="width:120px">  {# Customer #}
+      <col style="width:100px">  {# Route #}
+      <col style="width:110px">  {# Suppliers #}
+      <col style="width:36px">   {# Tix #}
+      <col style="width:90px">   {# Travel Date #}
+      <col style="width:88px">   {# Net #}
+      <col style="width:88px">   {# Sell #}
+      <col style="width:80px">   {# Profit #}
+      <col style="width:60px">   {# Status #}
+      {% if is_admin %}
+      <col style="width:80px">   {# Agent #}
+      <col style="width:90px">   {# Actions #}
+      {% endif %}
+    </colgroup>
     <thead>
       <tr>
         <th>ID</th>
+        <th>Type</th>
         <th>Date</th>
         <th>Company</th>
         <th>Customer</th>
@@ -184,15 +209,10 @@
       {% for s in sales %}
       <tr>
         <td style="color:var(--muted-lt);font-size:11px">{{ s.id }}</td>
-        <td>
-          {% set st = (s.service_type or 'FLIGHT') %}
-          <span class="svc-badge svc-{{ st }}">
-            <i class="fas {{ st|svc_icon }}"></i>{{ st }}
-          </span>
-        </td>
-        <td style="white-space:nowrap;font-size:12.5px;color:var(--text-2)">{{ s.sale_date }}</td>
+        <td>{% set st = (s.service_type or 'FLIGHT') %}<span class="svc-badge svc-{{ st }}"><i class="fas {{ st|svc_icon }}"></i>{{ st }}</span></td>
+        <td style="font-size:12px;white-space:nowrap">{{ s.sale_date }}</td>
 
-        <td>
+        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s.company }}">
           <a href="{{ url_for('statement', company=s.company) }}"
              style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:13px">
             {{ s.company }}
@@ -211,25 +231,18 @@
           {% endif %}
         </td>
 
-        <td style="font-size:11.5px;max-width:130px">
-          {% if s.buy_from %}
-          <div><i class="fas fa-plane-departure" style="color:var(--navy);font-size:10px;margin-right:3px"></i>{{ s.buy_from }}</div>
-          {% endif %}
-          {% if s.return_supplier %}
-          <div style="color:var(--gold-dk);margin-top:2px"><i class="fas fa-plane-arrival" style="font-size:10px;margin-right:3px"></i>{{ s.return_supplier }}</div>
-          {% endif %}
-          {% if not s.buy_from and not s.return_supplier %}<span style="color:var(--muted-lt)">—</span>{% endif %}
+        <td>
+          {% if s.buy_from %}<span class="supp-line"><i class="fas fa-plane-departure" style="color:var(--navy);font-size:9px;margin-right:2px"></i>{{ s.buy_from }}</span>{% endif %}
+          {% if s.hotel_supplier %}<span class="supp-line" style="color:var(--gold-dk)"><i class="fas fa-hotel" style="font-size:9px;margin-right:2px"></i>{{ s.hotel_supplier }}</span>{% endif %}
+          {% if s.return_supplier and s.return_supplier != s.buy_from %}<span class="supp-line" style="color:var(--muted)"><i class="fas fa-plane-arrival" style="font-size:9px;margin-right:2px"></i>{{ s.return_supplier }}</span>{% endif %}
+          {% if not s.buy_from and not s.return_supplier and not s.hotel_supplier %}<span style="color:var(--muted-lt)">—</span>{% endif %}
         </td>
 
         <td class="text-center" style="font-weight:700;color:var(--navy-dk)">{{ s.tickets }}</td>
 
-        <td style="font-size:12px;white-space:nowrap">
-          {% if s.travel_date %}
-          <span style="color:var(--navy-dk);font-weight:600">{{ s.travel_date }}</span>
-          {% endif %}
-          {% if s.return_date %}
-          <br><span style="color:var(--gold-dk);font-size:11px"><i class="fas fa-plane-arrival" style="font-size:9px"></i> {{ s.return_date }}</span>
-          {% endif %}
+        <td style="font-size:11.5px">
+          {% if s.travel_date %}<span style="color:var(--navy-dk);font-weight:600;display:block;white-space:nowrap">{{ s.travel_date }}</span>{% endif %}
+          {% if s.return_date %}<span style="color:var(--gold-dk);font-size:10.5px;display:block;white-space:nowrap">↩ {{ s.return_date }}</span>{% endif %}
           {% if not s.travel_date and not s.return_date %}<span style="color:var(--muted-lt)">—</span>{% endif %}
         </td>
 
