@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — {{ session.username }} — ALSONDOS{% endblock %}
+
+{% block content %}
+{# ── Banner ──────────────────────────────────────────────── #}
+<div class="dash-banner">
+  <div class="dash-banner-left">
+    <img src="{{ url_for('static', filename='logo_white.png') }}" class="dash-banner-logo" alt=""/>
+    <div>
+      <div class="dash-banner-title">My Dashboard</div>
+      <div class="dash-banner-sub">Sales Agent · {{ session.username }} · {{ today }}</div>
+    </div>
+  </div>
+  <div class="dash-banner-stats">
+    <div class="dash-stat">
+      <div class="dash-stat-val">{{ my_stats.total_txns or 0 }}</div>
+      <div class="dash-stat-lbl">My Transactions</div>
+    </div>
+    <div class="dash-stat-divider"></div>
+    <div class="dash-stat">
+      <div class="dash-stat-val" style="color:#6dd58a">JOD {{ "%.0f"|format((my_stats.commission or 0)|float) }}</div>
+      <div class="dash-stat-lbl">My Commission</div>
+    </div>
+  </div>
+</div>
+
+{# ── KPI Cards ────────────────────────────────────────────── #}
+<div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
+  <div class="kpi-box gold">
+    <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+    <div class="kpi-label">My Revenue</div>
+    <div class="kpi-value gold">JOD {{ "%.2f"|format((my_stats.total_sell or 0)|float) }}</div>
+    <div class="kpi-sub">Total invoiced</div>
+  </div>
+  <div class="kpi-box green">
+    <div class="kpi-icon"><i class="fas fa-coins"></i></div>
+    <div class="kpi-label">My Profit</div>
+    <div class="kpi-value green">JOD {{ "%.2f"|format((my_stats.total_profit or 0)|float) }}</div>
+    <div class="kpi-sub">Net profit earned</div>
+  </div>
+  <div class="kpi-box" style="border-top-color:#9b59b6">
+    <div class="kpi-icon" style="background:#f3e5ff;color:#9b59b6"><i class="fas fa-percentage"></i></div>
+    <div class="kpi-label">My Commission ({{ commission_rate|int }}%)</div>
+    <div class="kpi-value" style="color:#9b59b6">JOD {{ "%.3f"|format((my_stats.commission or 0)|float) }}</div>
+    <div class="kpi-sub"><a href="{{ url_for('my_commission') }}" style="color:#9b59b6;font-weight:700">Full report →</a></div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
+    <div class="kpi-label">My Transactions</div>
+    <div class="kpi-value">{{ my_stats.total_txns or 0 }}</div>
+    <div class="kpi-sub"><a href="{{ url_for('my_sales') }}" style="color:var(--navy);font-weight:700">View all →</a></div>
+  </div>
+  <div class="kpi-box blue">
+    <div class="kpi-icon"><i class="fas fa-plane-departure"></i></div>
+    <div class="kpi-label">Upcoming</div>
+    <div class="kpi-value">{{ upcoming|length }}</div>
+    <div class="kpi-sub">Departures ahead</div>
+  </div>
+</div>
+
+{# ── My Service Breakdown ─────────────────────────────────────── #}
+{% if emp_svc %}
+<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px;align-items:center">
+  <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap">You Sold:</span>
+  {% for s in emp_svc %}
+  <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid var(--border-lt);background:var(--bg-card)">
+    <span class="svc-badge svc-{{ s.svc }}" style="margin:0"><i class="fas {{ s.svc|svc_icon }}"></i>{{ s.svc }}</span>
+    <strong style="font-size:13px;color:var(--navy)">{{ s.cnt }}</strong>
+    <span style="font-size:11px;color:var(--muted)">JOD {{ "%.0f"|format((s.total_sell or 0)|float) }}</span>
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Charts ───────────────────────────────────────────────── #}
+<div class="chart-grid" style="margin-bottom:20px">
+  <div class="chart-card">
+    <div class="chart-card-header"><i class="fas fa-chart-bar" style="color:var(--navy)"></i> My Monthly Sales</div>
+    <div class="chart-card-body">
+      {% if has_chart %}
+      <canvas id="myChart" style="max-height:200px"></canvas>
+      {% else %}
+      <div class="chart-empty"><i class="fas fa-chart-bar" style="font-size:26px;opacity:.2;display:block;margin-bottom:8px"></i>No sales data yet this year</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-card-header"><i class="fas fa-chart-pie" style="color:var(--navy)"></i> Booking Status</div>
+    <div class="chart-card-body">
+      {% if (my_stats.total_txns or 0) > 0 %}
+      <canvas id="statusChart" style="max-height:190px"></canvas>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#1E7B34"></div> Done: {{ my_stats.done_count or 0 }}</div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#E67E22"></div> Still: {{ my_stats.still_count or 0 }}</div>
+      </div>
+      {% else %}
+      <div class="chart-empty"><i class="fas fa-chart-pie" style="font-size:26px;opacity:.2;display:block;margin-bottom:8px"></i>No data</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-card-header"><i class="fas fa-coins" style="color:var(--gold)"></i> Commission This Year</div>
+    <div class="chart-card-body">
+      <div style="text-align:center;padding:16px 0">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total Commission Earned</div>
+        <div style="font-size:32px;font-weight:900;color:#9b59b6;font-family:var(--font-hd)">JOD {{ "%.3f"|format((my_stats.commission or 0)|float) }}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">{{ commission_rate|int }}% of JOD {{ "%.2f"|format((my_stats.total_profit or 0)|float) }} profit</div>
+        <a href="{{ url_for('my_commission') }}" class="btn btn-sm" style="margin-top:14px;background:rgba(155,89,182,.1);color:#9b59b6;border-color:#9b59b6">
+          <i class="fas fa-chart-bar"></i> Full Commission Report
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Quick Actions ─────────────────────────────────────────── #}
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+  <a href="{{ url_for('add_sale_v2') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
+  <a href="{{ url_for('new_invoice') }}" class="btn btn-primary"><i class="fas fa-file-invoice"></i> New Invoice</a>
+  <a href="{{ url_for('new_voucher') }}" class="btn btn-gold"><i class="fas fa-hotel"></i> New Voucher</a>
+  <a href="{{ url_for('new_package') }}" class="btn btn-outline"><i class="fas fa-box-open"></i> New Package</a>
+</div>
+
+{# ── Recent Transactions ───────────────────────────────────── #}
+<div class="grid-2 mb-6">
+  <div class="card">
+    <div class="card-header"><i class="fas fa-exchange-alt"></i> My Recent Transactions <a href="{{ url_for('my_sales') }}" style="margin-left:auto">View All →</a></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Date</th><th>Company</th><th>Customer</th><th>Route</th><th class="text-right">Sell (JOD)</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for s in recent %}
+          <tr>
+            <td style="font-size:12px">{{ s.sale_date }}</td>
+            <td><strong>{{ s.company }}</strong></td>
+            <td>{{ s.customer }}</td>
+            <td style="font-size:12px"><strong>{{ s.from_loc }}</strong> → <strong>{{ s.to_loc }}</strong></td>
+            <td class="text-right text-gold">{{ "%.2f"|format(s.sell|float) }}</td>
+            <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted" style="padding:20px">No transactions yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><i class="fas fa-plane-departure" style="color:var(--blue)"></i> Upcoming Departures</div>
+    {% if upcoming %}
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Date</th><th>Company</th><th>Customer</th><th>Route</th></tr></thead>
+        <tbody>
+          {% for s in upcoming %}
+          <tr>
+            <td style="color:var(--red);font-weight:700;font-size:12.5px">{{ s.travel_date }}</td>
+            <td><strong>{{ s.company }}</strong></td>
+            <td>{{ s.customer }}</td>
+            <td><strong>{{ s.from_loc }}</strong> → <strong>{{ s.to_loc }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="padding:24px;text-align:center;color:var(--muted)"><i class="fas fa-calendar" style="font-size:20px;display:block;margin-bottom:6px"></i>No upcoming departures</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── My Invoices & Vouchers ────────────────────────────────── #}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><i class="fas fa-file-invoice"></i> My Recent Invoices <a href="{{ url_for('invoice_list') }}" style="margin-left:auto">View All →</a></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Invoice #</th><th>Customer</th><th class="text-right">Total</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for inv in my_invoices %}
+          <tr>
+            <td><a href="{{ url_for('view_invoice', inv_id=inv.id) }}" style="color:var(--navy);font-weight:700">{{ inv.invoice_number }}</a></td>
+            <td>{{ inv.customer }}</td>
+            <td class="text-right text-gold">JOD {{ "%.2f"|format(inv.total|float) }}</td>
+            <td><span class="badge badge-{% if inv.status=='PAID' %}done{% elif inv.status=='PARTIAL' %}still{% else %}cancel{% endif %}">{{ inv.status }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No invoices yet — <a href="{{ url_for('new_invoice') }}" style="color:var(--red)">Create one →</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> My Recent Vouchers <a href="{{ url_for('voucher_list') }}" style="margin-left:auto">View All →</a></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Voucher #</th><th>Guest</th><th>Hotel</th><th>Check-In</th></tr></thead>
+        <tbody>
+          {% for v in my_vouchers %}
+          <tr>
+            <td><a href="{{ url_for('view_voucher', vch_id=v.id) }}" style="color:var(--navy);font-weight:700">{{ v.voucher_number }}</a></td>
+            <td>{{ v.guest_name }}</td>
+            <td>{{ v.hotel_name }}</td>
+            <td style="font-size:12.5px">{{ v.checkin_date }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No vouchers yet — <a href="{{ url_for('new_voucher') }}" style="color:var(--red)">Create one →</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family="'Inter','Segoe UI',sans-serif"; Chart.defaults.font.size=12; Chart.defaults.color='#6B7A99';
+{% if has_chart %}
+(function(){
+  var mnames=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var labels = {{ chart_labels | tojson }};
+  new Chart(document.getElementById('myChart'),{type:'bar',data:{
+    labels:labels.map(function(m){return mnames[parseInt(m)]||m;}),
+    datasets:[
+      {label:'Revenue (JOD)',data:{{ chart_sells | tojson }},backgroundColor:'rgba(27,58,107,.7)',borderRadius:5},
+      {label:'Profit (JOD)', data:{{ chart_profits | tojson }},backgroundColor:'rgba(30,123,52,.6)',borderRadius:5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:function(v){return 'JOD '+v.toLocaleString();}}},x:{grid:{display:false}}}
+    }
+  });
+})();
+{% endif %}
+{% if (my_stats.total_txns or 0) > 0 %}
+new Chart(document.getElementById('statusChart'),{type:'doughnut',data:{
+  labels:['Done','Still','Other'],
+  datasets:[{data:[{{ my_stats.done_count or 0 }},{{ my_stats.still_count or 0 }},{{ my_stats.other_count or 0 }}],
+    backgroundColor:['#1E7B34','#E67E22','#8b1a1a'],borderWidth:2,borderColor:'#fff',hoverOffset:5}]},
+  options:{responsive:true,cutout:'65%',plugins:{legend:{display:false}}}
+});
+{% endif %}
+</script>
+{% endblock %}

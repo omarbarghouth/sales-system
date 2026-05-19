@@ -1,66 +1,212 @@
-# ALSONDOS TRAVEL — DEPLOYMENT GUIDE
-# Deploy to Render.com (Free)
-# ============================================================
+{% extends "base.html" %}
+{% block title %}{{ vch.voucher_number }} — Voucher — ALSONDOS{% endblock %}
 
-## PROJECT STRUCTURE
-alsondos/
-├── app.py              ← Main Flask application
-├── requirements.txt    ← Python dependencies
-├── seed_data.json      ← Your 1,636 Excel records (auto-imported)
-├── static/
-│   └── style.css       ← All styling
-└── templates/
-    ├── base.html       ← Navigation & layout
-    ├── index.html      ← Dashboard
-    ├── add.html        ← Add / Edit sale
-    ├── report.html     ← Sales report with filters
-    ├── statement.html  ← Company statement (no profit shown)
-    ├── payments.html   ← Record payments
-    └── deliver.html    ← Deliver tomorrow
+{% block content %}
+<div class="page-header no-print">
+  <div class="page-header-left">
+    <h1><i class="fas fa-hotel" style="color:var(--gold-dk);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ vch.voucher_number }}</h1>
+    <p>{{ vch.hotel_name or 'Package Voucher' }} &nbsp;·&nbsp; Created by {{ vch.created_by }}</p>
+  </div>
+  <div class="page-header-actions">
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Voucher</button>
+    <a href="{{ url_for('voucher_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
 
-## STEP 1 — UPLOAD TO GITHUB
-1. Go to github.com → Sign in → New repository
-2. Name it: alsondos-travel
-3. Set to: Public
-4. Click "Create repository"
-5. Upload ALL files keeping the same folder structure
+{% set passengers = vch.passengers_json | from_json if vch.passengers_json else [] %}
+{% set tours      = vch.tours_json      | from_json if vch.tours_json      else (sale.tours_json | from_json if sale and sale.tours_json else []) %}
 
-## STEP 2 — DEPLOY ON RENDER
-1. Go to render.com → Sign in (use GitHub account)
-2. Click "New +" → "Web Service"
-3. Connect your GitHub repository: alsondos-travel
-4. Fill in settings:
-   - Name:          alsondos-travel
-   - Region:        Frankfurt (EU) — closest to Jordan
-   - Branch:        main
-   - Runtime:       Python 3
-   - Build Command: pip install -r requirements.txt
-   - Start Command: python app.py
-5. Click "Create Web Service"
-6. Wait 2-3 minutes → your app is live!
+<div class="doc-print-wrap" style="max-width:860px">
+  <div class="print-only" id="genStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;padding:8px 36px 0"></div>
 
-## STEP 3 — YOUR APP URL
-Render gives you a free URL like:
-https://alsondos-travel.onrender.com
+  {# ── HEADER ──────────────────────────────────────────────────── #}
+  <div style="background:linear-gradient(135deg,#0d1e3f 0%,#1a2f52 55%,#1a3360 100%);padding:28px 36px 24px;display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;border-bottom:3px solid #C8A84B">
+    <div>
+      <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos"
+           style="height:72px;width:auto;display:block;margin-bottom:12px;filter:drop-shadow(0 2px 10px rgba(0,0,0,.25))">
+      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.7">
+        Alsondos Travel &amp; Tourism<br>Amman, Jordan &nbsp;·&nbsp; Travel Agency
+        {% if vch.emergency_contact %}<br><strong style="color:rgba(255,200,100,.8)">Emergency: {{ vch.emergency_contact }}</strong>{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:30px;font-weight:800;color:#fff;line-height:1">TRAVEL VOUCHER</div>
+      <div style="font-size:16px;font-weight:700;color:#C8A84B;margin-top:8px;letter-spacing:.5px">{{ vch.voucher_number }}</div>
+      {% if vch.checkin_date %}<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px">{{ vch.checkin_date }}{% if vch.checkout_date %} — {{ vch.checkout_date }}{% endif %}</div>{% endif %}
+    </div>
+  </div>
 
-Share this link with your 3 team members.
-Everyone can use it from any device — phone, tablet, laptop.
+  <div style="padding:0 36px">
 
-## FEATURES
-✅ Dashboard with KPIs and monthly analysis
-✅ Add / Edit / Delete transactions
-✅ Sales report with filters (company, date, status)
-✅ Company Statement — professional, NO profit/net shown to client
-✅ Payments tracking — balance updates automatically
-✅ Deliver Tomorrow — shows tickets due tomorrow every day
-✅ Print any page as PDF (File > Print > Save as PDF)
-✅ All 1,636 existing records imported from your Excel
+    {# ══ SECTION 1 — PASSENGERS ══════════════════════════════════ #}
+    <div style="margin:20px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #0f1d35;margin-bottom:0;display:flex;align-items:center;gap:7px">
+        <span style="background:#0f1d35;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">01</span> Passenger Details
+      </div>
+      {% if passengers %}
+      <table style="margin:0">
+        <thead><tr>
+          <th style="width:35%">Passenger Name</th>
+          <th>Passport No.</th>
+          <th>Nationality</th>
+          <th>Date of Birth</th>
+        </tr></thead>
+        <tbody>
+          {% for p in passengers %}
+          <tr>
+            <td style="font-weight:700;color:#0f1d35;font-size:14px">{{ p.name }}</td>
+            <td style="font-family:'Courier New',monospace;font-weight:700;color:#8b1a1a;background:#fef2f2;padding:6px 12px;border-radius:4px;font-size:12px">{{ p.passport or '—' }}</td>
+            <td>{{ p.nationality or '—' }}</td>
+            <td style="font-size:12px;color:#64748b">{{ p.dob or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="padding:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><span style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px">Guest Name</span><div style="font-size:18px;font-weight:800;color:#0f1d35;font-family:'Playfair Display',serif;margin-top:3px">{{ vch.guest_name }}</div></div>
+        <div><span style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px">No. of Guests</span><div style="font-size:18px;font-weight:800;color:#0f1d35;margin-top:3px">{{ vch.num_guests }}</div></div>
+      </div>
+      {% endif %}
+    </div>
 
-## IMPORTANT NOTES
-- The database (SQLite) resets on Render free tier if inactive
-- For permanent data: upgrade to Render paid plan ($7/month)
-  OR use PostgreSQL (free on Render) — just ask and I will update the code
-- For production with real data: use PostgreSQL
+    {# ══ SECTION 2 — FLIGHT ═══════════════════════════════════════ #}
+    {% set has_flight = vch.airline or vch.from_loc or vch.pnr or (sale and sale.airline) %}
+    {% if has_flight %}
+    <div style="margin:18px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #1B3A6B;margin-bottom:0;display:flex;align-items:center;gap:7px">
+        <span style="background:#1B3A6B;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">02</span> Flight Details
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:#f8fafc;border:1px solid #e2e8f0;border-top:none">
+        {% set _air = vch.airline or (sale.airline if sale else '') %}
+        {% set _from = vch.from_loc or (sale.from_loc if sale else '') %}
+        {% set _to   = vch.to_loc   or (sale.to_loc   if sale else '') %}
+        {% set _dep  = vch.departure_date or (sale.travel_date if sale else '') %}
+        {% set _ret  = vch.return_date or (sale.return_date if sale else '') %}
+        {% set _pnr  = vch.pnr or (sale.pnr if sale else '') %}
+        {% set _bag  = vch.baggage or (sale.baggage if sale else '') %}
+        {% for label, val in [('Airline',_air),('Route',(_from+' → '+_to) if _from else ''),('PNR',_pnr),('Departure',_dep),('Return',_ret),('Baggage',_bag)] if val %}
+        <div style="padding:12px 16px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:4px">{{ label }}</div>
+          <div style="font-size:13.5px;font-weight:700;color:#0f1d35">{{ val }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
-## ENVIRONMENT VARIABLES (Render)
-No extra variables needed — app auto-detects PORT from Render.
+    {# ══ SECTION 3 — HOTEL ════════════════════════════════════════ #}
+    {% if vch.hotel_name %}
+    <div style="margin:18px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #8B6914;margin-bottom:0;display:flex;align-items:center;gap:7px">
+        <span style="background:#C8A84B;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">03</span> Hotel Details
+      </div>
+      <div style="background:linear-gradient(135deg,#e8eef8,#f0f4fc);border:1px solid #dde5f0;border-top:none;display:grid;grid-template-columns:repeat(4,1fr);gap:0">
+        {% for label, val in [('Hotel Name',vch.hotel_name),('Room Type',vch.room_type),('Meal Plan',vch.meal_plan),('Check-In',vch.checkin_date),('Check-Out',vch.checkout_date),('Nights',vch.nights|string if vch.nights else '')] if val %}
+        <div style="padding:12px 16px;border-right:1px solid #d0ddf0;border-bottom:1px solid #d0ddf0;text-align:center">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#4a6891;margin-bottom:4px">{{ label }}</div>
+          <div style="font-size:{% if label=='Hotel Name' %}15px{% else %}13.5px{% endif %};font-weight:{% if label=='Hotel Name' %}800{% else %}700{% endif %};color:#0f1d35{% if label=='Nights' %};font-size:22px;font-family:'Playfair Display',serif{% endif %}">{{ val }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ══ SECTION 4 — TRANSFER ═════════════════════════════════════ #}
+    {% set has_transfer = vch.vehicle_type or vch.pickup_time or vch.driver_contact %}
+    {% if has_transfer or vch.include_transfer %}
+    <div style="margin:18px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #D97706;margin-bottom:0;display:flex;align-items:center;gap:7px">
+        <span style="background:#D97706;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">04</span> Transfer Details
+      </div>
+      <div style="background:#fffbf0;border:1px solid #fde68a;border-top:none;padding:14px 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        {% for label, val in [('Transfer Type',(vch.transfer_type if vch.transfer_type else (sale.transfer_type if sale and sale.transfer_type else ''))),('Pickup Time',vch.pickup_time),('Vehicle',vch.vehicle_type),('Sign Name',vch.pickup_sign),('Driver/Contact',vch.driver_contact),('Arrival Flight',vch.arrival_flight)] if val %}
+        <div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:3px">{{ label }}</div>
+          <div style="font-size:13px;font-weight:700;color:#0f1d35">{{ val }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ══ SECTION 5 — TOURS ════════════════════════════════════════ #}
+    {% if tours %}
+    <div style="margin:18px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #6D28D9;margin-bottom:0;display:flex;align-items:center;gap:7px">
+        <span style="background:#6D28D9;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">05</span> Tour Programme
+      </div>
+      <table style="margin:0">
+        <thead><tr>
+          <th style="width:14%">Date</th>
+          <th style="width:32%">Tour Name</th>
+          <th style="width:13%">Pickup Time</th>
+          <th style="width:15%">Status</th>
+          <th>Notes</th>
+        </tr></thead>
+        <tbody>
+          {% for t in tours %}
+          <tr>
+            <td style="font-weight:700;white-space:nowrap;font-size:12.5px">{{ t.date or '—' }}</td>
+            <td style="font-weight:700;color:#0f1d35;font-size:13.5px">{{ t.name }}</td>
+            <td style="font-size:12px">{{ t.pickup or '—' }}</td>
+            <td>
+              <span style="padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;
+                {% if t.status=='INCLUDED' %}background:#d1fae5;color:#065f46{% else %}background:#fef3c7;color:#92400e{% endif %}">
+                {{ t.status or 'INCLUDED' }}
+              </span>
+            </td>
+            <td style="font-size:12px;color:#64748b">{{ t.notes or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {# ══ SECTION 6 — NOTES / INCLUSIONS ══════════════════════════ #}
+    {% set has_notes = vch.cancellation_policy or vch.remarks or vch.include_transfer or vch.include_tours or vch.include_insurance %}
+    {% if has_notes %}
+    <div style="margin:18px 0 0">
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;padding:10px 0 7px;border-bottom:2px solid #475569;margin-bottom:10px;display:flex;align-items:center;gap:7px">
+        <span style="background:#475569;color:#fff;padding:3px 10px;border-radius:20px;font-size:9px">06</span> Notes &amp; Inclusions
+      </div>
+      {% if vch.include_transfer or vch.include_tours or vch.include_insurance %}
+      <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:10px">
+        {% if vch.include_transfer %}<span style="background:#d1fae5;color:#065f46;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid #a7f3d0">✓ Airport Transfer</span>{% endif %}
+        {% if vch.include_tours    %}<span style="background:#d1fae5;color:#065f46;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid #a7f3d0">✓ Tours</span>{% endif %}
+        {% if vch.include_insurance%}<span style="background:#d1fae5;color:#065f46;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid #a7f3d0">✓ Insurance</span>{% endif %}
+      </div>
+      {% endif %}
+      {% if vch.cancellation_policy %}
+      <div style="background:#fff7ed;border-left:3px solid #f97316;padding:9px 14px;font-size:12.5px;color:#431407;margin-bottom:8px;border-radius:0 6px 6px 0"><strong>Cancellation:</strong> {{ vch.cancellation_policy }}</div>
+      {% endif %}
+      {% if vch.remarks %}
+      <div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:9px 14px;font-size:12.5px;color:#374151;border-radius:0 6px 6px 0"><strong>Remarks:</strong> {{ vch.remarks }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Signatures #}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:22px 0 18px;margin-top:18px;border-top:1px solid #e2e8f0">
+      <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:6px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel &amp; Tourism</div></div>
+      <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:6px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature &nbsp;·&nbsp; Date: _______________</div></div>
+    </div>
+  </div>
+
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:11px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
+    Alsondos Travel &amp; Tourism &nbsp;·&nbsp; Amman, Jordan &nbsp;·&nbsp; {{ vch.voucher_number }}<br>
+    This voucher must be presented upon check-in and at tour meeting points
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var el=document.getElementById('genStamp'); if(el) el.textContent=stamp;
+})();
+</script>
+{% endblock %}

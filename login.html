@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if inv else 'New' }} Invoice — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
+    <p>{{ 'Update invoice details' if inv else 'Create and connect an invoice to a transaction' }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+
+  {# ── LEFT: Invoice Form ───────────────────────────────── #}
+  <div>
+    <div class="card">
+      <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
+      <div class="card-body">
+        <form method="POST" id="invoiceForm">
+          {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
+          {% if inv %}<input type="hidden" name="sale_id" value="{{ inv.sale_id or '' }}">{% endif %}
+          <input type="hidden" name="_linked_sale_id" id="linkedSaleId" value="">
+
+          <div class="form-grid form-grid-2" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Company / Client <span class="req">*</span></label>
+              <input type="text" name="company" id="companyInput" list="co-list" required
+                     style="text-transform:uppercase;font-weight:700"
+                     value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
+                     oninput="loadCompanyTxns(this.value)"
+                     autocomplete="off">
+              <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+              <small>Select to auto-load related transactions</small>
+            </div>
+            <div class="form-group">
+              <label>Customer Name <span class="req">*</span></label>
+              <input type="text" name="customer" id="customerInput" required
+                     style="text-transform:uppercase"
+                     value="{{ inv.customer if inv else (sale.customer if sale else '') }}">
+            </div>
+            <div class="form-group">
+              <label>Invoice Date <span class="req">*</span></label>
+              <input type="date" name="invoice_date" required
+                     value="{{ inv.invoice_date if inv else today }}">
+            </div>
+            <div class="form-group">
+              <label>Due Date</label>
+              <input type="date" name="due_date"
+                     value="{{ inv.due_date if inv else '' }}">
+            </div>
+            <div class="form-group">
+              <label>Amount (JOD) <span class="req">*</span></label>
+              <input type="number" name="amount" step="0.001" min="0" required
+                     id="inv-amount" oninput="calcTotal()"
+                     style="font-size:16px;font-weight:700"
+                     value="{{ inv.amount if inv else (sale.sell if sale else '') }}">
+            </div>
+            <div class="form-group">
+              <label>Discount (JOD)</label>
+              <input type="number" name="discount" step="0.001" min="0"
+                     id="inv-discount" oninput="calcTotal()"
+                     value="{{ inv.discount if inv else 0 }}">
+            </div>
+          </div>
+
+          {# Total display #}
+          <div style="margin-bottom:14px">
+            <div class="profit-display" id="inv-total">
+              <i class="fas fa-file-invoice-dollar"></i>
+              <span id="inv-total-val">JOD {{ "%.3f"|format((inv.total if inv else (sale.sell if sale else 0))|float) }}</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Service Description <span class="req">*</span></label>
+            <textarea name="service_desc" id="serviceDesc" rows="5" required
+                      placeholder="Service details auto-filled from transaction…">{{ inv.service_desc if inv else (auto_desc if auto_desc else '') }}</textarea>
+            <small>Auto-filled from transaction. Edit if needed.</small>
+          </div>
+
+          <div class="form-grid form-grid-2" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Status</label>
+              <select name="status">
+                <option value="UNPAID"  {% if not inv or inv.status=='UNPAID'  %}selected{% endif %}>Unpaid</option>
+                <option value="PARTIAL" {% if inv and inv.status=='PARTIAL' %}selected{% endif %}>Partial</option>
+                <option value="PAID"    {% if inv and inv.status=='PAID'    %}selected{% endif %}>Paid</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <input type="text" name="notes" placeholder="Additional notes or terms"
+                     value="{{ inv.notes if inv else '' }}">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-red">
+              <i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── RIGHT: Transaction Lookup ────────────────────────── #}
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-search"></i> Transaction Lookup
+        <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:4px">Select a transaction to auto-fill</span>
+      </div>
+      <div style="padding:13px 16px;background:var(--navy-lt);border-bottom:1px solid var(--border-lt)">
+        <div class="form-group" style="margin:0">
+          <label>Search by Company</label>
+          <input type="text" id="companySearch" list="co-list-search"
+                 placeholder="Type company name to load transactions…"
+                 value="{{ company_filter }}"
+                 oninput="loadCompanyTxns(this.value)"
+                 autocomplete="off"
+                 style="background:#fff">
+          <datalist id="co-list-search">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+        </div>
+      </div>
+
+      {# Transactions table (populated by JS or server-side) #}
+      <div id="txnTableWrap" style="overflow-x:auto;min-height:120px">
+        {% if company_transactions %}
+        <table id="txnTable">
+          <thead><tr>
+            <th>Date</th><th>Customer</th><th>Route</th>
+            <th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>
+          </tr></thead>
+          <tbody id="txnBody">
+            {% for t in company_transactions %}
+            <tr>
+              <td style="font-size:12px;white-space:nowrap">{{ t.sale_date }}</td>
+              <td style="font-size:12.5px">{{ t.customer }}</td>
+              <td style="font-size:12px;white-space:nowrap">
+                <strong>{{ t.from_loc }}</strong> <span style="color:var(--gold)">→</span> <strong>{{ t.to_loc }}</strong>
+              </td>
+              <td class="text-right" style="font-weight:700;color:var(--navy-dk)">{{ "%.3f"|format(t.sell|float) }}</td>
+              <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
+              <td>
+                <button type="button" class="btn btn-edit btn-xs"
+                        onclick="fillFromTxnById({{ t.id }})">
+                  <i class="fas fa-arrow-left"></i> Use
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% elif company_filter %}
+        <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">
+          No transactions found for <strong>{{ company_filter }}</strong>
+        </div>
+        {% else %}
+        <div style="padding:28px 16px;text-align:center;color:var(--muted-lt);font-size:13px">
+          <i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:.35"></i>
+          Type a company name above to auto-load related transactions
+        </div>
+        {% endif %}
+        <div id="txnLoading" style="display:none;padding:20px;text-align:center;color:var(--muted)">
+          <i class="fas fa-circle-notch fa-spin" style="margin-right:6px"></i> Loading transactions…
+        </div>
+      </div>
+    </div>
+
+    {% if sale %}
+    <div class="card" style="margin-top:14px">
+      <div class="card-header"><i class="fas fa-link"></i> Linked Transaction</div>
+      <div style="padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div>
+            <div style="font-weight:700;color:var(--navy-dk);font-size:14px">
+              {{ sale.from_loc }} → {{ sale.to_loc }} &nbsp;·&nbsp; {{ sale.customer }}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">
+              {{ sale.sale_date }} · {{ sale.tickets }} ticket(s) · {{ sale.company }}
+            </div>
+          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy-dk)">JOD {{ "%.3f"|format(sale.sell|float) }}</div>
+        </div>
+        <span class="badge badge-{{ sale.status|lower }}">{{ sale.status }}</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var debTimer = null;
+
+function calcTotal(){
+  var a=parseFloat(document.getElementById('inv-amount').value)||0;
+  var d=parseFloat(document.getElementById('inv-discount').value)||0;
+  var t=a-d;
+  document.getElementById('inv-total-val').textContent =
+    'JOD '+t.toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3});
+}
+
+// Cache of full transaction objects loaded from API
+var txnCache = {};
+
+function buildServiceDesc(t) {
+  var parts = [];
+  var svc = (t.svc || 'FLIGHT').toUpperCase();
+
+  if (svc === 'FLIGHT' || svc === 'PACKAGE' || t.route || t.airline) {
+    var fl = 'FLIGHT: ' + (t.route || '');
+    if (t.airline)      fl += ' | Airline: ' + t.airline;
+    if (t.buy_from)     fl += ' | Supplier: ' + t.buy_from;
+    if (t.pnr)          fl += ' | PNR: ' + t.pnr;
+    if (t.travel_date)  fl += ' | Dep: ' + t.travel_date;
+    if (t.return_date)  fl += ' | Ret: ' + t.return_date;
+    if (t.baggage)      fl += ' | Bag: ' + t.baggage;
+    if (t.trip_type)    fl += ' | ' + t.trip_type;
+    fl += ' | Pax: ' + (t.tickets || 1);
+    parts.push(fl);
+  }
+  if (t.hotel_name) {
+    var ht = 'HOTEL: ' + t.hotel_name;
+    if (t.hotel_room)     ht += ' | ' + t.hotel_room;
+    if (t.hotel_meal)     ht += ' | ' + t.hotel_meal;
+    if (t.hotel_checkin)  ht += ' | Check-In: ' + t.hotel_checkin;
+    if (t.hotel_checkout) ht += ' | Check-Out: ' + t.hotel_checkout;
+    if (t.hotel_nights)   ht += ' | ' + t.hotel_nights + ' nights';
+    parts.push(ht);
+  }
+  if (t.transfer_type) {
+    var tr = 'TRANSFER: ' + t.transfer_type;
+    if (t.transfer_vehicle) tr += ' | ' + t.transfer_vehicle;
+    if (t.transfer_pickup)  tr += ' | Pickup: ' + t.transfer_pickup;
+    parts.push(tr);
+  }
+  if (svc === 'VISA' && (t.visa_type || t.passport_number)) {
+    var vi = 'VISA: ' + (t.visa_type || '');
+    if (t.passport_number) vi += ' | Passport: ' + t.passport_number;
+    parts.push(vi);
+  }
+  if (svc === 'INSURANCE' && t.insurance_type) {
+    parts.push('INSURANCE: ' + t.insurance_type);
+  }
+  if (t.tours && t.tours.length) {
+    var tourLines = t.tours.filter(function(x){return x.name;}).map(function(x){
+      return x.name + (x.date ? ' (' + x.date + ')' : '') + (x.pickup ? ' Pickup:' + x.pickup : '');
+    }).join(', ');
+    if (tourLines) parts.push('TOURS: ' + tourLines);
+  }
+  if (t.passengers && t.passengers.length) {
+    var paxLines = t.passengers.filter(function(p){return p.name;}).map(function(p){
+      return p.name + (p.passport ? ' [' + p.passport + ']' : '');
+    }).join(', ');
+    if (paxLines) parts.push('PASSENGERS: ' + paxLines);
+  }
+  if (t.remarks) parts.push('Note: ' + t.remarks);
+  return parts.join('\n');
+}
+
+function fillFromTxn(t) {
+  document.getElementById('customerInput').value = t.customer || '';
+  document.getElementById('inv-amount').value    = (t.sell || 0).toFixed(3);
+  document.getElementById('inv-discount').value  = '0';
+  document.getElementById('linkedSaleId').value  = t.id;
+  var sf = document.querySelector('[name="sale_id"]'); if (sf) sf.value = t.id;
+  document.getElementById('serviceDesc').value   = buildServiceDesc(t);
+  calcTotal();
+  document.querySelectorAll('#txnBody tr').forEach(function(r){ r.style.background=''; });
+  if (event && event.target) { var row = event.target.closest('tr'); if (row) row.style.background='var(--navy-lt)'; }
+}
+
+function fillFromTxnById(id) {
+  if (txnCache[id]) { fillFromTxn(txnCache[id]); return; }
+  var _co=(document.getElementById('companyInput')||{value:''}).value||(document.getElementById('companySearch')||{value:''}).value||'';
+  fetch('/api/company-transactions?company='+encodeURIComponent(_co))
+  .then(function(r){return r.json();}).then(function(d){
+    (d.transactions||[]).forEach(function(t){txnCache[t.id]=t;});
+    if (txnCache[id]) fillFromTxn(txnCache[id]);
+  });
+}
+
+function loadCompanyTxns(val) {
+  // Sync both search inputs
+  var company = val.trim().toUpperCase();
+  if (document.getElementById('companyInput').value.toUpperCase() !== company)
+    document.getElementById('companyInput').value = company;
+  if (document.getElementById('companySearch').value.toUpperCase() !== company)
+    document.getElementById('companySearch').value = company;
+
+  clearTimeout(debTimer);
+  if (!company || company.length < 2) return;
+
+  debTimer = setTimeout(function(){
+    var wrap = document.getElementById('txnTableWrap');
+    var loading = document.getElementById('txnLoading');
+    loading.style.display='block';
+
+    fetch('/api/company-transactions?company='+encodeURIComponent(company))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      loading.style.display='none';
+      var txns = data.transactions || [];
+      if (txns.length === 0) {
+        wrap.innerHTML = '<div id="txnLoading" style="display:none"></div><div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No transactions found for <strong>'+company+'</strong></div>';
+        return;
+      }
+      var html = '<div id="txnLoading" style="display:none"></div>'
+               + '<table id="txnTable"><thead><tr>'
+               + '<th>Date</th><th>Customer</th><th>Route</th>'
+               + '<th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>'
+               + '</tr></thead><tbody id="txnBody">';
+      txns.forEach(function(t){ txnCache[t.id] = t; });
+      txns.forEach(function(t){
+        var badge = 'badge-navy';
+        if(t.status==='DONE') badge='badge-done';
+        else if(t.status==='STILL') badge='badge-still';
+        else if(t.status==='CANCEL') badge='badge-cancel';
+        html += '<tr>'
+          +'<td style="font-size:12px;white-space:nowrap">'+t.date+'</td>'
+          +'<td style="font-size:12.5px">'+t.customer+'</td>'
+          +'<td style="font-size:12px;white-space:nowrap">'+t.route+'</td>'
+          +'<td class="text-right" style="font-weight:700;color:var(--navy-dk)">'+t.sell.toFixed(3)+'</td>'
+          +'<td><span class="badge '+badge+'">'+t.status+'</span></td>'
+          +'<td><button type="button" class="btn btn-edit btn-xs" '
+          +'onclick="fillFromTxn(txnCache['+t.id+'])">'
+          +'<i class="fas fa-arrow-left"></i> Use</button></td>'
+          +'</tr>';
+      });
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    })
+    .catch(function(){ loading.style.display='none'; });
+  }, 380);
+}
+
+// Init
+calcTotal();
+{% if company_filter %}loadCompanyTxns('{{ company_filter }}');{% endif %}
+</script>
+{% endblock %}

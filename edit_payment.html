@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Commission Report — {{ session.username }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-percentage"></i> My Commission Report</h1>
+    <p>{{ rate|int }}% commission rate · Year {{ year }}</p>
+  </div>
+  <div class="page-header-actions no-print">
+    <form method="GET" style="display:flex;gap:8px;align-items:center">
+      <select name="year" onchange="this.form.submit()" class="form-group" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font)">
+        {% for y in range(2024, 2028) %}<option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div class="kpi-box gold"><div class="kpi-label">Total Revenue</div><div class="kpi-value gold">JOD {{ "%.2f"|format(totals.sell) }}</div></div>
+  <div class="kpi-box green"><div class="kpi-label">Total Profit</div><div class="kpi-value green">JOD {{ "%.2f"|format(totals.profit) }}</div></div>
+  <div class="kpi-box" style="border-top-color:#9b59b6">
+    <div class="kpi-label">Total Commission ({{ rate|int }}%)</div>
+    <div class="kpi-value" style="color:#9b59b6">JOD {{ "%.3f"|format(totals.commission) }}</div>
+  </div>
+  <div class="kpi-box"><div class="kpi-label">Transactions</div><div class="kpi-value">{{ totals.count }}</div></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="fas fa-table"></i> Monthly Breakdown — {{ year }}</div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Month</th><th class="text-right">Transactions</th><th class="text-right">Revenue (JOD)</th><th class="text-right">Profit (JOD)</th><th class="text-right">Commission ({{ rate|int }}%)</th></tr></thead>
+      <tbody>
+        {% for m in monthly %}
+        <tr>
+          <td><strong>{{ m.month_name.strip() }}</strong></td>
+          <td class="text-right text-muted">{{ m.count }}</td>
+          <td class="text-right text-gold">{{ "%.2f"|format(m.total_sell|float) }}</td>
+          <td class="text-right text-green">{{ "%.2f"|format(m.total_profit|float) }}</td>
+          <td class="text-right" style="color:#9b59b6;font-weight:700">{{ "%.3f"|format(m.commission) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted" style="padding:24px">No transactions in {{ year }}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if monthly %}
+      <tfoot>
+        <tr>
+          <td>TOTAL {{ year }}</td>
+          <td class="text-right">{{ totals.count }}</td>
+          <td class="text-right" style="color:var(--gold);font-size:14px">{{ "%.2f"|format(totals.sell) }}</td>
+          <td class="text-right" style="color:#6dd58a;font-size:14px">{{ "%.2f"|format(totals.profit) }}</td>
+          <td class="text-right" style="color:#c39bd3;font-size:14px">{{ "%.3f"|format(totals.commission) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+{# Print footer #}
+<div class="print-only" style="margin-top:28px;text-align:center;font-size:11px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px">
+  Commission Report — {{ session.username }} — {{ year }} — Alsondos Travel & Tourism<br>
+  Commission Rate: {{ rate|int }}% of net profit
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% macro render_pagination(page, total_pages, total_rows, endpoint, filters={}) %}
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+    <a href="{{ url_for(endpoint, page=1, **filters) }}">«</a>
+    <a href="{{ url_for(endpoint, page=page-1, **filters) }}">‹ Prev</a>
+  {% else %}
+    <span class="disabled">«</span>
+    <span class="disabled">‹ Prev</span>
+  {% endif %}
+
+  {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
+    {% if p == page %}
+      <span class="active">{{ p }}</span>
+    {% else %}
+      <a href="{{ url_for(endpoint, page=p, **filters) }}">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="{{ url_for(endpoint, page=page+1, **filters) }}">Next ›</a>
+    <a href="{{ url_for(endpoint, page=total_pages, **filters) }}">»</a>
+  {% else %}
+    <span class="disabled">Next ›</span>
+    <span class="disabled">»</span>
+  {% endif %}
+</div>
+<div class="page-info">Page {{ page }} of {{ total_pages }} &nbsp;|&nbsp; {{ total_rows }} total records</div>
+{% else %}
+<div class="page-info">{{ total_rows }} total records</div>
+{% endif %}
+{% endmacro %}
