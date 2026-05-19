@@ -214,11 +214,7 @@ def init_db():
     cur.close()
     db.close()
 
-try:
-    init_db()
-    logger.info("DB initialised OK")
-except Exception as _db_err:
-    logger.error(f"init_db error: {_db_err}")
+init_db()
 
 # ── Audit log helper ──────────────────────────────────────────────────────────
 def log_action(action, table_name, record_id=None, detail=''):
@@ -527,7 +523,9 @@ def index():
         SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 8
     ''')
 
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
 
     # Status distribution for pie chart
     status_counts = query_db("""
@@ -622,7 +620,9 @@ def index():
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_sale():
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -756,7 +756,9 @@ def edit_sale(sale_id):
     if not sale:
         flash('Sale not found.', 'danger')
         return redirect(url_for('sales_report'))
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -895,7 +897,9 @@ def sales_report():
 
     sales, total_rows, total_pages = paginate(base_q, params, page)
 
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     # All users for agent filter dropdown (admin only)
     agents = []
     if session.get('user_role') == 'admin':
@@ -915,7 +919,9 @@ def statement():
     company   = request.args.get('company', '')
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     sales, payments, total_invoiced, total_paid, balance = [], [], 0, 0, 0
     if company:
         q = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
@@ -948,7 +954,9 @@ def statement():
 @app.route('/payments', methods=['GET', 'POST'])
 @login_required
 def payments():
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         if session.get('user_role') != 'admin':
             flash('Admin access required to record payments.', 'danger')
@@ -992,7 +1000,9 @@ def edit_payment(pay_id):
     if not payment:
         flash('Payment not found.', 'danger')
         return redirect(url_for('payments'))
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         try:
             amount = float(request.form.get('amount', 0))
@@ -1227,7 +1237,9 @@ def admin():
     table     = request.args.get('table', 'sales')
     page      = max(1, int(request.args.get('page', 1)))
 
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
 
     sales_data, payments_data = [], []
     total_pages = total_rows = total_payments = 1
@@ -1595,6 +1607,14 @@ def archive_delete_payment(pay_id):
     flash(f'Payment #{pay_id} permanently deleted.', 'success')
     return redirect(url_for('archive', table='payments'))
 
+@app.route('/api/companies')
+@login_required
+def api_companies():
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
+    return jsonify(companies)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -1796,71 +1816,6 @@ def init_extension_db():
         ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS departure_date  TEXT DEFAULT '';
         ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS return_date     TEXT DEFAULT '';
     EXCEPTION WHEN duplicate_column THEN NULL; END $$;""")
-
-    # ── Master data tables (companies, suppliers, customers) ─────────────────
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS master_companies (
-            id         SERIAL PRIMARY KEY,
-            name       TEXT NOT NULL UNIQUE,
-            phone      TEXT DEFAULT '',
-            email      TEXT DEFAULT '',
-            address    TEXT DEFAULT '',
-            notes      TEXT DEFAULT '',
-            is_active  BOOLEAN DEFAULT TRUE,
-            created_at TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
-        )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS master_suppliers (
-            id           SERIAL PRIMARY KEY,
-            name         TEXT NOT NULL UNIQUE,
-            service_type TEXT DEFAULT 'FLIGHT',
-            phone        TEXT DEFAULT '',
-            email        TEXT DEFAULT '',
-            notes        TEXT DEFAULT '',
-            is_active    BOOLEAN DEFAULT TRUE,
-            created_at   TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
-        )
-    """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS master_customers (
-            id             SERIAL PRIMARY KEY,
-            full_name      TEXT NOT NULL,
-            passport       TEXT DEFAULT '',
-            nationality    TEXT DEFAULT '',
-            phone          TEXT DEFAULT '',
-            email          TEXT DEFAULT '',
-            date_of_birth  TEXT DEFAULT '',
-            notes          TEXT DEFAULT '',
-            is_active      BOOLEAN DEFAULT TRUE,
-            created_at     TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
-        )
-    """)
-    # Auto-seed master_companies from existing sales data (safe — ignore errors)
-    try:
-        cur.execute("""
-            INSERT INTO master_companies (name)
-            SELECT DISTINCT UPPER(TRIM(company))
-            FROM sales
-            WHERE deleted=FALSE AND TRIM(COALESCE(company,'')) <> ''
-            ON CONFLICT (name) DO NOTHING
-        """)
-    except Exception:
-        db.rollback()
-
-    # Auto-seed master_suppliers (each supplier type separately so one failure
-    # doesn't block the others — some columns may not exist on first deploy)
-    for _supp_sql in [
-        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(buy_from)),'FLIGHT' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>'' ON CONFLICT(name) DO NOTHING",
-        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(hotel_supplier)),'HOTEL' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
-        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(transfer_supplier)),'TRANSFER' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
-        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(visa_supplier)),'VISA' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
-        "INSERT INTO master_suppliers (name,service_type) SELECT DISTINCT UPPER(TRIM(insurance_supplier)),'INSURANCE' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>'' ON CONFLICT(name) DO NOTHING",
-    ]:
-        try:
-            cur.execute(_supp_sql)
-        except Exception:
-            db.rollback()
 
     # ── Supplier payments table ──────────────────────────────────────────────
     cur.execute("""
@@ -2141,7 +2096,9 @@ _orig_add_sale_func = app.view_functions.get('add_sale')
 @login_required
 def add_sale_v2():
     """Extended add sale that captures which user created it."""
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -2264,7 +2221,9 @@ def my_edit_sale(sale_id):
     if not sale:
         flash('Transaction not found.', 'danger')
         return redirect(url_for('my_sales'))
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -2363,7 +2322,9 @@ def invoice_list():
 def new_invoice():
     sale_id   = request.args.get('sale_id', '')
     sale      = query_db('SELECT * FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True) if sale_id else None
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         try:
             amount   = float(request.form.get('amount') or 0)
@@ -2497,7 +2458,9 @@ def edit_invoice(inv_id):
     if session.get('user_role') != 'admin' and inv['created_by_id'] != session['user_id']:
         flash('Access denied.', 'danger')
         return redirect(url_for('invoice_list'))
-    companies = get_companies_list()
+    companies = [r['company'] for r in query_db(
+        'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+    )]
     if request.method == 'POST':
         amount   = float(request.form.get('amount', 0))
         discount = float(request.form.get('discount', 0))
@@ -2850,149 +2813,6 @@ def delete_supplier_payment(pay_id):
     flash('Payment deleted.', 'success')
     supplier = request.form.get('supplier','')
     return redirect(url_for('supplier_statement', supplier=supplier))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MASTER DATA — Companies, Suppliers, Customers
-# ══════════════════════════════════════════════════════════════════════════════
-
-def get_companies_list():
-    """All active companies — from master table + any in sales not yet seeded."""
-    rows = query_db("""
-        SELECT name FROM (
-            SELECT name FROM master_companies WHERE is_active=TRUE
-            UNION
-            SELECT UPPER(TRIM(company)) FROM sales
-            WHERE deleted=FALSE AND TRIM(company)<>''
-        ) t ORDER BY name
-    """) or []
-    return [r['name'] for r in rows]
-
-def get_suppliers_list(svc_type=None):
-    """All active suppliers — from master table + any in sales not yet seeded."""
-    q = """
-        SELECT name, service_type FROM (
-            SELECT name, service_type FROM master_suppliers WHERE is_active=TRUE
-            UNION
-            SELECT supplier, svc FROM (
-                SELECT UPPER(TRIM(buy_from)) AS supplier, 'FLIGHT' AS svc
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
-                UNION
-                SELECT UPPER(TRIM(hotel_supplier)), 'HOTEL'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''
-                UNION
-                SELECT UPPER(TRIM(transfer_supplier)), 'TRANSFER'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>''
-                UNION
-                SELECT UPPER(TRIM(visa_supplier)), 'VISA'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>''
-                UNION
-                SELECT UPPER(TRIM(insurance_supplier)), 'INSURANCE'
-                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>''
-            ) s2 WHERE supplier<>''
-        ) t
-    """
-    params = []
-    if svc_type:
-        q += " WHERE service_type=%s"
-        params.append(svc_type.upper())
-    q += " ORDER BY name"
-    rows = query_db(q, params) or []
-    return rows
-
-
-@app.route('/api/companies')
-@login_required
-def api_companies():
-    """AJAX: return company list as JSON."""
-    from flask import jsonify
-    q = request.args.get('q','').strip().upper()
-    companies = get_companies_list()
-    if q:
-        companies = [c for c in companies if q in c.upper()]
-    return jsonify({'companies': companies[:50]})
-
-
-@app.route('/api/suppliers')
-@login_required
-def api_suppliers():
-    """AJAX: return supplier list as JSON, optionally filtered by service type."""
-    from flask import jsonify
-    svc = request.args.get('svc','').strip()
-    q   = request.args.get('q','').strip().upper()
-    rows = get_suppliers_list(svc or None)
-    data = [{'name': r['name'], 'svc': r['service_type']} for r in rows]
-    if q:
-        data = [d for d in data if q in d['name'].upper()]
-    return jsonify({'suppliers': data[:60]})
-
-
-# ── Master Data Management Pages ─────────────────────────────────────────────
-
-@app.route('/master/companies', methods=['GET', 'POST'])
-@admin_required
-def master_companies():
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add':
-            name = request.form.get('name','').strip().upper()
-            if name:
-                try:
-                    execute_db(
-                        "INSERT INTO master_companies (name,phone,email,address,notes) VALUES (%s,%s,%s,%s,%s)",
-                        (name,
-                         request.form.get('phone','').strip(),
-                         request.form.get('email','').strip(),
-                         request.form.get('address','').strip(),
-                         request.form.get('notes','').strip())
-                    )
-                    flash(f'Company {name} added.', 'success')
-                except Exception as ex:
-                    flash(f'Error: {ex}', 'danger')
-        elif action == 'toggle':
-            cid = request.form.get('id')
-            execute_db('UPDATE master_companies SET is_active = NOT is_active WHERE id=%s', [cid])
-            flash('Company status updated.', 'success')
-        elif action == 'delete':
-            cid = request.form.get('id')
-            execute_db('DELETE FROM master_companies WHERE id=%s', [cid])
-            flash('Company deleted.', 'success')
-        return redirect(url_for('master_companies'))
-    companies = query_db('SELECT * FROM master_companies ORDER BY name') or []
-    return render_template('master_companies.html', companies=companies)
-
-
-@app.route('/master/suppliers', methods=['GET', 'POST'])
-@admin_required
-def master_suppliers():
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add':
-            name = request.form.get('name','').strip().upper()
-            svc  = request.form.get('service_type','FLIGHT').strip().upper()
-            if name:
-                try:
-                    execute_db(
-                        "INSERT INTO master_suppliers (name,service_type,phone,email,notes) VALUES (%s,%s,%s,%s,%s)",
-                        (name, svc,
-                         request.form.get('phone','').strip(),
-                         request.form.get('email','').strip(),
-                         request.form.get('notes','').strip())
-                    )
-                    flash(f'Supplier {name} added.', 'success')
-                except Exception as ex:
-                    flash(f'Error: {ex}', 'danger')
-        elif action == 'toggle':
-            sid = request.form.get('id')
-            execute_db('UPDATE master_suppliers SET is_active = NOT is_active WHERE id=%s', [sid])
-            flash('Supplier status updated.', 'success')
-        elif action == 'delete':
-            sid = request.form.get('id')
-            execute_db('DELETE FROM master_suppliers WHERE id=%s', [sid])
-            flash('Supplier deleted.', 'success')
-        return redirect(url_for('master_suppliers'))
-    suppliers = query_db('SELECT * FROM master_suppliers ORDER BY service_type, name') or []
-    return render_template('master_suppliers.html', suppliers=suppliers)
 
 @app.route('/api/company-transactions')
 @login_required

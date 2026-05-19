@@ -95,20 +95,6 @@
       <i class="fas fa-user-shield"></i> User Accounts
     </a>
 
-    <div class="sb-section">Master Data</div>
-    <a href="{{ url_for('master_companies') }}"
-       class="sb-link {% if request.endpoint=='master_companies' %}active{% endif %}">
-      <i class="fas fa-building"></i> Companies
-    </a>
-    <a href="{{ url_for('master_suppliers') }}"
-       class="sb-link {% if request.endpoint=='master_suppliers' %}active{% endif %}">
-      <i class="fas fa-handshake"></i> Suppliers
-    </a>
-    <a href="{{ url_for('supplier_statement') }}"
-       class="sb-link {% if request.endpoint=='supplier_statement' %}active{% endif %}">
-      <i class="fas fa-truck"></i> Supplier Statements
-    </a>
-
     <div class="sb-section">System</div>
     <a href="{{ url_for('admin') }}"
        class="sb-link {% if request.endpoint=='admin' %}active{% endif %}">

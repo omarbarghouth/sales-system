@@ -27,13 +27,12 @@
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
             <div class="form-group">
               <label>Company / Client <span class="req">*</span></label>
-              <input type="text" name="company" id="companyInput" required
+              <input type="text" name="company" id="companyInput" list="co-list" required
                      style="text-transform:uppercase;font-weight:700"
                      value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
-                     oninput="loadCompanyTxns(this.value);liveSearch(this,'invCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
-                     onfocus="liveSearch(this,'invCoDrop','/api/companies?q=','companies')"
+                     oninput="loadCompanyTxns(this.value)"
                      autocomplete="off">
-              <div id="invCoDrop" class="live-dropdown" style="display:none"></div>
+              <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
               <small>Select to auto-load related transactions</small>
             </div>
             <div class="form-group">
@@ -119,14 +118,13 @@
       <div style="padding:13px 16px;background:var(--navy-lt);border-bottom:1px solid var(--border-lt)">
         <div class="form-group" style="margin:0">
           <label>Search by Company</label>
-          <input type="text" id="companySearch"
+          <input type="text" id="companySearch" list="co-list-search"
                  placeholder="Type company name to load transactions…"
                  value="{{ company_filter }}"
-                 oninput="loadCompanyTxns(this.value);liveSearch(this,'invCoDrop2','/api/companies?q='+encodeURIComponent(this.value),'companies')"
-                 onfocus="liveSearch(this,'invCoDrop2','/api/companies?q=','companies')"
+                 oninput="loadCompanyTxns(this.value)"
                  autocomplete="off"
                  style="background:#fff">
-          <div id="invCoDrop2" class="live-dropdown" style="display:none"></div>
+          <datalist id="co-list-search">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         </div>
       </div>
 
@@ -281,35 +279,5 @@ function loadCompanyTxns(val) {
 // Init
 calcTotal();
 {% if company_filter %}loadCompanyTxns('{{ company_filter }}');{% endif %}
-
-// Live search reuse
-var _lsTimers2 = {};
-function liveSearch(input, dropId, url, key, nameKey) {
-  nameKey = nameKey || null;
-  clearTimeout(_lsTimers2[dropId]);
-  var drop = document.getElementById(dropId);
-  if (!drop) return;
-  _lsTimers2[dropId] = setTimeout(function(){
-    fetch(url)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      var items = data[key] || [];
-      if (!items.length) { drop.style.display='none'; return; }
-      var html = '';
-      items.forEach(function(item){
-        var label = nameKey ? item[nameKey] : item;
-        html += '<div class="live-dropdown-item" onmousedown="(function(e){e.preventDefault();document.getElementById(''+input.id+'').value=''+label.replace(/'/g,"\'")+'';document.getElementById(''+dropId+'').style.display='none';})(event)">' + label + '</div>';
-      });
-      drop.innerHTML = html;
-      drop.style.display = 'block';
-    })
-    .catch(function(){ drop.style.display='none'; });
-  }, 200);
-}
-document.addEventListener('click', function(e){
-  document.querySelectorAll('.live-dropdown').forEach(function(d){
-    d.style.display='none';
-  });
-});
 </script>
 {% endblock %}

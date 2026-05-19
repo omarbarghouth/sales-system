@@ -50,15 +50,8 @@
     <div class="form-grid form-grid-4">
       <div class="form-group">
         <label>Company <span class="req">*</span></label>
-        <input type="text" name="company" id="companyInput" required
-               style="text-transform:uppercase;font-weight:700"
-               value="{{ sale.company if sale else (form.company or '') }}"
-               autocomplete="off"
-               oninput="liveSearch(this,'companyDropdown','/api/companies?q='+encodeURIComponent(this.value),'companies')"
-               onfocus="liveSearch(this,'companyDropdown','/api/companies?q=','companies')"
-               placeholder="Type to search or add new…">
-        <div id="companyDropdown" class="live-dropdown" style="display:none"></div>
-        <small>Select existing or type new company name</small>
+        <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700" value="{{ sale.company if sale else (form.company or '') }}">
+        <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
       </div>
       <div class="form-group">
         <label>Customer <span class="req">*</span></label>
@@ -124,14 +117,8 @@
         <div class="price-panel-title"><i class="fas fa-plane-departure"></i> Outbound</div>
         <div class="form-grid form-grid-2">
           <div class="form-group">
-            <label>Outbound Supplier</label>
-            <input type="text" name="buy_from" id="buyFromInput"
-                   placeholder="Search flight supplier…"
-                   value="{{ sale.buy_from if sale else '' }}"
-                   style="text-transform:uppercase" autocomplete="off"
-                   oninput="liveSearch(this,'buyFromDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
-                   onfocus="liveSearch(this,'buyFromDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
-            <div id="buyFromDrop" class="live-dropdown" style="display:none"></div>
+            <label>Supplier</label>
+            <input type="text" name="buy_from" placeholder="Outbound supplier" value="{{ sale.buy_from if sale else '' }}" style="text-transform:uppercase">
           </div>
           <div class="form-group">
             <label>Departure Date</label>
@@ -152,13 +139,7 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Return Supplier</label>
-            <input type="text" name="return_supplier" id="retSuppInput"
-                   placeholder="If different from outbound…"
-                   value="{{ sale.return_supplier if sale else '' }}"
-                   style="text-transform:uppercase" autocomplete="off"
-                   oninput="liveSearch(this,'retSuppDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
-                   onfocus="liveSearch(this,'retSuppDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
-            <div id="retSuppDrop" class="live-dropdown" style="display:none"></div>
+            <input type="text" name="return_supplier" placeholder="If different" value="{{ sale.return_supplier if sale else '' }}" style="text-transform:uppercase">
           </div>
           <div class="form-group">
             <label>Return Date</label>
@@ -185,13 +166,7 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Hotel Supplier</label>
-        <input type="text" name="hotel_supplier" id="hotelSuppInput"
-               placeholder="Search hotel supplier…"
-               value="{{ sale.hotel_supplier if sale else '' }}"
-               style="text-transform:uppercase" autocomplete="off"
-               oninput="liveSearch(this,'hotelSuppDrop','/api/suppliers?svc=HOTEL&q='+encodeURIComponent(this.value),'suppliers','name')"
-               onfocus="liveSearch(this,'hotelSuppDrop','/api/suppliers?svc=HOTEL&q=','suppliers','name')">
-        <div id="hotelSuppDrop" class="live-dropdown" style="display:none"></div>
+        <input type="text" name="hotel_supplier" placeholder="Who supplies this hotel?" value="{{ sale.hotel_supplier if sale else '' }}" style="text-transform:uppercase">
       </div>
       <div class="form-group">
         <label>Hotel Name</label>
@@ -243,13 +218,7 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Transfer Supplier</label>
-        <input type="text" name="transfer_supplier" id="trSuppInput"
-               placeholder="Search transfer company…"
-               value="{{ sale.transfer_supplier if sale else '' }}"
-               style="text-transform:uppercase" autocomplete="off"
-               oninput="liveSearch(this,'trSuppDrop','/api/suppliers?svc=TRANSFER&q='+encodeURIComponent(this.value),'suppliers','name')"
-               onfocus="liveSearch(this,'trSuppDrop','/api/suppliers?svc=TRANSFER&q=','suppliers','name')">
-        <div id="trSuppDrop" class="live-dropdown" style="display:none"></div>
+        <input type="text" name="transfer_supplier" placeholder="Transfer company" value="{{ sale.transfer_supplier if sale else '' }}" style="text-transform:uppercase">
       </div>
       <div class="form-group">
         <label>Transfer Type</label>
@@ -588,44 +557,5 @@ function addTourRow() {
 // Init on page load
 setType(currentType);
 calcProfit();
-
-// ── Live search dropdown ──────────────────────────────────
-var _lsTimers = {};
-function liveSearch(input, dropId, url, key, nameKey) {
-  nameKey = nameKey || null;
-  clearTimeout(_lsTimers[dropId]);
-  var drop = document.getElementById(dropId);
-  var val = input.value.trim();
-  _lsTimers[dropId] = setTimeout(function(){
-    fetch(url)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      var items = data[key] || [];
-      if (!items.length) { drop.style.display='none'; return; }
-      var html = '';
-      items.forEach(function(item){
-        var label = nameKey ? item[nameKey] : item;
-        var display = nameKey ? (item.name + (item.svc ? ' <span style="font-size:10px;color:#94a3b8">' + item.svc + '</span>' : '')) : item;
-        html += '<div class="live-dropdown-item" onmousedown="selectDropItem(event,'' + label.replace(/'/g,"\'") + '','' + input.id + '','' + dropId + '')">' + display + '</div>';
-      });
-      drop.innerHTML = html;
-      drop.style.display = 'block';
-    })
-    .catch(function(){ drop.style.display='none'; });
-  }, val ? 250 : 50);
-}
-function selectDropItem(e, val, inputId, dropId) {
-  e.preventDefault();
-  var inp = document.getElementById(inputId);
-  if (inp) { inp.value = val; }
-  document.getElementById(dropId).style.display = 'none';
-}
-// Close dropdowns on outside click
-document.addEventListener('click', function(e){
-  document.querySelectorAll('.live-dropdown').forEach(function(d){
-    if (!d.previousElementSibling || !d.previousElementSibling.contains(e.target))
-      d.style.display='none';
-  });
-});
 </script>
 {% endblock %}
