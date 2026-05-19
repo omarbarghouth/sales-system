@@ -3100,6 +3100,7 @@ def new_voucher():
              arrival_flight,pickup_sign,driver_contact,pickup_time,vehicle_type,
              emergency_contact,cancellation_policy,remarks)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (
             vcn, sid,
             session['user_id'], session.get('username',''),
