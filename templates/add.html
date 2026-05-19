@@ -32,13 +32,7 @@
   <div class="form-section-header"><i class="fas fa-tag"></i> Service Type <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:6px">— choose what you are selling</span></div>
   <div class="form-section-body">
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
-      {% if sale %}
-  {% set cur_type = sale.get('service_type', 'FLIGHT') if sale.get is defined else (sale.service_type if sale.service_type is defined else 'FLIGHT') %}
-{% elif form and form.service_type %}
-  {% set cur_type = form.service_type %}
-{% else %}
-  {% set cur_type = 'FLIGHT' %}
-{% endif %}
+      {% set cur_type = ((sale.service_type|default('FLIGHT')) if sale else ((form.service_type if form and form.service_type is defined else '') or 'FLIGHT')) %}
       {% for t, icon in [('FLIGHT','fa-plane'),('HOTEL','fa-hotel'),('PACKAGE','fa-box-open'),('VISA','fa-passport'),('INSURANCE','fa-shield-alt'),('TRANSFER','fa-car'),('TOUR','fa-map-marked-alt')] %}
       <button type="button" class="type-btn {% if cur_type==t %}active{% endif %}" data-type="{{ t }}" onclick="setType('{{ t }}')">
         <i class="fas {{ icon }}"></i>{{ t }}
@@ -58,7 +52,7 @@
         <label>Company <span class="req">*</span></label>
         <input type="text" name="company" id="addCoInput" required
                style="text-transform:uppercase;font-weight:700"
-               value="{{ sale.company if sale else (form.company or '') }}"
+               value="{{ (sale.company|default('')) if sale else (form.company or '') }}"
                autocomplete="off" placeholder="Type to search…"
                oninput="lsSearch(this,'addCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
                onfocus="lsSearch(this,'addCoDrop','/api/companies?q=','companies')">
@@ -66,20 +60,20 @@
       </div>
       <div class="form-group">
         <label>Customer <span class="req">*</span></label>
-        <input type="text" name="customer" required style="text-transform:uppercase" value="{{ sale.customer if sale else (form.customer or '') }}">
+        <input type="text" name="customer" required style="text-transform:uppercase" value="{{ (sale.customer|default('')) if sale else (form.customer or '') }}">
       </div>
       <div class="form-group">
         <label>Sale Date <span class="req">*</span></label>
-        <input type="date" name="sale_date" required value="{{ sale.sale_date if sale else (form.sale_date or today) }}">
+        <input type="date" name="sale_date" required value="{{ (sale.sale_date|default('')) if sale else (form.sale_date or today) }}">
       </div>
       <div class="form-group">
         <label>No. of Tickets / Pax</label>
-        <input type="number" name="tickets" min="1" max="99" value="{{ sale.tickets if sale else 1 }}" style="font-weight:800;font-size:18px;text-align:center">
+        <input type="number" name="tickets" min="1" max="99" value="{{ (sale.tickets|default('')) if sale else 1 }}" style="font-weight:800;font-size:18px;text-align:center">
       </div>
     </div>
     <div class="form-group" style="margin-top:12px">
       <label>Remarks / Reference</label>
-      <input type="text" name="remarks" placeholder="Optional notes, booking reference…" maxlength="250" value="{{ sale.remarks if sale else '' }}">
+      <input type="text" name="remarks" placeholder="Optional notes, booking reference…" maxlength="250" value="{{ (sale.remarks|default('')) if sale else '' }}">
     </div>
   </div>
 </div>
@@ -91,15 +85,15 @@
     <div class="form-grid form-grid-4" style="margin-bottom:14px">
       <div class="form-group">
         <label>From <span class="req">*</span></label>
-        <input type="text" name="from_loc" placeholder="AMM" required value="{{ sale.from_loc if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
+        <input type="text" name="from_loc" placeholder="AMM" required value="{{ (sale.from_loc|default('')) if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
       </div>
       <div class="form-group">
         <label>To <span class="req">*</span></label>
-        <input type="text" name="to_loc" placeholder="DXB" required value="{{ sale.to_loc if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
+        <input type="text" name="to_loc" placeholder="DXB" required value="{{ (sale.to_loc|default('')) if sale else '' }}" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;font-size:16px;text-align:center">
       </div>
       <div class="form-group">
         <label>Via</label>
-        <input type="text" name="via" placeholder="e.g. IST" value="{{ sale.via if sale else '' }}" style="text-transform:uppercase;text-align:center">
+        <input type="text" name="via" placeholder="e.g. IST" value="{{ (sale.via|default('')) if sale else '' }}" style="text-transform:uppercase;text-align:center">
       </div>
       <div class="form-group">
         <label>Trip Type</label>
@@ -111,15 +105,15 @@
       </div>
       <div class="form-group">
         <label>Airline</label>
-        <input type="text" name="airline" placeholder="e.g. RJ, EK" value="{{ sale.airline if sale else '' }}" style="text-transform:uppercase">
+        <input type="text" name="airline" placeholder="e.g. RJ, EK" value="{{ (sale.airline|default('')) if sale else '' }}" style="text-transform:uppercase">
       </div>
       <div class="form-group">
         <label>PNR</label>
-        <input type="text" name="pnr" placeholder="Booking reference" value="{{ sale.pnr if sale else '' }}" style="text-transform:uppercase;font-weight:700">
+        <input type="text" name="pnr" placeholder="Booking reference" value="{{ (sale.pnr|default('')) if sale else '' }}" style="text-transform:uppercase;font-weight:700">
       </div>
       <div class="form-group">
         <label>Baggage</label>
-        <input type="text" name="baggage" placeholder="e.g. 23kg + 7kg" value="{{ sale.baggage if sale else '' }}">
+        <input type="text" name="baggage" placeholder="e.g. 23kg + 7kg" value="{{ (sale.baggage|default('')) if sale else '' }}">
       </div>
     </div>
     {# Outbound sector #}
@@ -131,18 +125,18 @@
             <label>Supplier</label>
             <input type="text" name="buy_from" id="addBfInput" autocomplete="off"
                    placeholder="Search flight supplier…"
-                   value="{{ sale.buy_from if sale else '' }}" style="text-transform:uppercase"
+                   value="{{ (sale.buy_from|default('')) if sale else '' }}" style="text-transform:uppercase"
                    oninput="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
                    onfocus="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
             <div id="addBfDrop" class="live-dropdown" style="display:none"></div>
           </div>
           <div class="form-group">
             <label>Departure Date</label>
-            <input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}">
+            <input type="date" name="travel_date" value="{{ (sale.travel_date|default('')) if sale else '' }}">
           </div>
           <div class="form-group">
             <label>Outbound Cost (JOD)</label>
-            <input type="number" name="outbound_cost" step="0.001" min="0" placeholder="0.000" id="outbound_cost" oninput="splitCostCalc()" value="{{ sale.outbound_cost if sale else '' }}">
+            <input type="number" name="outbound_cost" step="0.001" min="0" placeholder="0.000" id="outbound_cost" oninput="splitCostCalc()" value="{{ (sale.outbound_cost|default('')) if sale else '' }}">
           </div>
           <div class="form-group">
             <label>Delivery Date</label>
@@ -157,18 +151,18 @@
             <label>Return Supplier</label>
             <input type="text" name="return_supplier" id="addRsInput" autocomplete="off"
                  placeholder="Return supplier (if different)…"
-                 value="{{ sale.return_supplier if sale else '' }}" style="text-transform:uppercase"
+                 value="{{ (sale.return_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
                  oninput="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
                  onfocus="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
           <div id="addRsDrop" class="live-dropdown" style="display:none"></div>
           </div>
           <div class="form-group">
             <label>Return Date</label>
-            <input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}">
+            <input type="date" name="return_date" value="{{ (sale.return_date|default('')) if sale else '' }}">
           </div>
           <div class="form-group">
             <label>Return Cost (JOD)</label>
-            <input type="number" name="return_cost" step="0.001" min="0" placeholder="0.000" id="return_cost" oninput="splitCostCalc()" value="{{ sale.return_cost if sale else '' }}">
+            <input type="number" name="return_cost" step="0.001" min="0" placeholder="0.000" id="return_cost" oninput="splitCostCalc()" value="{{ (sale.return_cost|default('')) if sale else '' }}">
           </div>
           <div class="form-group">
             <label>Delivery Date</label>
@@ -189,14 +183,14 @@
         <label>Hotel Supplier</label>
         <input type="text" name="hotel_supplier" id="addHsInput" autocomplete="off"
                placeholder="Search hotel supplier…"
-               value="{{ sale.hotel_supplier if sale else '' }}" style="text-transform:uppercase"
+               value="{{ (sale.hotel_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
                oninput="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q='+encodeURIComponent(this.value),'suppliers','name')"
                onfocus="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q=','suppliers','name')">
         <div id="addHsDrop" class="live-dropdown" style="display:none"></div>
       </div>
       <div class="form-group">
         <label>Hotel Name</label>
-        <input type="text" name="hotel_name" placeholder="e.g. Grand Hyatt Amman" value="{{ sale.hotel_name if sale else '' }}">
+        <input type="text" name="hotel_name" placeholder="e.g. Grand Hyatt Amman" value="{{ (sale.hotel_name|default('')) if sale else '' }}">
       </div>
       <div class="form-group">
         <label>Room Type</label>
@@ -218,19 +212,19 @@
       </div>
       <div class="form-group">
         <label>Check-In</label>
-        <input type="date" name="hotel_checkin" id="h_ci" onchange="calcNights()" value="{{ sale.hotel_checkin if sale else '' }}">
+        <input type="date" name="hotel_checkin" id="h_ci" onchange="calcNights()" value="{{ (sale.hotel_checkin|default('')) if sale else '' }}">
       </div>
       <div class="form-group">
         <label>Check-Out</label>
-        <input type="date" name="hotel_checkout" id="h_co" onchange="calcNights()" value="{{ sale.hotel_checkout if sale else '' }}">
+        <input type="date" name="hotel_checkout" id="h_co" onchange="calcNights()" value="{{ (sale.hotel_checkout|default('')) if sale else '' }}">
       </div>
       <div class="form-group">
         <label>Nights</label>
-        <input type="number" name="hotel_nights" id="hotel_nights" min="0" value="{{ sale.hotel_nights if sale else 0 }}" readonly style="background:var(--navy-lt);font-weight:800;font-size:18px;text-align:center">
+        <input type="number" name="hotel_nights" id="hotel_nights" min="0" value="{{ (sale.hotel_nights|default('')) if sale else 0 }}" readonly style="background:var(--navy-lt);font-weight:800;font-size:18px;text-align:center">
       </div>
       <div class="form-group">
         <label>Hotel Net Cost (JOD)</label>
-        <input type="number" name="hotel_net" step="0.001" min="0" placeholder="0.000" id="hotel_net" oninput="packageCostCalc()" value="{{ sale.hotel_net if sale else '' }}">
+        <input type="number" name="hotel_net" step="0.001" min="0" placeholder="0.000" id="hotel_net" oninput="packageCostCalc()" value="{{ (sale.hotel_net|default('')) if sale else '' }}">
         <small>Cost paid to hotel supplier</small>
       </div>
     </div>
@@ -246,7 +240,7 @@
         <label>Transfer Supplier</label>
         <input type="text" name="transfer_supplier" id="addTsInput" autocomplete="off"
                placeholder="Search transfer company…"
-               value="{{ sale.transfer_supplier if sale else '' }}" style="text-transform:uppercase"
+               value="{{ (sale.transfer_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
                oninput="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q='+encodeURIComponent(this.value),'suppliers','name')"
                onfocus="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q=','suppliers','name')">
         <div id="addTsDrop" class="live-dropdown" style="display:none"></div>
@@ -271,11 +265,11 @@
       </div>
       <div class="form-group">
         <label>Pickup Time</label>
-        <input type="time" name="transfer_pickup" value="{{ sale.transfer_pickup if sale else '' }}">
+        <input type="time" name="transfer_pickup" value="{{ (sale.transfer_pickup|default('')) if sale else '' }}">
       </div>
       <div class="form-group">
         <label>Transfer Net Cost (JOD)</label>
-        <input type="number" name="transfer_net" step="0.001" min="0" placeholder="0.000" id="transfer_net" oninput="packageCostCalc()" value="{{ sale.transfer_net if sale else '' }}">
+        <input type="number" name="transfer_net" step="0.001" min="0" placeholder="0.000" id="transfer_net" oninput="packageCostCalc()" value="{{ (sale.transfer_net|default('')) if sale else '' }}">
       </div>
     </div>
   </div>
@@ -327,7 +321,7 @@
     <div class="form-grid form-grid-4">
       <div class="form-group"><label>Route (From → To)</label><input type="text" name="from_loc" placeholder="AMM" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;text-align:center"></div>
       <div class="form-group"><label>To</label><input type="text" name="to_loc" placeholder="e.g. UAE" style="text-transform:uppercase;letter-spacing:2px;font-weight:800;text-align:center"></div>
-      <div class="form-group"><label>Visa Supplier</label><input type="text" name="visa_supplier" placeholder="Visa agency / embassy" value="{{ sale.visa_supplier if sale else '' }}" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Visa Supplier</label><input type="text" name="visa_supplier" placeholder="Visa agency / embassy" value="{{ (sale.visa_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Visa Type</label>
         <select name="visa_type">
           <option value="">Select…</option>
@@ -336,8 +330,8 @@
           {% endfor %}
         </select>
       </div>
-      <div class="form-group"><label>Passport Number</label><input type="text" name="passport_number" style="text-transform:uppercase;font-weight:700" placeholder="Passport number" value="{{ sale.passport_number if sale else '' }}"></div>
-      <div class="form-group"><label>Travel Date</label><input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}"></div>
+      <div class="form-group"><label>Passport Number</label><input type="text" name="passport_number" style="text-transform:uppercase;font-weight:700" placeholder="Passport number" value="{{ (sale.passport_number|default('')) if sale else '' }}"></div>
+      <div class="form-group"><label>Travel Date</label><input type="date" name="travel_date" value="{{ (sale.travel_date|default('')) if sale else '' }}"></div>
       <div class="form-group"><label>Visa Status</label>
         <select name="visa_status">
           {% for s in ['PENDING','APPROVED','REJECTED','DELIVERED'] %}
@@ -354,7 +348,7 @@
   <div class="form-section-header" style="background:linear-gradient(90deg,#0f2b1a,#1a5c30)"><i class="fas fa-shield-alt" style="color:#86efac"></i> Insurance Details</div>
   <div class="form-section-body">
     <div class="form-grid form-grid-4">
-      <div class="form-group"><label>Insurance Supplier</label><input type="text" name="insurance_supplier" placeholder="Insurance company" value="{{ sale.insurance_supplier if sale else '' }}" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Insurance Supplier</label><input type="text" name="insurance_supplier" placeholder="Insurance company" value="{{ (sale.insurance_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Insurance Type</label>
         <select name="insurance_type">
           <option value="">Select…</option>
@@ -363,10 +357,10 @@
           {% endfor %}
         </select>
       </div>
-      <div class="form-group"><label>Travel Date (From)</label><input type="date" name="travel_date" value="{{ sale.travel_date if sale else '' }}"></div>
-      <div class="form-group"><label>Return Date (To)</label><input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}"></div>
-      <div class="form-group"><label>From</label><input type="text" name="from_loc" value="{{ sale.from_loc if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
-      <div class="form-group"><label>To</label><input type="text" name="to_loc" value="{{ sale.to_loc if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
+      <div class="form-group"><label>Travel Date (From)</label><input type="date" name="travel_date" value="{{ (sale.travel_date|default('')) if sale else '' }}"></div>
+      <div class="form-group"><label>Return Date (To)</label><input type="date" name="return_date" value="{{ (sale.return_date|default('')) if sale else '' }}"></div>
+      <div class="form-group"><label>From</label><input type="text" name="from_loc" value="{{ (sale.from_loc|default('')) if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
+      <div class="form-group"><label>To</label><input type="text" name="to_loc" value="{{ (sale.to_loc|default('')) if sale else '' }}" style="text-transform:uppercase;text-align:center"></div>
     </div>
   </div>
 </div>
@@ -421,8 +415,8 @@
     </div>
     {# Split outbound/return for non-package #}
     <div id="split-cost-panel" class="price-split-grid" style="margin-bottom:14px">
-      <div class="price-panel out-panel"><div class="price-panel-title"><i class="fas fa-plane-departure"></i> Outbound Cost</div><div class="form-group"><input type="number" id="oc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('outbound_cost').value=this.value;splitCostCalc()" value="{{ sale.outbound_cost if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
-      <div class="price-panel ret-panel"><div class="price-panel-title"><i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return Cost</div><div class="form-group"><input type="number" id="rc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('return_cost').value=this.value;splitCostCalc()" value="{{ sale.return_cost if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
+      <div class="price-panel out-panel"><div class="price-panel-title"><i class="fas fa-plane-departure"></i> Outbound Cost</div><div class="form-group"><input type="number" id="oc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('outbound_cost').value=this.value;splitCostCalc()" value="{{ (sale.outbound_cost|default('')) if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
+      <div class="price-panel ret-panel"><div class="price-panel-title"><i class="fas fa-plane-arrival" style="color:var(--gold)"></i> Return Cost</div><div class="form-group"><input type="number" id="rc2" step="0.001" min="0" placeholder="0.000" oninput="document.getElementById('return_cost').value=this.value;splitCostCalc()" value="{{ (sale.return_cost|default('')) if sale else '' }}"><small>Auto-updates Net Cost</small></div></div>
     </div>
     <div class="net-total-row" style="margin-bottom:14px">
       <span class="net-total-label"><i class="fas fa-sigma" style="margin-right:5px"></i> Total Net Cost</span>
@@ -431,12 +425,12 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Net Cost (JOD) <span class="req">*</span></label>
-        <input type="number" name="net" id="net" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ sale.net if sale else '' }}" style="font-size:16px;font-weight:800;background:var(--navy-lt)">
+        <input type="number" name="net" id="net" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ (sale.net|default('')) if sale else '' }}" style="font-size:16px;font-weight:800;background:var(--navy-lt)">
         <small>Total cost to you (all suppliers)</small>
       </div>
       <div class="form-group">
         <label>Sell Price (JOD) <span class="req">*</span></label>
-        <input type="number" name="sell" id="sell" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ sale.sell if sale else '' }}" style="font-size:16px;font-weight:800">
+        <input type="number" name="sell" id="sell" step="0.001" min="0" required placeholder="0.000" oninput="calcProfit()" value="{{ (sale.sell|default('')) if sale else '' }}" style="font-size:16px;font-weight:800">
       </div>
       <div class="form-group">
         <label>Profit (Auto)</label>
@@ -468,7 +462,7 @@
 <div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px;flex-wrap:wrap">
   <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
   <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if edit else 'Add Transaction' }}</button>
-  {% if edit and sale and ((sale.get('service_type','FLIGHT') if sale.get is defined else (sale.service_type if sale.service_type is defined else 'FLIGHT')) == 'PACKAGE') %}
+  {% if edit and sale and ((sale.service_type|default('FLIGHT')) == 'PACKAGE') %}
   <a href="{{ url_for('auto_generate_voucher', sale_id=sale.id) }}"
      onclick="return confirm('Generate a professional voucher automatically from this package transaction?')"
      class="btn btn-gold btn-lg">
@@ -481,7 +475,7 @@
 
 {% block extra_js %}
 <script>
-var currentType = '{{ (sale.get("service_type","FLIGHT") if sale and sale.get is defined else (sale.service_type if sale and sale.service_type is defined else "FLIGHT")) }}';
+var currentType = '{{ ((sale.service_type|default("FLIGHT")) if sale else "FLIGHT") }}';
 
 var TYPE_SECTIONS = {
   FLIGHT:    ['sec-flight'],
