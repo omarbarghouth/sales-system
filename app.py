@@ -1595,12 +1595,6 @@ def archive_delete_payment(pay_id):
     flash(f'Payment #{pay_id} permanently deleted.', 'success')
     return redirect(url_for('archive', table='payments'))
 
-@app.route('/api/companies')
-@login_required
-def api_companies():
-    companies = get_companies_list()
-    return jsonify(companies)
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -3351,3 +3345,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
