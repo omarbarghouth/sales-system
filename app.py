@@ -749,6 +749,34 @@ def add_sale():
         return redirect(url_for('sales_report'))
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
 
+
+def safe_sale(sale):
+    """Return sale as a plain dict with all expected columns filled with defaults.
+    Prevents KeyError/UndefinedError in templates when new columns haven't been
+    added to the DB yet (migration pending)."""
+    if not sale: return sale
+    d = dict(sale)
+    defaults = {
+        'service_type': 'FLIGHT', 'airline': '', 'pnr': '', 'baggage': '',
+        'trip_type': 'RETURN', 'buy_from': '', 'return_supplier': '',
+        'outbound_cost': 0, 'return_cost': 0,
+        'hotel_supplier': '', 'hotel_name': '', 'hotel_room': '',
+        'hotel_meal': '', 'hotel_checkin': '', 'hotel_checkout': '',
+        'hotel_nights': 0, 'hotel_net': 0,
+        'transfer_supplier': '', 'transfer_type': '', 'transfer_pickup': '',
+        'transfer_vehicle': '', 'transfer_net': 0,
+        'tours_json': '[]', 'passengers_json': '[]',
+        'visa_supplier': '', 'visa_type': '', 'passport_number': '',
+        'visa_status': '', 'insurance_supplier': '', 'insurance_type': '',
+        'travel_date': '', 'return_date': '', 'via': '', 'remarks': '',
+        'from_loc': '', 'to_loc': '', 'outbound_delivery': '',
+        'return_delivery': '', 'outbound_status': '', 'return_status': '',
+    }
+    for k, v in defaults.items():
+        if k not in d or d[k] is None:
+            d[k] = v
+    return d
+
 @app.route('/edit/<int:sale_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_sale(sale_id):
@@ -756,6 +784,7 @@ def edit_sale(sale_id):
     if not sale:
         flash('Sale not found.', 'danger')
         return redirect(url_for('sales_report'))
+    sale = safe_sale(sale)
     companies = get_companies_list()
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
@@ -2301,6 +2330,7 @@ def my_edit_sale(sale_id):
     if not sale:
         flash('Transaction not found.', 'danger')
         return redirect(url_for('my_sales'))
+    sale = safe_sale(sale)
     companies = get_companies_list()
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
