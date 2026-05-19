@@ -699,6 +699,7 @@ tfoot td {
   border-radius: var(--radius);
   border: 1px solid var(--border-lt);
   box-shadow: var(--sh-sm);
+  overflow: visible;
   margin-bottom: 16px;
   overflow: hidden;
   transition: box-shadow var(--dur);
@@ -1514,17 +1515,16 @@ tfoot td {
 /* ── Live Search Dropdown — compact ERP style ────────────── */
 .live-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 2px);
   left: 0;
   right: 0;
-  z-index: 800;
+  z-index: 9999;
   background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 0 0 6px 6px;
-  max-height: 180px;
+  border: 2px solid #1B3A6B;
+  border-radius: 6px;
+  max-height: 200px;
   overflow-y: auto;
-  box-shadow: 0 6px 20px rgba(0,0,0,.12);
-  margin-top: 1px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
 }
 .live-dropdown-item {
   padding: 7px 12px;

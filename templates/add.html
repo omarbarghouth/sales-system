@@ -50,12 +50,13 @@
     <div class="form-grid form-grid-4">
       <div class="form-group">
         <label>Company <span class="req">*</span></label>
-        <input type="text" name="company" id="addCoInput" required
+        <input type="text" name="company" id="addCoInput" required list="coDatalist"
                style="text-transform:uppercase;font-weight:700"
                value="{{ (sale.company|default('')) if sale else (form.company or '') }}"
                autocomplete="off" placeholder="Type to search…"
                oninput="lsSearch(this,'addCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
                onfocus="lsSearch(this,'addCoDrop','/api/companies?q=','companies')">
+        <datalist id="coDatalist">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         <div id="addCoDrop" class="live-dropdown" style="display:none"></div>
       </div>
       <div class="form-group">
