@@ -819,6 +819,8 @@ def edit_sale(sale_id):
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        _oc = float(request.form.get('outbound_cost', 0) or 0)
+        _rc = float(request.form.get('return_cost', 0) or 0)
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -831,7 +833,8 @@ def edit_sale(sale_id):
                 hotel_checkin=%s,hotel_checkout=%s,hotel_nights=%s,hotel_net=%s,
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
-                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
+                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,
+                passengers_json=%s,outbound_cost=%s,return_cost=%s
             WHERE id=%s
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
@@ -840,7 +843,7 @@ def edit_sale(sale_id):
             request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),
             request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets', 1)),
+            int(request.form.get('tickets', 1) or 1),
             request.form.get('customer','').upper().strip(),
             request.form.get('sale_date',''),
             request.form.get('travel_date','').strip(),
@@ -853,7 +856,8 @@ def edit_sale(sale_id):
             ev['hotel_checkin'],ev['hotel_checkout'],ev['hotel_nights'],ev['hotel_net'],
             ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
             ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
-            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
+            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],
+            ev['passengers_json'],_oc,_rc,
             sale_id
         ))
         log_action('UPDATE','sales',sale_id,f"{request.form.get('customer','').upper()} | {ev['service_type']} | Sell:{sell}")
@@ -2352,6 +2356,8 @@ def my_edit_sale(sale_id):
         tours_list=[{'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''} for i in range(len(tour_names)) if tour_names[i].strip()]
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        _oc = float(request.form.get('outbound_cost', 0) or 0)
+        _rc = float(request.form.get('return_cost', 0) or 0)
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -2364,13 +2370,15 @@ def my_edit_sale(sale_id):
                 hotel_checkin=%s,hotel_checkout=%s,hotel_nights=%s,hotel_net=%s,
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
-                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
+                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,
+                passengers_json=%s,outbound_cost=%s,return_cost=%s
             WHERE id=%s
         ''', (
-            request.form.get('from_loc','').upper().strip(),request.form.get('to_loc','').upper().strip(),
+            (request.form.get('from_loc','').upper().strip() or '-'),
+            (request.form.get('to_loc','').upper().strip() or '-'),
             request.form.get('via','').upper().strip(),request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets',1)),request.form.get('customer','').upper().strip(),
+            int(request.form.get('tickets',1) or 1),request.form.get('customer','').upper().strip(),
             request.form.get('sale_date',''),request.form.get('travel_date','').strip(),
             return_date,return_supplier,outbound_delivery,return_delivery,
             outbound_status,return_status,net,sell,sell-net,overall,
@@ -2379,11 +2387,12 @@ def my_edit_sale(sale_id):
             ev['hotel_checkin'],ev['hotel_checkout'],ev['hotel_nights'],ev['hotel_net'],
             ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
             ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
-            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
+            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],
+            ev['passengers_json'],_oc,_rc,
             sale_id
         ))
         log_action('UPDATE','sales',sale_id,f"{ev['service_type']} | Sell:{sell}")
-        flash('Transaction updated.','success')
+        flash('Transaction updated successfully.','success')
         return redirect(url_for('my_sales'))
     return render_template('add.html', sale=sale, companies=companies, edit=True)
 
