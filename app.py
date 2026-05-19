@@ -1393,11 +1393,15 @@ def reset_data():
         db = get_db()
         cur = db.cursor()
 
-        # Get counts before delete for the log
-        cur.execute('SELECT COUNT(*) FROM sales')
-        sales_count = cur.fetchone()[0]
-        cur.execute('SELECT COUNT(*) FROM payments')
-        pay_count = cur.fetchone()[0]
+        # Get counts before delete
+        def _count(tbl):
+            try:
+                cur.execute(f'SELECT COUNT(*) as n FROM {tbl}')
+                r = cur.fetchone()
+                return int(r['n'] if isinstance(r, dict) else r[0]) if r else 0
+            except: return 0
+        sales_count = _count('sales')
+        pay_count   = _count('payments')
 
         # ── Hard delete ALL transactional data ──────────────────────────────
         tables_to_clear = [
@@ -1407,9 +1411,11 @@ def reset_data():
         counts = {}
         for t in tables_to_clear:
             try:
-                cur.execute(f'SELECT COUNT(*) FROM {t}')
-                row = cur.fetchone(); counts[t] = row[0] if row else 0
-            except: counts[t] = 0
+                cur.execute(f'SELECT COUNT(*) as n FROM {t}')
+                row = cur.fetchone()
+                if row: counts[t] = int(row['n'] if isinstance(row, dict) else row[0])
+                else: counts[t] = 0
+            except: counts[t] = 0; db.rollback()
         for t in tables_to_clear:
             try: cur.execute(f'DELETE FROM {t}')
             except: db.rollback()
@@ -1443,17 +1449,21 @@ def reset_data():
               f'{counts.get("payments",0)} payments deleted. Numbering reset to 0001.', 'success')
         return redirect(url_for('index'))
 
-    # GET — show confirmation page with full stats
-    stats = query_db("""
-        SELECT
-            (SELECT COUNT(*) FROM sales)            as sales_count,
-            (SELECT COUNT(*) FROM payments)         as payments_count,
-            (SELECT COUNT(*) FROM invoices WHERE deleted=FALSE) as inv_count,
-            (SELECT COUNT(*) FROM vouchers WHERE deleted=FALSE) as vch_count,
-            (SELECT COUNT(*) FROM supplier_payments WHERE deleted=FALSE) as sp_count,
-            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE deleted=FALSE) as total_sell,
-            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted=FALSE) as total_paid
-    """, one=True)
+    # GET — show confirmation page with safe individual counts
+    def _safe_count(q):
+        try:
+            r = query_db(q, one=True)
+            return int(list(r.values())[0]) if r else 0
+        except: return 0
+    stats = {
+        'sales_count':    _safe_count("SELECT COUNT(*) as n FROM sales"),
+        'payments_count': _safe_count("SELECT COUNT(*) as n FROM payments"),
+        'inv_count':      _safe_count("SELECT COUNT(*) as n FROM invoices WHERE deleted=FALSE"),
+        'vch_count':      _safe_count("SELECT COUNT(*) as n FROM vouchers WHERE deleted=FALSE"),
+        'sp_count':       _safe_count("SELECT COUNT(*) as n FROM supplier_payments WHERE deleted=FALSE"),
+        'total_sell':     _safe_count("SELECT COALESCE(SUM(sell),0) as n FROM sales WHERE deleted=FALSE"),
+        'total_paid':     _safe_count("SELECT COALESCE(SUM(amount),0) as n FROM payments WHERE deleted=FALSE"),
+    }
     return render_template('reset_data.html', stats=stats)
 
 @app.route('/archive', methods=['GET'])
@@ -3412,4 +3422,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
