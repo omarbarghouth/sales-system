@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}ALSONDOS TRAVEL ERP{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+
+{# ═══════════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════════ #}
+<aside class="sidebar" id="sidebar">
+
+  {# Brand / Logo #}
+  <a href="{{ url_for('index') if is_admin else url_for('employee_dashboard') }}" class="sb-brand">
+    <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel" class="sb-logo"/>
+    <div class="sb-brand-text">
+      <div class="sb-brand-name">Alsondos Travel</div>
+      <div class="sb-brand-sub">ERP System</div>
+    </div>
+  </a>
+
+  {# Scrollable nav #}
+  <nav class="sb-nav">
+
+    {% if logged_in %}
+    {# ── New Sale CTA ─────────────────────────────────────── #}
+    <div class="sb-cta">
+      <a href="{{ url_for('add_sale_v2') }}" class="sb-cta-btn">
+        <i class="fas fa-plus"></i> New Transaction
+      </a>
+    </div>
+    {% endif %}
+
+    {% if is_admin %}
+    {# ════════════ ADMIN NAVIGATION ════════════ #}
+
+    <div class="sb-section">Main</div>
+    <a href="{{ url_for('index') }}"
+       class="sb-link {% if request.endpoint=='index' %}active{% endif %}">
+      <i class="fas fa-chart-pie"></i> Dashboard
+    </a>
+
+    <div class="sb-section">Operations</div>
+    <a href="{{ url_for('sales_report') }}"
+       class="sb-link {% if request.endpoint=='sales_report' %}active{% endif %}">
+      <i class="fas fa-exchange-alt"></i> Transactions
+    </a>
+    <a href="{{ url_for('statement') }}"
+       class="sb-link {% if request.endpoint=='statement' %}active{% endif %}">
+      <i class="fas fa-file-invoice-dollar"></i> Statements
+    </a>
+    <a href="{{ url_for('supplier_statement') }}"
+       class="sb-link {% if request.endpoint=='supplier_statement' %}active{% endif %}">
+      <i class="fas fa-truck"></i> Supplier Statements
+    </a>
+    <a href="{{ url_for('payments') }}"
+       class="sb-link {% if request.endpoint=='payments' %}active{% endif %}">
+      <i class="fas fa-money-bill-wave"></i> Payments
+    </a>
+
+    <div class="sb-section">Documents</div>
+    <a href="{{ url_for('invoice_list') }}"
+       class="sb-link {% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-file-invoice"></i> Invoices
+    </a>
+    <a href="{{ url_for('voucher_list') }}"
+       class="sb-link {% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-hotel"></i> Hotel Vouchers
+    </a>
+    <a href="{{ url_for('package_list') }}"
+       class="sb-link {% if 'package' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-box-open"></i> Packages
+    </a>
+
+    <div class="sb-section">Delivery</div>
+    <a href="{{ url_for('deliver_tomorrow') }}"
+       class="sb-link {% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
+      <i class="fas fa-truck"></i> Deliver Tomorrow
+    </a>
+
+    <div class="sb-section">Management</div>
+    <a href="{{ url_for('admin_employees') }}"
+       class="sb-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-users-cog"></i> Staff & Commission
+    </a>
+    <a href="{{ url_for('manage_users') }}"
+       class="sb-link {% if request.endpoint in ('manage_users','add_user','change_password','admin_reset_pw') %}active{% endif %}">
+      <i class="fas fa-user-shield"></i> User Accounts
+    </a>
+
+    <div class="sb-section">System</div>
+    <a href="{{ url_for('admin') }}"
+       class="sb-link {% if request.endpoint=='admin' %}active{% endif %}">
+      <i class="fas fa-database"></i> Admin Panel
+    </a>
+    <a href="{{ url_for('audit_log') }}"
+       class="sb-link {% if request.endpoint=='audit_log' %}active{% endif %}">
+      <i class="fas fa-clipboard-list"></i> Audit Logs
+    </a>
+    <a href="{{ url_for('archive') }}"
+       class="sb-link {% if request.endpoint in ('archive','do_archive') %}active{% endif %}">
+      <i class="fas fa-archive"></i> Archive
+    </a>
+
+    {% else %}
+    {# ════════════ EMPLOYEE NAVIGATION ════════════ #}
+
+    <div class="sb-section">My Work</div>
+    <a href="{{ url_for('employee_dashboard') }}"
+       class="sb-link {% if request.endpoint=='employee_dashboard' %}active{% endif %}">
+      <i class="fas fa-chart-pie"></i> My Dashboard
+    </a>
+    <a href="{{ url_for('my_sales') }}"
+       class="sb-link {% if 'my_sales' in (request.endpoint or '') or 'my_edit' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-exchange-alt"></i> My Transactions
+    </a>
+    <a href="{{ url_for('my_commission') }}"
+       class="sb-link {% if request.endpoint=='my_commission' %}active{% endif %}">
+      <i class="fas fa-coins"></i> My Commission
+    </a>
+
+    <div class="sb-section">Documents</div>
+    <a href="{{ url_for('invoice_list') }}"
+       class="sb-link {% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-file-invoice"></i> Invoices
+    </a>
+    <a href="{{ url_for('voucher_list') }}"
+       class="sb-link {% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-hotel"></i> Hotel Vouchers
+    </a>
+    <a href="{{ url_for('package_list') }}"
+       class="sb-link {% if 'package' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-box-open"></i> Packages
+    </a>
+
+    {% endif %}
+
+  </nav>{# end .sb-nav #}
+
+  {# ── User area ─────────────────────────────────────────────── #}
+  {% if logged_in %}
+  <div class="sb-user">
+    <div class="sb-user-row">
+      <div class="sb-avatar {% if session.user_role=='admin' %}is-admin{% endif %}">
+        {{ session.username[0]|upper if session.username else '?' }}
+      </div>
+      <div class="sb-user-info">
+        <div class="sb-username">{{ session.username }}</div>
+        <div class="sb-role-tag">
+          {% if session.user_role == 'admin' %}👑 Administrator{% else %}👤 Sales Agent{% endif %}
+        </div>
+      </div>
+      <a href="{{ url_for('logout') }}" class="sb-logout-btn" title="Logout">
+        <i class="fas fa-sign-out-alt"></i>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+</aside>
+
+{# Mobile overlay (closes sidebar when clicked) #}
+<div class="sb-overlay" id="sbOverlay"></div>
+
+{# ═══════════════════════════════════════════════════════════════
+   MOBILE TOPBAR
+   ═══════════════════════════════════════════════════════════════ #}
+<div class="mobile-topbar" id="mobileTopbar">
+  <button class="sb-toggle" id="sidebarToggle" aria-label="Menu">
+    <i class="fas fa-bars"></i>
+  </button>
+  <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos" class="topbar-logo"/>
+  <div class="topbar-page-title">{% block topbar_title %}Alsondos Travel{% endblock %}</div>
+  {% if logged_in %}
+  <div class="topbar-user-pill">{{ session.username }}</div>
+  {% endif %}
+</div>
+
+{# ═══════════════════════════════════════════════════════════════
+   MAIN CONTENT
+   ═══════════════════════════════════════════════════════════════ #}
+<div class="main-content" id="mainContent">
+
+  {# Flash messages #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-container" id="flashBox">
+    {% for cat, msg in messages %}
+    <div class="flash-msg flash-{{ cat }}">
+      <i class="fas fa-{% if cat=='success' %}check-circle{% elif cat=='danger' %}exclamation-circle{% elif cat=='warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+  setTimeout(function(){
+    var e=document.getElementById('flashBox');
+    if(e){e.style.transition='opacity .45s';e.style.opacity=0;setTimeout(function(){e.remove()},460);}
+  }, 4500);
+  </script>
+  {% endif %}
+  {% endwith %}
+
+  <div class="container">{% block content %}{% endblock %}</div>
+
+</div>{# end .main-content #}
+
+{# ═══════════════════════════════════════════════════════════════
+   SIDEBAR JAVASCRIPT
+   ═══════════════════════════════════════════════════════════════ #}
+<script>
+(function(){
+  var sidebar  = document.getElementById('sidebar');
+  var overlay  = document.getElementById('sbOverlay');
+  var toggle   = document.getElementById('sidebarToggle');
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  if (toggle)  toggle.addEventListener('click', openSidebar);
+  if (overlay) overlay.addEventListener('click', closeSidebar);
+
+  // Close on Escape
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') closeSidebar();
+  });
+
+  // Close sidebar on nav link click (mobile UX)
+  var links = sidebar ? sidebar.querySelectorAll('.sb-link, .sb-cta-btn') : [];
+  links.forEach(function(link){
+    link.addEventListener('click', function(){
+      if (window.innerWidth <= 1024) closeSidebar();
+    });
+  });
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
