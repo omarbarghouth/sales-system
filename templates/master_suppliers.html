@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Suppliers — Master Data — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Suppliers</h1>
+    <p>Centralized supplier master data — flights, hotels, transfers, visas, insurance</p>
+  </div>
+</div>
+
+<div class="grid-2 mb-6">
+  <div class="card">
+    <div class="card-header"><i class="fas fa-plus-circle"></i> Add Supplier</div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="action" value="add">
+        <div class="form-grid form-grid-2" style="margin-bottom:14px">
+          <div class="form-group" style="grid-column:span 2">
+            <label>Supplier Name <span class="req">*</span></label>
+            <input type="text" name="name" required placeholder="e.g. ROYAL JORDANIAN" style="text-transform:uppercase;font-weight:700;font-size:15px" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Service Type</label>
+            <select name="service_type">
+              {% for t in ['FLIGHT','HOTEL','TRANSFER','VISA','INSURANCE','TOUR','GENERAL'] %}
+              <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="text" name="phone" placeholder="+962 x xxxx xxxx">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" name="notes" placeholder="Account number, terms…">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-red" style="width:100%">
+          <i class="fas fa-plus"></i> Add Supplier
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><i class="fas fa-chart-pie"></i> By Service Type</div>
+    <div class="card-body">
+      {% set svc_counts = {} %}
+      {% for s in suppliers %}
+        {% set _ = svc_counts.update({s.service_type: (svc_counts.get(s.service_type, 0) + 1)}) %}
+      {% endfor %}
+      {% for svc, cnt in svc_counts.items() %}
+      <div class="outstanding-row">
+        <div>
+          <span class="svc-badge svc-{{ svc }}"><i class="fas {{ svc|svc_icon }}"></i>{{ svc }}</span>
+        </div>
+        <strong style="color:var(--navy-dk)">{{ cnt }} supplier{{ 's' if cnt != 1 }}</strong>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:20px;color:var(--muted-lt)">No suppliers yet</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="fas fa-table"></i> All Suppliers</div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Supplier</th><th>Service Type</th>
+        <th>Phone</th><th>Notes</th><th>Status</th><th>Actions</th>
+      </tr></thead>
+      <tbody>
+        {% for s in suppliers %}
+        <tr {% if not s.is_active %}style="opacity:.55"{% endif %}>
+          <td style="color:var(--muted-lt);font-size:11px">{{ loop.index }}</td>
+          <td style="font-weight:700;color:var(--navy-dk);font-size:14px">{{ s.name }}</td>
+          <td><span class="svc-badge svc-{{ s.service_type }}"><i class="fas {{ s.service_type|svc_icon }}"></i>{{ s.service_type }}</span></td>
+          <td style="font-size:12.5px">{{ s.phone or '—' }}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ s.notes or '—' }}</td>
+          <td><span class="badge {% if s.is_active %}badge-done{% else %}badge-inactive{% endif %}">{{ 'Active' if s.is_active else 'Inactive' }}</span></td>
+          <td>
+            <div style="display:flex;gap:5px">
+              <a href="{{ url_for('supplier_statement', supplier=s.name) }}" class="btn btn-edit btn-xs" title="View Statement">
+                <i class="fas fa-file-invoice-dollar"></i>
+              </a>
+              <form method="POST" style="display:inline">
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="id" value="{{ s.id }}">
+                <button type="submit" class="btn btn-warning btn-xs"><i class="fas fa-{{ 'pause' if s.is_active else 'play' }}"></i></button>
+              </form>
+              <form method="POST" style="display:inline" onsubmit="return confirm('Delete {{ s.name }}?')">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="{{ s.id }}">
+                <button type="submit" class="btn btn-danger btn-xs"><i class="fas fa-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted" style="padding:28px">No suppliers yet. Add your first supplier above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
