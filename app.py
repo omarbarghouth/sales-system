@@ -1904,10 +1904,10 @@ except Exception as _ext_err:
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_doc_number(doc_type: str) -> str:
     """
-    Smart document numbering with TESTING MODE reset support.
-    - If ALL records in the table are deleted (soft-deleted), resets to 0001.
-    - If records still exist, syncs to MAX(id) to avoid duplicate key errors.
-    - Uses a dedicated connection to avoid interfering with the request connection.
+    Testing-mode smart numbering.
+    If ALL rows deleted → reset to 0001.
+    If rows exist → sync to MAX(id) to avoid duplicate key.
+    Uses dedicated connection to avoid interfering with request connection.
     """
     table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
     table = table_map.get(doc_type)
@@ -1919,24 +1919,18 @@ def next_doc_number(doc_type: str) -> str:
         )
         conn.autocommit = False
         cur = conn.cursor()
-
         if table:
-            # Count ALL rows (including soft-deleted) to detect true empty state
             cur.execute(f"SELECT COUNT(*) as total, COALESCE(MAX(id),0) as max_id FROM {table}")
-            row     = cur.fetchone()
-            total   = int(row['total'])  if row else 0
-            max_id  = int(row['max_id']) if row else 0
-
+            row    = cur.fetchone()
+            total  = int(row['total'])  if row else 0
+            max_id = int(row['max_id']) if row else 0
             if total == 0:
-                # Table is truly empty — reset sequence so next = 0001
                 cur.execute("UPDATE doc_sequences SET last_num=0 WHERE doc_type=%s", [doc_type])
             else:
-                # Records exist — sync sequence to MAX(id) to avoid duplicate key
                 cur.execute(
                     "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s AND last_num < %s",
                     [max_id, doc_type, max_id]
                 )
-
         cur.execute("""
             UPDATE doc_sequences SET last_num = last_num + 1
             WHERE doc_type = %s RETURNING last_num
@@ -1958,7 +1952,6 @@ def next_doc_number(doc_type: str) -> str:
             except: pass
 
 
-# ── Ownership guard — employees see only their own sales ─────────────────────
 def own_sale_required(f):
     """Allow admins full access; users only access their own sales."""
     @wraps(f)
