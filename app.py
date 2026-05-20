@@ -975,36 +975,122 @@ def sales_report():
 @app.route('/statement')
 @login_required
 def statement():
-    company   = request.args.get('company', '')
-    date_from = request.args.get('date_from', '')
-    date_to   = request.args.get('date_to', '')
-    companies = get_companies_list()
-    sales, payments, total_invoiced, total_paid, balance = [], [], 0, 0, 0
+    """
+    Mutual B2B Company Ledger.
+    CREDIT  = we sold to this company  (their debt to us)
+    DEBIT   = we bought from this company (our debt to them)
+    Running balance: positive = they owe us, negative = we owe them.
+    """
+    company   = request.args.get('company', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to   = request.args.get('date_to', '').strip()
+    try:
+        companies = get_companies_list()
+    except Exception:
+        companies = []
+
+    ledger_entries = []
+    summary = {}
+
     if company:
-        q = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
-        p = [company]
-        if date_from: q += ' AND sale_date>=%s'; p.append(date_from)
-        if date_to:   q += ' AND sale_date<=%s'; p.append(date_to)
-        q += ' ORDER BY sale_date ASC'
-        sales = query_db(q, p)
+        p_sale = [company]
+        p_pay  = [company]
+        date_f_sale = ''
+        date_f_pay  = ''
+        if date_from:
+            date_f_sale += ' AND sale_date>=%s'; p_sale.append(date_from)
+            date_f_pay  += ' AND pay_date>=%s';  p_pay.append(date_from)
+        if date_to:
+            date_f_sale += ' AND sale_date<=%s'; p_sale.append(date_to)
+            date_f_pay  += ' AND pay_date<=%s';  p_pay.append(date_to)
 
-        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
-        pp = [company]
-        if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
-        if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
-        pq += ' ORDER BY pay_date ASC'
-        payments = query_db(pq, pp)
+        def _q(q, p):
+            try: return query_db(q, p) or []
+            except Exception:
+                try: get_db().rollback()
+                except: pass
+                return []
 
-        total_invoiced = sum(r['sell'] for r in sales)
-        total_paid     = sum(r['amount'] for r in payments)
-        balance        = total_invoiced - total_paid
+        # CREDIT: we sold to this company
+        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+            ledger_entries.append({
+                'date': s['sale_date'], 'ref': f"TXN-{s['id']:04d}",
+                'description': f"{s.get('service_type','FLIGHT')} — {s.get('customer','')}",
+                'debit': 0.0, 'credit': float(s['sell'] or 0), 'type': 'sale', 'id': s['id'],
+            })
+
+        # DEBIT: we bought from this company (flight outbound)
+        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(buy_from))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+            cost = float(s.get('outbound_cost') or s.get('net') or 0)
+            if cost > 0:
+                ledger_entries.append({'date': s['sale_date'], 'ref': f"PUR-{s['id']:04d}",
+                    'description': f"Purchase (Flight) — {s.get('customer','')}",
+                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+
+        # DEBIT: return supplier
+        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(return_supplier))=UPPER(%s){date_f_sale} AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s) ORDER BY sale_date ASC", [company, company] + (p_sale[1:] if len(p_sale)>1 else [])):
+            cost = float(s.get('return_cost') or 0)
+            if cost > 0:
+                ledger_entries.append({'date': s['sale_date'], 'ref': f"RTN-{s['id']:04d}",
+                    'description': f"Purchase (Return) — {s.get('customer','')}",
+                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+
+        # DEBIT: hotel/transfer/visa/insurance supplier
+        for supp_field, cost_field, label in [
+            ('hotel_supplier','hotel_net','Hotel'),
+            ('transfer_supplier','transfer_net','Transfer'),
+            ('visa_supplier','net','Visa'),
+            ('insurance_supplier','net','Insurance'),
+        ]:
+            for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM({supp_field}))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+                cost = float(s.get(cost_field) or 0)
+                if cost > 0:
+                    ledger_entries.append({'date': s['sale_date'], 'ref': f"{label[:3].upper()}-{s['id']:04d}",
+                        'description': f"Purchase ({label}) — {s.get('customer','')}",
+                        'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+
+        # CREDIT: payment received from company
+        for p in _q(f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_pay} ORDER BY pay_date ASC", p_pay):
+            ledger_entries.append({'date': p['pay_date'], 'ref': f"PAY-{p['id']:04d}",
+                'description': f"Payment received — {p.get('notes','') or ''}",
+                'debit': 0.0, 'credit': float(p['amount'] or 0), 'type': 'payment_in', 'id': p['id']})
+
+        # DEBIT: supplier payment made to this company
+        for sp in _q("SELECT * FROM supplier_payments WHERE deleted=FALSE AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date ASC", [company]):
+            if date_from and sp['pay_date'] < date_from: continue
+            if date_to   and sp['pay_date'] > date_to:   continue
+            ledger_entries.append({'date': sp['pay_date'], 'ref': f"SPY-{sp['id']:04d}",
+                'description': f"Payment made — {sp.get('notes','') or sp.get('service_type','')}",
+                'debit': float(sp['amount'] or 0), 'credit': 0.0, 'type': 'payment_out', 'id': sp['id']})
+
+        # Sort by date
+        ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
+
+        # Running balance
+        running = 0.0
+        for e in ledger_entries:
+            running += e['credit'] - e['debit']
+            e['balance'] = round(running, 3)
+
+        # Summary
+        sold    = sum(e['credit'] for e in ledger_entries if e['type']=='sale')
+        bought  = sum(e['debit']  for e in ledger_entries if e['type']=='purchase')
+        rcvd    = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
+        paid_to = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
+        net_bal = round(running, 3)
+        summary = {
+            'total_sold_to_them': sold, 'total_bought_from': bought,
+            'total_received': rcvd, 'total_paid_to_them': paid_to,
+            'net_receivable': round(sold - rcvd, 3),
+            'net_payable':    round(bought - paid_to, 3),
+            'net_balance':    net_bal,
+            'status': 'CREDIT' if net_bal > 0.005 else ('DEBIT' if net_bal < -0.005 else 'SETTLED'),
+        }
 
     return render_template('statement.html',
-        companies=companies, sales=sales, payments=payments,
-        company=company, total_invoiced=total_invoiced,
-        total_paid=total_paid, balance=balance,
-        filters={'date_from':date_from,'date_to':date_to},
-        today=date.today().strftime('%d %B %Y')
+        companies=companies, ledger=ledger_entries, summary=summary,
+        company=company, filters={'date_from': date_from, 'date_to': date_to},
+        today=date.today().strftime('%d %B %Y'),
     )
 
 # ── Payments (paginated) ──────────────────────────────────────────────────────
@@ -3461,3 +3547,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
