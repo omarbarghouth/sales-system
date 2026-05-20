@@ -71,7 +71,9 @@ def query_db(query, args=(), one=False):
         rv = cur.fetchall()
         return (rv[0] if rv else None) if one else rv
     except Exception as e:
-        logger.error(f"query_db error: {e} | query: {query}")
+        try: get_db().rollback()
+        except: pass
+        logger.error(f"query_db error: {e} | query: {query[:120]}")
         raise
 
 def execute_db(query, args=()):
@@ -303,7 +305,10 @@ def validate_sale_form(form):
 def get_current_user():
     if 'user_id' not in session:
         return None
-    return query_db('SELECT * FROM users WHERE id=%s', [session['user_id']], one=True)
+    try:
+        return query_db('SELECT * FROM users WHERE id=%s', [session['user_id']], one=True)
+    except Exception:
+        return None
 
 def login_required(f):
     @wraps(f)
@@ -328,8 +333,12 @@ def admin_required(f):
 
 @app.context_processor
 def inject_user():
+    try:
+        cur_user = get_current_user()
+    except Exception:
+        cur_user = None
     return {
-        'current_user': get_current_user(),
+        'current_user': cur_user,
         'is_admin': session.get('user_role') == 'admin',
         'logged_in': 'user_id' in session
     }
@@ -647,7 +656,10 @@ def index():
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_sale():
-    companies = get_companies_list()
+    try:
+        companies = get_companies_list()
+    except Exception:
+        companies = []
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -2192,7 +2204,10 @@ _orig_add_sale_func = app.view_functions.get('add_sale')
 @login_required
 def add_sale_v2():
     """Extended add sale that captures which user created it."""
-    companies = get_companies_list()
+    try:
+        companies = get_companies_list()
+    except Exception:
+        companies = []
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
@@ -2909,16 +2924,25 @@ def delete_supplier_payment(pay_id):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_companies_list():
-    """All active companies — from master table + any in sales not yet seeded."""
-    rows = query_db("""
-        SELECT name FROM (
-            SELECT name FROM master_companies WHERE is_active=TRUE
-            UNION
-            SELECT UPPER(TRIM(company)) FROM sales
-            WHERE deleted=FALSE AND TRIM(company)<>''
-        ) t ORDER BY name
-    """) or []
-    return [r['name'] for r in rows]
+    """All companies — safe fallback if master_companies table missing."""
+    try:
+        rows = query_db("""
+            SELECT name FROM (
+                SELECT name FROM master_companies WHERE is_active=TRUE
+                UNION
+                SELECT UPPER(TRIM(company)) FROM sales
+                WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>''
+            ) t ORDER BY name
+        """) or []
+        return [r['name'] for r in rows]
+    except Exception:
+        try: get_db().rollback()
+        except: pass
+        try:
+            rows = query_db("SELECT DISTINCT UPPER(TRIM(company)) as name FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>'' ORDER BY name") or []
+            return [r['name'] for r in rows]
+        except Exception:
+            return []
 
 def get_suppliers_list(svc_type=None):
     """All active suppliers — from master table + any in sales not yet seeded."""
