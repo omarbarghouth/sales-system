@@ -22,6 +22,7 @@ PER_PAGE = 50  # rows per page
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
+    """Get a healthy database connection. Auto-heals aborted transactions."""
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = psycopg2.connect(
@@ -29,15 +30,39 @@ def get_db():
             cursor_factory=psycopg2.extras.RealDictCursor
         )
         db.autocommit = False
+    else:
+        # If connection is in aborted/error state, rollback to clean it
+        try:
+            if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
+                db.rollback()
+        except Exception:
+            # Connection broken entirely — make a new one
+            try: db.close()
+            except: pass
+            db = g._database = psycopg2.connect(
+                os.environ.get("DATABASE_URL"),
+                cursor_factory=psycopg2.extras.RealDictCursor
+            )
+            db.autocommit = False
     return db
 
 @app.teardown_appcontext
 def close_connection(exception):
+    """Always close the connection at end of request — ensures next request gets fresh state."""
     db = getattr(g, '_database', None)
     if db is not None:
-        if exception:
-            db.rollback()
-        db.close()
+        try:
+            if exception:
+                db.rollback()
+            else:
+                db.commit()  # commit any uncommitted work
+        except Exception:
+            pass
+        try:
+            db.close()
+        except Exception:
+            pass
+        g._database = None
 
 def query_db(query, args=(), one=False):
     try:
@@ -751,30 +776,27 @@ def add_sale():
 
 
 def safe_sale(sale):
-    """Return sale as a plain dict with all expected columns filled with defaults.
-    Prevents KeyError/UndefinedError in templates when new columns haven't been
-    added to the DB yet (migration pending)."""
+    """Normalize DB row with default values for all expected columns."""
     if not sale: return sale
     d = dict(sale)
     defaults = {
-        'service_type': 'FLIGHT', 'airline': '', 'pnr': '', 'baggage': '',
-        'trip_type': 'RETURN', 'buy_from': '', 'return_supplier': '',
-        'outbound_cost': 0, 'return_cost': 0,
-        'hotel_supplier': '', 'hotel_name': '', 'hotel_room': '',
-        'hotel_meal': '', 'hotel_checkin': '', 'hotel_checkout': '',
-        'hotel_nights': 0, 'hotel_net': 0,
-        'transfer_supplier': '', 'transfer_type': '', 'transfer_pickup': '',
-        'transfer_vehicle': '', 'transfer_net': 0,
-        'tours_json': '[]', 'passengers_json': '[]',
-        'visa_supplier': '', 'visa_type': '', 'passport_number': '',
-        'visa_status': '', 'insurance_supplier': '', 'insurance_type': '',
-        'travel_date': '', 'return_date': '', 'via': '', 'remarks': '',
-        'from_loc': '', 'to_loc': '', 'outbound_delivery': '',
-        'return_delivery': '', 'outbound_status': '', 'return_status': '',
+        'service_type':'FLIGHT','airline':'','pnr':'','baggage':'',
+        'trip_type':'RETURN','buy_from':'','return_supplier':'',
+        'outbound_cost':0,'return_cost':0,
+        'hotel_supplier':'','hotel_name':'','hotel_room':'',
+        'hotel_meal':'','hotel_checkin':'','hotel_checkout':'',
+        'hotel_nights':0,'hotel_net':0,
+        'transfer_supplier':'','transfer_type':'','transfer_pickup':'',
+        'transfer_vehicle':'','transfer_net':0,
+        'tours_json':'[]','passengers_json':'[]',
+        'visa_supplier':'','visa_type':'','passport_number':'',
+        'visa_status':'','insurance_supplier':'','insurance_type':'',
+        'travel_date':'','return_date':'','via':'','remarks':'',
+        'from_loc':'','to_loc':'','outbound_delivery':'',
+        'return_delivery':'','outbound_status':'','return_status':'',
     }
-    for k, v in defaults.items():
-        if k not in d or d[k] is None:
-            d[k] = v
+    for k,v in defaults.items():
+        if k not in d or d[k] is None: d[k] = v
     return d
 
 @app.route('/edit/<int:sale_id>', methods=['GET', 'POST'])
@@ -819,8 +841,6 @@ def edit_sale(sale_id):
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
-        _oc = float(request.form.get('outbound_cost', 0) or 0)
-        _rc = float(request.form.get('return_cost', 0) or 0)
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -833,8 +853,7 @@ def edit_sale(sale_id):
                 hotel_checkin=%s,hotel_checkout=%s,hotel_nights=%s,hotel_net=%s,
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
-                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,
-                passengers_json=%s,outbound_cost=%s,return_cost=%s
+                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
             WHERE id=%s
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
@@ -843,7 +862,7 @@ def edit_sale(sale_id):
             request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),
             request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets', 1) or 1),
+            int(request.form.get('tickets', 1)),
             request.form.get('customer','').upper().strip(),
             request.form.get('sale_date',''),
             request.form.get('travel_date','').strip(),
@@ -856,8 +875,7 @@ def edit_sale(sale_id):
             ev['hotel_checkin'],ev['hotel_checkout'],ev['hotel_nights'],ev['hotel_net'],
             ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
             ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
-            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],
-            ev['passengers_json'],_oc,_rc,
+            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
             sale_id
         ))
         log_action('UPDATE','sales',sale_id,f"{request.form.get('customer','').upper()} | {ev['service_type']} | Sell:{sell}")
@@ -945,178 +963,36 @@ def sales_report():
 @app.route('/statement')
 @login_required
 def statement():
-    """
-    Mutual B2B Company Ledger.
-    CREDIT  = we sold to this company (their debt to us / our receivable)
-    DEBIT   = we bought from this company (our debt to them / our payable)
-    PAYMENT = money received from this company (reduces their debt)
-    SUPPLIER_PAYMENT = money paid to this company (reduces our debt)
-    Running balance: positive = they owe us, negative = we owe them.
-    """
-    company   = request.args.get('company', '').strip()
-    date_from = request.args.get('date_from', '').strip()
-    date_to   = request.args.get('date_to', '').strip()
+    company   = request.args.get('company', '')
+    date_from = request.args.get('date_from', '')
+    date_to   = request.args.get('date_to', '')
     companies = get_companies_list()
-
-    ledger_entries   = []
-    summary          = {}
-
+    sales, payments, total_invoiced, total_paid, balance = [], [], 0, 0, 0
     if company:
-        params_base = [company]
-        date_filter_sale = ''
-        date_filter_pay  = ''
-        p_sale, p_pay = [company], [company]
-        if date_from:
-            date_filter_sale += ' AND sale_date>=%s'; p_sale.append(date_from)
-            date_filter_pay  += ' AND pay_date>=%s';  p_pay.append(date_from)
-        if date_to:
-            date_filter_sale += ' AND sale_date<=%s'; p_sale.append(date_to)
-            date_filter_pay  += ' AND pay_date<=%s';  p_pay.append(date_to)
+        q = 'SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
+        p = [company]
+        if date_from: q += ' AND sale_date>=%s'; p.append(date_from)
+        if date_to:   q += ' AND sale_date<=%s'; p.append(date_to)
+        q += ' ORDER BY sale_date ASC'
+        sales = query_db(q, p)
 
-        # ── CREDIT entries: we sold to this company ──────────────────────────
-        sales = query_db(
-            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND company=%s{date_filter_sale} ORDER BY sale_date ASC",
-            p_sale
-        ) or []
-        for s in sales:
-            ledger_entries.append({
-                'date':        s['sale_date'],
-                'ref':         f"TXN-{s['id']:04d}",
-                'description': f"{s.get('service_type','FLIGHT')} — {s.get('customer','')} ({s.get('from_loc','')}{' → '+s['to_loc'] if s.get('to_loc') else ''})",
-                'debit':       0.0,
-                'credit':      float(s['sell'] or 0),
-                'type':        'sale',
-                'id':          s['id'],
-            })
+        pq = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND company=%s'
+        pp = [company]
+        if date_from: pq += ' AND pay_date>=%s'; pp.append(date_from)
+        if date_to:   pq += ' AND pay_date<=%s'; pp.append(date_to)
+        pq += ' ORDER BY pay_date ASC'
+        payments = query_db(pq, pp)
 
-        # ── DEBIT entries: we bought from this company ────────────────────────
-        # Buy_from field in sales = outbound supplier
-        purchases_out = query_db(
-            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(buy_from))=UPPER(%s){date_filter_sale} ORDER BY sale_date ASC",
-            p_sale
-        ) or []
-        for s in purchases_out:
-            ledger_entries.append({
-                'date':        s['sale_date'],
-                'ref':         f"PUR-{s['id']:04d}",
-                'description': f"Purchase from {company} — {s.get('service_type','FLIGHT')} | {s.get('customer','')}",
-                'debit':       float(s.get('outbound_cost') or s.get('net') or 0),
-                'credit':      0.0,
-                'type':        'purchase',
-                'id':          s['id'],
-            })
-
-        # Return supplier purchases
-        purchases_ret = query_db(
-            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(return_supplier))=UPPER(%s) AND (UPPER(TRIM(buy_from))<>UPPER(%s)){date_filter_sale} ORDER BY sale_date ASC",
-            [company, company] + (p_sale[1:] if len(p_sale)>1 else [])
-        ) or []
-        for s in purchases_ret:
-            ledger_entries.append({
-                'date':        s['sale_date'],
-                'ref':         f"RTN-{s['id']:04d}",
-                'description': f"Return purchase from {company} — {s.get('customer','')}",
-                'debit':       float(s.get('return_cost') or 0),
-                'credit':      0.0,
-                'type':        'purchase',
-                'id':          s['id'],
-            })
-
-        # Hotel/Transfer/Visa/Insurance supplier purchases
-        for supp_field, cost_field, label in [
-            ('hotel_supplier',     'hotel_net',     'Hotel'),
-            ('transfer_supplier',  'transfer_net',  'Transfer'),
-            ('visa_supplier',      'net',           'Visa'),
-            ('insurance_supplier', 'net',           'Insurance'),
-        ]:
-            rows = query_db(
-                f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM({supp_field}))=UPPER(%s){date_filter_sale} ORDER BY sale_date ASC",
-                p_sale
-            ) or []
-            for s in rows:
-                ledger_entries.append({
-                    'date':        s['sale_date'],
-                    'ref':         f"{label[:3].upper()}-{s['id']:04d}",
-                    'description': f"{label} purchase from {company} — {s.get('customer','')}",
-                    'debit':       float(s.get(cost_field) or 0),
-                    'credit':      0.0,
-                    'type':        'purchase',
-                    'id':          s['id'],
-                })
-
-        # ── PAYMENT entries: money received from this company ─────────────────
-        payments_recv = query_db(
-            f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_filter_pay} ORDER BY pay_date ASC",
-            p_pay
-        ) or []
-        for p in payments_recv:
-            ledger_entries.append({
-                'date':        p['pay_date'],
-                'ref':         f"PAY-{p['id']:04d}",
-                'description': f"Payment received — {p.get('notes','') or 'Cash/Transfer'}",
-                'debit':       0.0,
-                'credit':      float(p['amount'] or 0),  # reduces their balance owed
-                'type':        'payment_in',
-                'id':          p['id'],
-            })
-
-        # ── SUPPLIER PAYMENT entries: money paid to this company ──────────────
-        try:
-            sp_rows = query_db(
-                f"SELECT * FROM supplier_payments WHERE deleted=FALSE AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date ASC",
-                [company]
-            ) or []
-            for sp in sp_rows:
-                if date_from and sp['pay_date'] < date_from: continue
-                if date_to   and sp['pay_date'] > date_to:   continue
-                ledger_entries.append({
-                    'date':        sp['pay_date'],
-                    'ref':         f"SPY-{sp['id']:04d}",
-                    'description': f"Payment made to {company} — {sp.get('notes','') or sp.get('service_type','')}",
-                    'debit':       float(sp['amount'] or 0),  # reduces what we owe them
-                    'credit':      0.0,
-                    'type':        'payment_out',
-                    'id':          sp['id'],
-                })
-        except Exception:
-            pass
-
-        # ── Sort all entries by date then ref ────────────────────────────────
-        ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
-
-        # ── Compute running balance ──────────────────────────────────────────
-        # Credit = money they owe us (receivable) = positive balance
-        # Debit  = money we owe them (payable)    = negative balance  
-        running = 0.0
-        for e in ledger_entries:
-            running += e['credit'] - e['debit']
-            e['balance'] = round(running, 3)
-
-        # ── Summary ──────────────────────────────────────────────────────────
-        total_sold_to_them   = sum(e['credit'] for e in ledger_entries if e['type'] == 'sale')
-        total_bought_from    = sum(e['debit']  for e in ledger_entries if e['type'] == 'purchase')
-        total_received       = sum(e['credit'] for e in ledger_entries if e['type'] == 'payment_in')
-        total_paid_to_them   = sum(e['debit']  for e in ledger_entries if e['type'] == 'payment_out')
-        net_balance          = round(running, 3)
-
-        summary = {
-            'total_sold_to_them':  total_sold_to_them,
-            'total_bought_from':   total_bought_from,
-            'total_received':      total_received,
-            'total_paid_to_them':  total_paid_to_them,
-            'net_receivable':      total_sold_to_them - total_received,
-            'net_payable':         total_bought_from  - total_paid_to_them,
-            'net_balance':         net_balance,
-            'status':              'CREDIT' if net_balance > 0.005 else ('DEBIT' if net_balance < -0.005 else 'SETTLED'),
-        }
+        total_invoiced = sum(r['sell'] for r in sales)
+        total_paid     = sum(r['amount'] for r in payments)
+        balance        = total_invoiced - total_paid
 
     return render_template('statement.html',
-        companies=companies,
-        ledger=ledger_entries,
-        summary=summary,
-        company=company,
-        filters={'date_from': date_from, 'date_to': date_to},
-        today=date.today().strftime('%d %B %Y'),
+        companies=companies, sales=sales, payments=payments,
+        company=company, total_invoiced=total_invoiced,
+        total_paid=total_paid, balance=balance,
+        filters={'date_from':date_from,'date_to':date_to},
+        today=date.today().strftime('%d %B %Y')
     )
 
 # ── Payments (paginated) ──────────────────────────────────────────────────────
@@ -1568,77 +1444,40 @@ def reset_data():
         db = get_db()
         cur = db.cursor()
 
-        # Get counts before delete
-        def _count(tbl):
-            try:
-                cur.execute(f'SELECT COUNT(*) as n FROM {tbl}')
-                r = cur.fetchone()
-                return int(r['n'] if isinstance(r, dict) else r[0]) if r else 0
-            except: return 0
-        sales_count = _count('sales')
-        pay_count   = _count('payments')
+        # Get counts before delete for the log
+        cur.execute('SELECT COUNT(*) FROM sales')
+        sales_count = cur.fetchone()[0]
+        cur.execute('SELECT COUNT(*) FROM payments')
+        pay_count = cur.fetchone()[0]
 
-        # ── Hard delete ALL transactional data ──────────────────────────────
-        tables_to_clear = [
-            'invoices', 'vouchers', 'packages',
-            'sales', 'payments', 'supplier_payments', 'audit_logs',
-        ]
-        counts = {}
-        for t in tables_to_clear:
-            try:
-                cur.execute(f'SELECT COUNT(*) as n FROM {t}')
-                row = cur.fetchone()
-                if row: counts[t] = int(row['n'] if isinstance(row, dict) else row[0])
-                else: counts[t] = 0
-            except: counts[t] = 0; db.rollback()
-        for t in tables_to_clear:
-            try: cur.execute(f'DELETE FROM {t}')
-            except: db.rollback()
+        # Hard delete everything — permanent, not soft delete
+        cur.execute('DELETE FROM sales')
+        cur.execute('DELETE FROM payments')
+        cur.execute('DELETE FROM audit_logs')
 
-        # ── Reset table ID sequences ──────────────────────────────────────────
-        for seq in ['sales_id_seq','payments_id_seq','audit_logs_id_seq',
-                    'invoices_id_seq','vouchers_id_seq','packages_id_seq',
-                    'supplier_payments_id_seq']:
-            try: cur.execute(f'ALTER SEQUENCE {seq} RESTART WITH 1')
-            except: pass
-
-        # ── Reset document number sequences (INV/VCH/PKG) ────────────────────
-        try:
-            cur.execute("UPDATE doc_sequences SET last_num=0")
-        except: pass
-
-        # ── Reset master data (companies/suppliers seeded from sales) ─────────
-        try:
-            cur.execute("DELETE FROM master_companies")
-            cur.execute("DELETE FROM master_suppliers")
-        except: pass
+        # Reset auto-increment sequences so IDs start from 1 again
+        cur.execute("ALTER SEQUENCE sales_id_seq RESTART WITH 1")
+        cur.execute("ALTER SEQUENCE payments_id_seq RESTART WITH 1")
+        cur.execute("ALTER SEQUENCE audit_logs_id_seq RESTART WITH 1")
 
         db.commit()
 
-        total_deleted = sum(counts.values())
+        # Log the reset action (this will be the first entry in fresh audit log)
         log_action('RESET', 'system', None,
-                   f"Full test data reset by {session.get('username')} — {total_deleted} total records deleted")
+                   f"Full data reset by {session.get('username')} — "
+                   f"deleted {sales_count} sales and {pay_count} payments")
 
-        flash(f'✅ Test data cleared. {counts.get("sales",0)} transactions, '
-              f'{counts.get("invoices",0)} invoices, {counts.get("vouchers",0)} vouchers, '
-              f'{counts.get("payments",0)} payments deleted. Numbering reset to 0001.', 'success')
+        flash(f'✅ All data cleared successfully. {sales_count} sales and {pay_count} payments deleted. System starts fresh from today.', 'success')
         return redirect(url_for('index'))
 
-    # GET — show confirmation page with safe individual counts
-    def _safe_count(q):
-        try:
-            r = query_db(q, one=True)
-            return int(list(r.values())[0]) if r else 0
-        except: return 0
-    stats = {
-        'sales_count':    _safe_count("SELECT COUNT(*) as n FROM sales"),
-        'payments_count': _safe_count("SELECT COUNT(*) as n FROM payments"),
-        'inv_count':      _safe_count("SELECT COUNT(*) as n FROM invoices WHERE deleted=FALSE"),
-        'vch_count':      _safe_count("SELECT COUNT(*) as n FROM vouchers WHERE deleted=FALSE"),
-        'sp_count':       _safe_count("SELECT COUNT(*) as n FROM supplier_payments WHERE deleted=FALSE"),
-        'total_sell':     _safe_count("SELECT COALESCE(SUM(sell),0) as n FROM sales WHERE deleted=FALSE"),
-        'total_paid':     _safe_count("SELECT COALESCE(SUM(amount),0) as n FROM payments WHERE deleted=FALSE"),
-    }
+    # GET — show confirmation page
+    stats = query_db('''
+        SELECT
+            (SELECT COUNT(*) FROM sales) as sales_count,
+            (SELECT COUNT(*) FROM payments) as payments_count,
+            (SELECT COALESCE(SUM(sell),0) FROM sales) as total_sell,
+            (SELECT COALESCE(SUM(amount),0) FROM payments) as total_paid
+    ''', one=True)
     return render_template('reset_data.html', stats=stats)
 
 @app.route('/archive', methods=['GET'])
@@ -2498,8 +2337,6 @@ def my_edit_sale(sale_id):
         tours_list=[{'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''} for i in range(len(tour_names)) if tour_names[i].strip()]
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
-        _oc = float(request.form.get('outbound_cost', 0) or 0)
-        _rc = float(request.form.get('return_cost', 0) or 0)
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -2512,15 +2349,13 @@ def my_edit_sale(sale_id):
                 hotel_checkin=%s,hotel_checkout=%s,hotel_nights=%s,hotel_net=%s,
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
-                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,
-                passengers_json=%s,outbound_cost=%s,return_cost=%s
+                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
             WHERE id=%s
         ''', (
-            (request.form.get('from_loc','').upper().strip() or '-'),
-            (request.form.get('to_loc','').upper().strip() or '-'),
+            request.form.get('from_loc','').upper().strip(),request.form.get('to_loc','').upper().strip(),
             request.form.get('via','').upper().strip(),request.form.get('trip_type',''),
             request.form.get('buy_from','').upper().strip(),request.form.get('company','').upper().strip(),
-            int(request.form.get('tickets',1) or 1),request.form.get('customer','').upper().strip(),
+            int(request.form.get('tickets',1)),request.form.get('customer','').upper().strip(),
             request.form.get('sale_date',''),request.form.get('travel_date','').strip(),
             return_date,return_supplier,outbound_delivery,return_delivery,
             outbound_status,return_status,net,sell,sell-net,overall,
@@ -2529,12 +2364,11 @@ def my_edit_sale(sale_id):
             ev['hotel_checkin'],ev['hotel_checkout'],ev['hotel_nights'],ev['hotel_net'],
             ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
             ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
-            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],
-            ev['passengers_json'],_oc,_rc,
+            ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
             sale_id
         ))
         log_action('UPDATE','sales',sale_id,f"{ev['service_type']} | Sell:{sell}")
-        flash('Transaction updated successfully.','success')
+        flash('Transaction updated.','success')
         return redirect(url_for('my_sales'))
     return render_template('add.html', sale=sale, companies=companies, edit=True)
 
@@ -3075,57 +2909,52 @@ def delete_supplier_payment(pay_id):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_companies_list():
-    """All companies. Falls back to sales table if master_companies not yet created."""
-    try:
-        rows = query_db("""
-            SELECT name FROM (
-                SELECT name FROM master_companies WHERE is_active=TRUE
-                UNION
-                SELECT UPPER(TRIM(company)) FROM sales
-                WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>''
-            ) t ORDER BY name
-        """) or []
-        return [r['name'] for r in rows]
-    except Exception:
-        # master_companies may not exist yet — rollback aborted txn then use sales only
-        try: get_db().rollback()
-        except: pass
-        try:
-            rows = query_db(
-                "SELECT DISTINCT UPPER(TRIM(company)) as name FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>'' ORDER BY name"
-            ) or []
-            return [r['name'] for r in rows]
-        except Exception:
-            return []
+    """All active companies — from master table + any in sales not yet seeded."""
+    rows = query_db("""
+        SELECT name FROM (
+            SELECT name FROM master_companies WHERE is_active=TRUE
+            UNION
+            SELECT UPPER(TRIM(company)) FROM sales
+            WHERE deleted=FALSE AND TRIM(company)<>''
+        ) t ORDER BY name
+    """) or []
+    return [r['name'] for r in rows]
 
 def get_suppliers_list(svc_type=None):
-    """All active suppliers. Falls back to empty list if master_suppliers not yet created."""
-    try:
-        q = """
-            SELECT DISTINCT name, service_type FROM (
-                SELECT name, service_type FROM master_suppliers WHERE is_active=TRUE
+    """All active suppliers — from master table + any in sales not yet seeded."""
+    q = """
+        SELECT name, service_type FROM (
+            SELECT name, service_type FROM master_suppliers WHERE is_active=TRUE
+            UNION
+            SELECT supplier, svc FROM (
+                SELECT UPPER(TRIM(buy_from)) AS supplier, 'FLIGHT' AS svc
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
                 UNION
-                SELECT UPPER(TRIM(buy_from)),'FLIGHT' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
+                SELECT UPPER(TRIM(hotel_supplier)), 'HOTEL'
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''
                 UNION
-                SELECT UPPER(TRIM(hotel_supplier)),'HOTEL' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''
+                SELECT UPPER(TRIM(transfer_supplier)), 'TRANSFER'
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>''
                 UNION
-                SELECT UPPER(TRIM(transfer_supplier)),'TRANSFER' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(transfer_supplier,''))<>''
+                SELECT UPPER(TRIM(visa_supplier)), 'VISA'
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>''
                 UNION
-                SELECT UPPER(TRIM(visa_supplier)),'VISA' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(visa_supplier,''))<>''
-                UNION
-                SELECT UPPER(TRIM(insurance_supplier)),'INSURANCE' FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>''
-            ) t WHERE name IS NOT NULL AND name<>''
-        """
-        params = []
-        if svc_type:
-            q += " AND service_type=%s"
-            params.append(svc_type.upper())
-        q += " ORDER BY name"
-        return query_db(q, params) or []
-    except Exception:
-        try: get_db().rollback()
-        except: pass
-        return []
+                SELECT UPPER(TRIM(insurance_supplier)), 'INSURANCE'
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(insurance_supplier,''))<>''
+            ) s2 WHERE supplier<>''
+        ) t
+    """
+    params = []
+    if svc_type:
+        q += " WHERE service_type=%s"
+        params.append(svc_type.upper())
+    q += " ORDER BY name"
+    rows = query_db(q, params) or []
+    return rows
+
+
+@app.route('/api/companies')
+@login_required
 def api_companies():
     """AJAX: return company list as JSON."""
     from flask import jsonify
@@ -3608,4 +3437,3 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
-
