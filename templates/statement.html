@@ -1,283 +1,216 @@
 {% extends "base.html" %}
-{% block title %}Statement — {{ company or 'Select Company' }} — ALSONDOS{% endblock %}
+{% block title %}Company Ledger — {{ company or 'Select Company' }} — ALSONDOS{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-file-invoice-dollar"></i> Account Statement</h1>
-    <p>Company ledger — selling amounts, payments, and outstanding balance</p>
+    <h1><i class="fas fa-balance-scale" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Company Ledger</h1>
+    <p>Mutual B2B accounting — receivables, payables & running balance</p>
   </div>
-  {% if company %}
   <div class="page-header-actions no-print">
-    <button onclick="window.print()" class="btn btn-print">
-      <i class="fas fa-print"></i> Print Statement
-    </button>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
   </div>
-  {% endif %}
 </div>
 
-{# ── Filters ──────────────────────────────────────────────── #}
+{# ── Filters ─────────────────────────────────────────────────── #}
 <div class="filter-bar no-print">
-  <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
-    <div class="form-group" style="min-width:240px;flex:2">
+  <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%">
+    <div class="form-group" style="flex:2;min-width:220px">
       <label>Company</label>
-      <select name="company" onchange="this.form.submit()" style="font-weight:{% if company %}700{% endif %}">
-        <option value="">— Select a company —</option>
+      <select name="company" onchange="this.form.submit()" style="font-weight:700">
+        <option value="">— Select Company —</option>
         {% for co in companies %}
         <option value="{{ co }}" {% if co == company %}selected{% endif %}>{{ co }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="form-group" style="min-width:140px">
+    <div class="form-group" style="min-width:130px">
       <label>Date From</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
-    <div class="form-group" style="min-width:140px">
+    <div class="form-group" style="min-width:130px">
       <label>Date To</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
     {% if company %}
-    <a href="{{ url_for('statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end">
-      <i class="fas fa-times"></i> Clear
-    </a>
+    <a href="{{ url_for('statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>
     {% endif %}
   </form>
 </div>
 
-{% if company %}
-
-{# ── Print Header — Premium layout ────────────────────────── #}
-<div class="print-only" style="margin-bottom:18px">
-  <div id="stmtPrintDate" style="font-size:10px;color:#9ca3af;text-align:right;font-style:italic;margin-bottom:5px"></div>
-  <div style="background:#122850;padding:18px 26px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-    <div style="display:flex;align-items:center;gap:14px">
-      <img src="{{ url_for('static', filename='logo.png') }}" style="height:54px;width:auto">
-      <div>
-        <div style="font-size:16px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">Alsondos Travel &amp; Tourism</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.55)">Amman, Jordan · B2B Travel Agency</div>
-      </div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:24px;font-weight:800;color:#fff;font-family:'Playfair Display',serif;line-height:1">ACCOUNT STATEMENT</div>
-      <div style="font-size:10.5px;color:rgba(200,168,75,.8);margin-top:4px;letter-spacing:1px">{{ today }}</div>
-    </div>
-  </div>
-  <div style="background:#0d1e3f;padding:12px 26px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-top:2.5px solid #C8A84B;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+{% if company and summary %}
+{# ── Print Header ─────────────────────────────────────────────── #}
+<div class="print-only" style="margin-bottom:16px">
+  <div id="stmtStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;margin-bottom:5px"></div>
+  <div style="background:#0d1e3f;padding:18px 28px;display:flex;justify-content:space-between;align-items:center">
     <div>
-      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Account</div>
-      <div style="font-size:19px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">{{ company }}</div>
+      <img src="{{ url_for('static',filename='logo_white.png') }}" style="height:52px;width:auto;filter:drop-shadow(0 2px 8px rgba(0,0,0,.3))">
+      <div style="color:rgba(255,255,255,.55);font-size:11px;margin-top:6px">Alsondos Travel & Tourism · Amman, Jordan</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Financial Summary</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:2"><strong style="color:#fff">Invoiced:</strong> JOD {{ "%.3f"|format(total_invoiced) }}</div>
-      <div style="font-size:12px;color:#86efac;line-height:1.8"><strong>Paid:</strong> JOD {{ "%.3f"|format(total_paid) }}</div>
-      <div style="font-size:14px;font-weight:800;color:{% if balance > 0.005 %}#fca5a5{% else %}#86efac{% endif %};line-height:1.8"><strong>Outstanding:</strong> JOD {{ "%.3f"|format(balance) }}</div>
+      <div style="font-size:22px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">COMPANY LEDGER</div>
+      <div style="font-size:15px;color:#C8A84B;margin-top:5px;font-weight:700">{{ company }}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:3px">{{ today }}{% if filters.date_from %} · {{ filters.date_from }} → {{ filters.date_to or 'present' }}{% endif %}</div>
     </div>
   </div>
 </div>
 
-{# ── Statement Header ──────────────────────────────────────── #}
-<div style="border-radius:12px;overflow:hidden;box-shadow:var(--shadow-md);margin-bottom:20px">
-  <div class="stmt-header">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-      <div>
-        <div class="stmt-title">{{ company }}</div>
-        <div class="stmt-sub">
-          Account Statement
-          {% if filters.date_from or filters.date_to %}
-          · {{ filters.date_from or 'All' }} to {{ filters.date_to or 'Present' }}
-          {% else %} · All Dates{% endif %}
-        </div>
-        <div class="stmt-sub" style="margin-top:6px;font-size:11px">{{ today }}</div>
-      </div>
-    </div>
+{# ── Summary KPI Cards ─────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-arrow-down"></i></div>
+    <div class="kpi-label">Sold to Them</div>
+    <div class="kpi-value green">JOD {{ "%.3f"|format(summary.total_sold_to_them) }}</div>
+    <div class="kpi-sub">Receivable from company</div>
   </div>
-  <div class="stmt-kpis">
-    <div class="stmt-kpi">
-      <div class="stmt-kpi-label"><i class="fas fa-file-invoice"></i> Total Invoiced</div>
-      <div class="stmt-kpi-value">JOD {{ "%.3f"|format(total_invoiced) }}</div>
-    </div>
-    <div class="stmt-kpi">
-      <div class="stmt-kpi-label"><i class="fas fa-check-circle"></i> Total Paid</div>
-      <div class="stmt-kpi-value paid">JOD {{ "%.3f"|format(total_paid) }}</div>
-    </div>
-    <div class="stmt-kpi">
-      <div class="stmt-kpi-label"><i class="fas fa-clock"></i> Outstanding</div>
-      <div class="stmt-kpi-value {% if balance <= 0 %}zero{% else %}balance{% endif %}">
-        JOD {{ "%.3f"|format(balance) }}
-      </div>
-    </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-arrow-up"></i></div>
+    <div class="kpi-label">Bought From Them</div>
+    <div class="kpi-value red">JOD {{ "%.3f"|format(summary.total_bought_from) }}</div>
+    <div class="kpi-sub">Payable to company</div>
   </div>
-  <div class="stmt-actions no-print">
-    <button onclick="window.print()" class="btn btn-print btn-sm">
-      <i class="fas fa-print"></i> Print Statement
-    </button>
-    <a href="{{ url_for('payments', _anchor='add-payment') }}" class="btn btn-red btn-sm">
-      <i class="fas fa-plus"></i> Record Payment
-    </a>
-    <a href="{{ url_for('statement', company=company) }}" class="btn btn-outline btn-sm">
-      <i class="fas fa-sync"></i> Refresh
-    </a>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-exchange-alt"></i></div>
+    <div class="kpi-label">Payments</div>
+    <div class="kpi-value navy" style="font-size:13px">
+      ↓ {{ "%.3f"|format(summary.total_received) }}<br>
+      <span style="font-size:11px;color:var(--muted)">↑ {{ "%.3f"|format(summary.total_paid_to_them) }}</span>
+    </div>
+    <div class="kpi-sub">In ↓ · Out ↑</div>
+  </div>
+  <div class="kpi-box {% if summary.status=='CREDIT' %}green{% elif summary.status=='DEBIT' %}red{% endif %}"
+       style="border:2px solid {% if summary.status=='CREDIT' %}var(--green){% elif summary.status=='DEBIT' %}var(--red){% else %}var(--gold){% endif %}">
+    <div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
+    <div class="kpi-label">Net Balance</div>
+    <div class="kpi-value {% if summary.status=='CREDIT' %}green{% elif summary.status=='DEBIT' %}red{% else %}gold{% endif %}" style="font-size:18px">
+      JOD {{ "%.3f"|format(summary.net_balance|abs) }}
+    </div>
+    <div class="kpi-sub" style="font-weight:700">
+      {% if summary.status=='CREDIT' %}✓ They owe us
+      {% elif summary.status=='DEBIT' %}⚠ We owe them
+      {% else %}✓ Fully Settled{% endif %}
+    </div>
   </div>
 </div>
 
-{# ── Sales Ledger ──────────────────────────────────────────── #}
-{% if sales %}
-<div class="card mb-4">
-  <div class="card-header"><i class="fas fa-exchange-alt"></i> Transactions ({{ sales|length }})</div>
+{# ── Breakdown bar ─────────────────────────────────────────────── #}
+<div class="card no-print" style="margin-bottom:16px;padding:14px 18px">
+  <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;align-items:center">
+    <div><i class="fas fa-circle" style="color:var(--green);font-size:8px;margin-right:5px"></i><strong>Net Receivable:</strong> JOD {{ "%.3f"|format(summary.net_receivable) }}</div>
+    <div><i class="fas fa-circle" style="color:var(--red);font-size:8px;margin-right:5px"></i><strong>Net Payable:</strong> JOD {{ "%.3f"|format(summary.net_payable) }}</div>
+    <div style="margin-left:auto;font-weight:800;font-size:15px;color:{% if summary.status=='CREDIT' %}var(--green){% elif summary.status=='DEBIT' %}var(--red){% else %}var(--gold-dk){% endif %}">
+      {% if summary.status=='CREDIT' %}Balance in your favor: JOD {{ "%.3f"|format(summary.net_balance) }}
+      {% elif summary.status=='DEBIT' %}Balance payable to {{ company }}: JOD {{ "%.3f"|format(summary.net_balance|abs) }}
+      {% else %}Account settled ✓{% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Ledger Table ──────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <i class="fas fa-table"></i> Ledger — {{ company }}
+    <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ ledger|length }} entries</span>
+  </div>
   <div style="overflow-x:auto">
-    <table>
+    <table style="table-layout:fixed;width:100%;min-width:820px">
+      <colgroup>
+        <col style="width:92px">
+        <col style="width:90px">
+        <col style="width:*">
+        <col style="width:95px">
+        <col style="width:95px">
+        <col style="width:105px">
+      </colgroup>
       <thead>
         <tr>
-          <th>#</th>
-          <th>Sale Date</th>
-          <th>Customer</th>
-          <th>Route</th>
-          <th>Type</th>
-          <th>Tix</th>
-          <th class="text-right">Amount (JOD)</th>
-          <th>Status</th>
+          <th>Date</th>
+          <th>Reference</th>
+          <th>Description</th>
+          <th class="text-right">Debit (JOD)<br><small style="font-weight:400;opacity:.6">We owe them</small></th>
+          <th class="text-right">Credit (JOD)<br><small style="font-weight:400;opacity:.6">They owe us</small></th>
+          <th class="text-right">Balance (JOD)<br><small style="font-weight:400;opacity:.6">+ = receivable</small></th>
         </tr>
       </thead>
       <tbody>
-        {% set running_total = namespace(val=0) %}
-        {% for s in sales %}
-        {% set running_total.val = running_total.val + s.sell %}
-        <tr>
-          <td class="text-muted" style="font-size:11.5px">{{ s.id }}</td>
-          <td style="white-space:nowrap">{{ s.sale_date }}</td>
-          <td><strong>{{ s.customer }}</strong></td>
-          <td style="font-size:12.5px">
-            <strong>{{ s.from_loc }}</strong>
-            <span style="color:var(--gold);margin:0 3px">→</span>
-            <strong>{{ s.to_loc }}</strong>
-            {% if s.via %}<span style="color:var(--muted);font-size:11px"> via {{ s.via }}</span>{% endif %}
+        {% for e in ledger %}
+        <tr style="{% if e.type=='payment_in' or e.type=='payment_out' %}background:var(--green-lt){% elif e.type=='purchase' %}background:#fff8f8{% endif %}">
+          <td style="font-size:12px;white-space:nowrap;color:var(--text-2)">{{ e.date }}</td>
+          <td>
+            <span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;
+              {% if e.type=='sale' %}background:#e8eef8;color:#1B3A6B
+              {% elif e.type=='purchase' %}background:#fef2f2;color:#8b1a1a
+              {% elif e.type=='payment_in' %}background:#e8f8ee;color:#1E7B34
+              {% else %}background:#fff8e7;color:#8B6914{% endif %}">
+              {{ e.ref }}
+            </span>
           </td>
-          <td><span class="badge badge-navy" style="font-size:9.5px">{{ s.trip_type or 'N/A' }}</span></td>
-          <td class="text-center">{{ s.tickets }}</td>
-          <td class="text-right td-money">{{ "%.3f"|format(s.sell) }}</td>
-          <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+          <td style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ e.description }}">
+            {{ e.description }}
+          </td>
+          <td class="text-right" style="font-weight:{% if e.debit > 0 %}700{% else %}400{% endif %};color:{% if e.debit > 0 %}var(--red){% else %}var(--muted-lt){% endif %};font-size:13px">
+            {% if e.debit > 0 %}{{ "%.3f"|format(e.debit) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-right" style="font-weight:{% if e.credit > 0 %}700{% else %}400{% endif %};color:{% if e.credit > 0 %}var(--green){% else %}var(--muted-lt){% endif %};font-size:13px">
+            {% if e.credit > 0 %}{{ "%.3f"|format(e.credit) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-right" style="font-weight:700;font-size:13px;color:{% if e.balance > 0.005 %}var(--green){% elif e.balance < -0.005 %}var(--red){% else %}var(--muted){% endif %}">
+            {{ "%.3f"|format(e.balance) }}
+          </td>
         </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted" style="padding:32px">
+          <i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;opacity:.3"></i>
+          No transactions found for <strong>{{ company }}</strong>
+          {% if filters.date_from or filters.date_to %}in the selected date range{% endif %}.
+        </td></tr>
         {% endfor %}
       </tbody>
+      {% if ledger %}
       <tfoot>
         <tr>
-          <td colspan="6" style="font-weight:700">TOTAL INVOICED</td>
-          <td class="text-right" style="font-size:15px;color:var(--gold)">JOD {{ "%.3f"|format(total_invoiced) }}</td>
+          <td colspan="2" style="font-weight:700;font-size:12px">TOTALS</td>
           <td></td>
+          <td class="text-right" style="font-weight:800;color:var(--red);font-size:13.5px">{{ "%.3f"|format(ledger|sum(attribute='debit')) }}</td>
+          <td class="text-right" style="font-weight:800;color:var(--green);font-size:13.5px">{{ "%.3f"|format(ledger|sum(attribute='credit')) }}</td>
+          <td class="text-right" style="font-weight:900;font-size:14px;color:{% if summary.status=='CREDIT' %}var(--green){% elif summary.status=='DEBIT' %}var(--red){% else %}var(--gold-dk){% endif %}">
+            {{ "%.3f"|format(summary.net_balance) }}
+          </td>
         </tr>
       </tfoot>
+      {% endif %}
     </table>
   </div>
 </div>
-{% endif %}
 
-{# ── Payments ──────────────────────────────────────────────── #}
-{% if payments %}
-<div class="card mb-4">
-  <div class="card-header"><i class="fas fa-money-bill-wave" style="color:#6dd58a"></i> Payments Received ({{ payments|length }})</div>
-  <div style="overflow-x:auto">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Payment Date</th>
-          <th>Company</th>
-          <th class="text-right">Amount (JOD)</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in payments %}
-        <tr>
-          <td class="text-muted" style="font-size:11.5px">{{ p.id }}</td>
-          <td style="white-space:nowrap">{{ p.pay_date }}</td>
-          <td><strong>{{ p.company }}</strong></td>
-          <td class="text-right" style="color:var(--green);font-weight:700;font-size:14px">JOD {{ "%.3f"|format(p.amount) }}</td>
-          <td class="text-muted" style="font-size:12.5px">{{ p.notes or '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3" style="font-weight:700">TOTAL PAID</td>
-          <td class="text-right" style="font-size:15px;color:#6dd58a">JOD {{ "%.3f"|format(total_paid) }}</td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-</div>
-{% endif %}
-
-{# ── Balance Summary ───────────────────────────────────────── #}
-<div style="background:{% if balance <= 0 %}linear-gradient(135deg,#1e5631,#1E7B34){% else %}linear-gradient(135deg,var(--red),#922b21){% endif %};
-     border-radius:var(--radius); padding:20px 26px; color:#fff; box-shadow:var(--shadow-md);
-     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px">
-  <div>
-    <div style="font-size:12px;opacity:.7;text-transform:uppercase;letter-spacing:1px;font-weight:700">
-      {% if balance <= 0 %}Account Settled{% else %}Outstanding Balance{% endif %}
-    </div>
-    <div style="font-size:14px;opacity:.8;margin-top:2px">{{ company }}</div>
-  </div>
-  <div style="font-size:32px;font-weight:900;letter-spacing:-.5px">
-    JOD {{ "%.3f"|format(balance|abs) }}
-    {% if balance <= 0 %}<span style="font-size:18px;opacity:.7;margin-left:8px">✅</span>{% endif %}
-  </div>
+{# Legend #}
+<div class="no-print" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)">
+  <span style="background:#e8eef8;padding:3px 10px;border-radius:12px;color:#1B3A6B;font-weight:600">TXN = Sale to company</span>
+  <span style="background:#fef2f2;padding:3px 10px;border-radius:12px;color:#8b1a1a;font-weight:600">PUR/HOT/TRF = Purchase from company</span>
+  <span style="background:#e8f8ee;padding:3px 10px;border-radius:12px;color:#1E7B34;font-weight:600">PAY = Payment received</span>
+  <span style="background:#fff8e7;padding:3px 10px;border-radius:12px;color:#8B6914;font-weight:600">SPY = Payment made to company</span>
 </div>
 
-{# ── Print signature footer ───────────────────────────────── #}
-<div class="print-only" style="margin-top:36px;padding-top:16px;border-top:1px solid #DDE3EF">
-  <div style="display:flex;justify-content:space-between;margin-bottom:32px">
-    <div>
-      <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Authorized Signature</div>
-      <div style="width:200px;border-bottom:1.5px solid #374151"></div>
-      <div style="font-size:11px;color:#6b7280;margin-top:4px">Alsondos Travel &amp; Tourism</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:10px;color:#9ca3af;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Client Signature</div>
-      <div style="width:200px;border-bottom:1.5px solid #374151;margin-left:auto"></div>
-      <div style="font-size:11px;color:#6b7280;margin-top:4px">Date: _______________</div>
-    </div>
-  </div>
-  <div style="text-align:center;font-size:10px;color:#9ca3af;line-height:1.7">
-    Alsondos Travel &amp; Tourism · Amman, Jordan<br>
-    This statement shows selling amounts only. For queries contact Alsondos Travel & Tourism, Amman, Jordan.
-  </div>
+{# Print footer #}
+<div class="print-only" style="margin-top:24px;padding-top:10px;border-top:1px solid #ddd;text-align:center;font-size:10px;color:#94a3b8">
+  Alsondos Travel & Tourism · Company Ledger — {{ company }} · Generated: {{ today }}
 </div>
 
 {% elif not company %}
-<div style="background:linear-gradient(135deg,var(--navy-dk),var(--navy));border-radius:var(--radius-lg);padding:40px 32px;text-align:center;color:#fff;box-shadow:var(--shadow-md)">
-  <img src="{{ url_for('static', filename='logo_white.png') }}" style="height:54px;margin-bottom:18px;opacity:.85">
-  <div style="font-family:var(--font-hd);font-size:22px;font-weight:700;margin-bottom:10px">Select a Company</div>
-  <div style="font-size:13.5px;opacity:.6;max-width:400px;margin:0 auto 22px">
-    Choose a company from the dropdown above to generate their account statement with transactions, payments, and outstanding balance.
-  </div>
-  {% if companies %}
-  <div style="display:flex;gap:9px;flex-wrap:wrap;justify-content:center">
-    {% for co in companies[:8] %}
-    <a href="?company={{ co }}" style="padding:6px 14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;color:rgba(255,255,255,.85);font-size:12.5px;text-decoration:none;transition:.15s"
-       onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
-      {{ co }}
-    </a>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p style="opacity:.5;font-size:13px">No company data yet. Add transactions first.</p>
-  {% endif %}
+<div class="card" style="text-align:center;padding:48px">
+  <i class="fas fa-balance-scale" style="font-size:40px;color:var(--border);display:block;margin-bottom:14px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--navy-dk);margin-bottom:6px">Select a Company to View Ledger</div>
+  <div style="font-size:13px;color:var(--muted)">The mutual ledger shows both what the company owes you and what you owe them.</div>
 </div>
 {% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function(){
-  var d=new Date();
-  var dt=d.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-  var tm=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  var el=document.getElementById('stmtPrintDate');
-  if(el) el.textContent='Generated on: '+dt+' — '+tm;
+  var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var stamp='Generated: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' — '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var el=document.getElementById('stmtStamp'); if(el) el.textContent=stamp;
 })();
 </script>
 {% endblock %}
