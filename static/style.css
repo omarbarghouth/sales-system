@@ -1632,3 +1632,40 @@ tfoot td {
 }
 .net-total-label { font-size: 11px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .5px; }
 .net-total-value { font-size: 15px; font-weight: 800; color: var(--navy-dk); font-family: var(--font-hd); }
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT MEDIA — Statement / Voucher / Invoice
+══════════════════════════════════════════════════════════════ */
+@media print {
+  /* Kill the entire page chrome */
+  .sidebar, .sidebar *,
+  .topbar,  .topbar *,
+  .page-header,
+  .filter-bar,
+  .no-print,
+  .no-print *            { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
+
+  /* Remove main-content margin that accounts for sidebar */
+  .main-content          { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+  body                   { background: #fff !important; margin: 0 !important; }
+
+  /* Ensure print-only elements show */
+  .print-only            { display: block !important; visibility: visible !important; }
+
+  /* Statement: only show the print document div */
+  #stmtPrintDoc          { display: block !important; visibility: visible !important;
+                           box-shadow: none !important; border-radius: 0 !important; }
+
+  /* Table print behavior */
+  table                  { page-break-inside: auto; }
+  tr                     { page-break-inside: avoid; page-break-after: auto; }
+  thead                  { display: table-header-group; }
+  tfoot                  { display: table-footer-group; }
+
+  /* Force color backgrounds */
+  *                      { -webkit-print-color-adjust: exact !important;
+                           print-color-adjust: exact !important; }
+
+  /* Page size */
+  @page                  { size: A4; margin: 12mm 14mm 14mm 14mm; }
+}
