@@ -1073,7 +1073,10 @@ def statement():
                 'debit': float(sp['amount'] or 0), 'credit': 0.0, 'type': 'payment_out', 'id': sp['id']})
 
         # Sort by date
-        ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
+        # Sort by date, then by type priority (sales/purchases before payments),
+        # then by ref — ensures payments always follow the transactions they settle
+        TYPE_ORDER = {'sale': 0, 'purchase': 1, 'payment_in': 2, 'payment_out': 3}
+        ledger_entries.sort(key=lambda x: (x['date'], TYPE_ORDER.get(x['type'], 9), x['ref']))
 
         # ── Running balance (OUR perspective) ──────────────────────────────
         # DEBIT  entries increase what THEY owe US  (+)
