@@ -758,7 +758,7 @@ def add_sale():
                 %s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,%s,%s,%s
             ) RETURNING id
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
