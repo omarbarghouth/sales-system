@@ -407,59 +407,90 @@ def change_password():
 @app.route('/')
 @login_required
 def index():
+    # ── Core KPIs ──────────────────────────────────────────────
     stats = query_db('''
         SELECT COUNT(*) as total_transactions,
                COALESCE(SUM(sell),0) as total_sell,
                COALESCE(SUM(net),0) as total_net,
-               COALESCE(SUM(profit),0) as total_profit
+               COALESCE(SUM(profit),0) as total_profit,
+               COUNT(CASE WHEN status='DONE'  THEN 1 END) as done_count,
+               COUNT(CASE WHEN status='STILL' THEN 1 END) as still_count,
+               COUNT(CASE WHEN status='CANCEL' THEN 1 END) as cancel_count
         FROM sales WHERE deleted=FALSE AND is_archived=FALSE
     ''', one=True)
+
     total_paid = query_db(
         'SELECT COALESCE(SUM(amount),0) as paid FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
     )['paid']
-    balance = (stats['total_sell'] or 0) - total_paid
+    balance = float(stats['total_sell'] or 0) - float(total_paid or 0)
 
+    # ── This month vs last month ────────────────────────────────
+    this_month = query_db('''
+        SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+          AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY-MM') = to_char(NOW(),'YYYY-MM')
+    ''', one=True)
+
+    last_month = query_db('''
+        SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+          AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY-MM') =
+              to_char(NOW() - INTERVAL '1 month','YYYY-MM')
+    ''', one=True)
+
+    # ── Monthly chart data (current year) ──────────────────────
     monthly = query_db('''
         SELECT to_char(to_date(sale_date,'YYYY-MM-DD'),'MM') as month,
                COALESCE(SUM(sell),0) as total_sell,
                COALESCE(SUM(profit),0) as total_profit,
                COUNT(*) as count
-        FROM sales
-        WHERE deleted=FALSE AND is_archived=FALSE
+        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
           AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY') = to_char(NOW(),'YYYY')
         GROUP BY month ORDER BY month
     ''')
 
+    # ── Top companies ───────────────────────────────────────────
     top_companies = query_db('''
-        SELECT company, COALESCE(SUM(sell),0) as total, COUNT(*) as cnt
+        SELECT company, COALESCE(SUM(sell),0) as total, COUNT(*) as cnt,
+               COALESCE(SUM(profit),0) as profit
         FROM sales WHERE deleted=FALSE AND is_archived=FALSE
-        GROUP BY company ORDER BY total DESC LIMIT 10
+        GROUP BY company ORDER BY total DESC LIMIT 8
     ''')
 
+    # ── Tomorrow departures ─────────────────────────────────────
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     tomorrow = query_db('''
         SELECT company, customer, from_loc, to_loc, travel_date, tickets, status
         FROM sales WHERE travel_date=%s AND deleted=FALSE ORDER BY company
     ''', [tomorrow_date])
 
-    # Recent activity from audit log
+    # ── Today's transactions ────────────────────────────────────
+    today_sales = query_db('''
+        SELECT COUNT(*) as cnt, COALESCE(SUM(sell),0) as rev
+        FROM sales WHERE deleted=FALSE AND sale_date=%s
+    ''', [str(date.today())], one=True)
+
+    # ── Recent activity ─────────────────────────────────────────
     recent_logs = query_db('''
-        SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 8
+        SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 10
     ''')
 
     try:
         companies = [r['company'] for r in (query_db(
-            'SELECT DISTINCT company FROM sales WHERE deleted=FALSE AND is_archived=FALSE ORDER BY company'
+            'SELECT DISTINCT company FROM sales WHERE deleted=FALSE ORDER BY company'
         ) or [])]
     except Exception:
         companies = []
 
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
-        monthly=monthly, top_companies=top_companies,
-        tomorrow=tomorrow, companies=companies,
-        recent_logs=recent_logs,
-        today=date.today().strftime('%d %B %Y')
+        monthly=monthly or [], top_companies=top_companies or [],
+        tomorrow=tomorrow or [], companies=companies,
+        recent_logs=recent_logs or [],
+        this_month=this_month, last_month=last_month,
+        today_sales=today_sales,
+        today=date.today().strftime('%d %B %Y'),
+        today_str=str(date.today()),
     )
 
 # ── Sales ─────────────────────────────────────────────────────────────────────
