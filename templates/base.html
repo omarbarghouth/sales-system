@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
 
   {# Brand / Logo #}
-  <a href="{{ url_for('index') if is_admin else url_for('employee_dashboard') }}" class="sb-brand">
+  <a href="{{ url_for('index') if is_admin else url_for('index') }}" class="sb-brand">
     <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel" class="sb-logo"/>
     <div class="sb-brand-text">
       <div class="sb-brand-name">Alsondos Travel</div>
@@ -32,7 +32,7 @@
     {% if logged_in %}
     {# ── New Sale CTA ─────────────────────────────────────── #}
     <div class="sb-cta">
-      <a href="{{ url_for('add_sale_v2') }}" class="sb-cta-btn">
+      <a href="{{ url_for('add_sale') }}" class="sb-cta-btn">
         <i class="fas fa-plus"></i> New Transaction
       </a>
     </div>
@@ -56,7 +56,7 @@
        class="sb-link {% if request.endpoint=='statement' %}active{% endif %}">
       <i class="fas fa-file-invoice-dollar"></i> Statements
     </a>
-    <a href="{{ url_for('supplier_statement') }}"
+    <a href="{{ url_for('statement') }}"
        class="sb-link {% if request.endpoint=='supplier_statement' %}active{% endif %}">
       <i class="fas fa-truck"></i> Supplier Statements
     </a>
@@ -66,15 +66,15 @@
     </a>
 
     <div class="sb-section">Documents</div>
-    <a href="{{ url_for('invoice_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-file-invoice"></i> Invoices
     </a>
-    <a href="{{ url_for('voucher_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-hotel"></i> Hotel Vouchers
     </a>
-    <a href="{{ url_for('package_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'package' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-box-open"></i> Packages
     </a>
@@ -86,7 +86,7 @@
     </a>
 
     <div class="sb-section">Management</div>
-    <a href="{{ url_for('admin_employees') }}"
+    <a href="{{ url_for('manage_users') }}"
        class="sb-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-users-cog"></i> Staff & Commission
     </a>
@@ -96,11 +96,11 @@
     </a>
 
     <div class="sb-section">Master Data</div>
-    <a href="{{ url_for('master_companies') }}"
+    <a href="{{ url_for('admin') }}"
        class="sb-link {% if request.endpoint=='master_companies' %}active{% endif %}">
       <i class="fas fa-building"></i> Companies
     </a>
-    <a href="{{ url_for('master_suppliers') }}"
+    <a href="{{ url_for('admin') }}"
        class="sb-link {% if request.endpoint=='master_suppliers' %}active{% endif %}">
       <i class="fas fa-handshake"></i> Suppliers
     </a>
@@ -123,29 +123,29 @@
     {# ════════════ EMPLOYEE NAVIGATION ════════════ #}
 
     <div class="sb-section">My Work</div>
-    <a href="{{ url_for('employee_dashboard') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if request.endpoint=='employee_dashboard' %}active{% endif %}">
       <i class="fas fa-chart-pie"></i> My Dashboard
     </a>
-    <a href="{{ url_for('my_sales') }}"
+    <a href="{{ url_for('sales_report') }}"
        class="sb-link {% if 'my_sales' in (request.endpoint or '') or 'my_edit' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-exchange-alt"></i> My Transactions
     </a>
-    <a href="{{ url_for('my_commission') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if request.endpoint=='my_commission' %}active{% endif %}">
       <i class="fas fa-coins"></i> My Commission
     </a>
 
     <div class="sb-section">Documents</div>
-    <a href="{{ url_for('invoice_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-file-invoice"></i> Invoices
     </a>
-    <a href="{{ url_for('voucher_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-hotel"></i> Hotel Vouchers
     </a>
-    <a href="{{ url_for('package_list') }}"
+    <a href="{{ url_for('index') }}"
        class="sb-link {% if 'package' in (request.endpoint or '') %}active{% endif %}">
       <i class="fas fa-box-open"></i> Packages
     </a>

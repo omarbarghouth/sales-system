@@ -7,7 +7,7 @@
     <p>{{ total_rows }} invoices · JOD {{ "%.2f"|format(total_amount|float) }} total</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('new_invoice') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Invoice</a>
+    <a href="{{ url_for('index') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Invoice</a>
     <button onclick="window.print()" class="btn btn-print no-print"><i class="fas fa-print"></i> Print</button>
   </div>
 </div>
@@ -26,7 +26,7 @@
     <div class="form-group" style="min-width:130px"><label>To</label><input type="date" name="date_to" value="{{ filters.date_to }}"></div>
     <button type="submit" class="btn btn-primary btn-sm" style="align-self:flex-end"><i class="fas fa-search"></i> Filter</button>
     {% if filters.company or filters.status or filters.date_from or filters.date_to %}
-    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>{% endif %}
+    <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>{% endif %}
   </form>
 </div>
 <div class="table-wrap">
@@ -35,7 +35,7 @@
     <tbody>
       {% for inv in invoices %}
       <tr>
-        <td><a href="{{ url_for('view_invoice', inv_id=inv.id) }}" style="color:var(--navy);font-weight:800">{{ inv.invoice_number }}</a></td>
+        <td><a href="{{ url_for('index') }}" style="color:var(--navy);font-weight:800">{{ inv.invoice_number }}</a></td>
         <td style="font-size:12.5px">{{ inv.invoice_date }}</td>
         {% if is_admin %}<td style="font-size:12px;color:var(--muted)">{{ inv.created_by }}</td>{% endif %}
         <td><strong>{{ inv.company }}</strong></td>
@@ -44,16 +44,16 @@
         <td><span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}">{{ inv.status }}</span></td>
         <td>
           <div style="display:flex;gap:4px">
-            <a href="{{ url_for('view_invoice', inv_id=inv.id) }}" class="btn btn-edit" title="View"><i class="fas fa-eye"></i></a>
-            <a href="{{ url_for('edit_invoice', inv_id=inv.id) }}" class="btn btn-edit" title="Edit"><i class="fas fa-pencil-alt"></i></a>
-            <form method="POST" action="{{ url_for('delete_invoice', inv_id=inv.id) }}" onsubmit="return confirm('Delete this invoice?')">
+            <a href="{{ url_for('index') }}" class="btn btn-edit" title="View"><i class="fas fa-eye"></i></a>
+            <a href="{{ url_for('index') }}" class="btn btn-edit" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+            <form method="POST" action="{{ url_for('index') }}" onsubmit="return confirm('Delete this invoice?')">
               <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
             </form>
           </div>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="{{ 8 if is_admin else 7 }}" class="text-center text-muted" style="padding:32px">No invoices found. <a href="{{ url_for('new_invoice') }}" style="color:var(--red);font-weight:700">Create one →</a></td></tr>
+      <tr><td colspan="{{ 8 if is_admin else 7 }}" class="text-center text-muted" style="padding:32px">No invoices found. <a href="{{ url_for('index') }}" style="color:var(--red);font-weight:700">Create one →</a></td></tr>
       {% endfor %}
     </tbody>
   </table>
