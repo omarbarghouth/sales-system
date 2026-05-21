@@ -22,7 +22,7 @@ PER_PAGE = 50  # rows per page
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
-    """Get a healthy database connection. Auto-heals aborted transactions."""
+    """Get (or create) a per-request database connection."""
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = psycopg2.connect(
@@ -31,12 +31,15 @@ def get_db():
         )
         db.autocommit = False
     else:
-        # If connection is in aborted/error state, rollback to clean it
+        # If in INERROR state (aborted transaction), rollback to reset it
         try:
             if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
-                db.rollback()
+                # Only rollback if the transaction has actually errored
+                # (INTRANS_INERROR = 4, normal INTRANS = 2)
+                if db.get_transaction_status() == psycopg2.extensions.TRANSACTION_STATUS_INERROR:
+                    db.rollback()
         except Exception:
-            # Connection broken entirely — make a new one
+            # Connection is broken — replace it
             try: db.close()
             except: pass
             db = g._database = psycopg2.connect(
@@ -48,14 +51,12 @@ def get_db():
 
 @app.teardown_appcontext
 def close_connection(exception):
-    """Always close the connection at end of request — ensures next request gets fresh state."""
+    """Close DB connection at end of every request. Never commit here — execute_db handles commits."""
     db = getattr(g, '_database', None)
     if db is not None:
         try:
-            if exception:
-                db.rollback()
-            else:
-                db.commit()  # commit any uncommitted work
+            # Always rollback any uncommitted work (execute_db committed its own work already)
+            db.rollback()
         except Exception:
             pass
         try:
@@ -65,33 +66,41 @@ def close_connection(exception):
         g._database = None
 
 def query_db(query, args=(), one=False):
-    try:
-        cur = get_db().cursor()
-        cur.execute(query, args)
-        rv = cur.fetchall()
-        return (rv[0] if rv else None) if one else rv
-    except Exception as e:
-        try: get_db().rollback()
-        except: pass
-        logger.error(f"query_db error: {e} | query: {query[:120]}")
-        raise
-
-def execute_db(query, args=()):
-    """Execute INSERT/UPDATE/DELETE. For INSERT with RETURNING id, returns the new row id."""
+    db  = None
     try:
         db  = get_db()
         cur = db.cursor()
         cur.execute(query, args)
-        db.commit()
-        # If query has RETURNING clause, fetch the returned value
+        rv  = cur.fetchall()
+        return (rv[0] if rv else None) if one else rv
+    except Exception as e:
+        if db:
+            try: db.rollback()
+            except: pass
+        logger.error(f"query_db error: {e} | query: {query[:120]}")
+        raise
+
+def execute_db(query, args=()):
+    """Execute INSERT/UPDATE/DELETE. Fetch RETURNING before commit."""
+    db  = None
+    cur = None
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute(query, args)
+        # Fetch RETURNING value BEFORE commit (cursor closes after commit)
+        result = None
         if 'RETURNING' in query.upper():
             row = cur.fetchone()
             if row:
-                return row[0] if not hasattr(row, 'keys') else (row.get('id') or row[list(row.keys())[0]])
-        return None
+                result = row[0] if not hasattr(row, 'keys') else (
+                    row.get('id') or row[list(row.keys())[0]])
+        db.commit()
+        return result
     except Exception as e:
-        try: get_db().rollback()
-        except: pass
+        if db:
+            try: db.rollback()
+            except: pass
         logger.error(f"execute_db error: {e} | query: {query[:120]}")
         raise
 
@@ -716,7 +725,7 @@ def add_sale():
             transfer_pickup   = request.form.get('transfer_pickup','').strip(),
             transfer_vehicle  = request.form.get('transfer_vehicle','').strip(),
             transfer_net      = float(request.form.get('transfer_net',0) or 0),
-            tours_json        = _json.dumps(tours_list),
+            tours_json        = json.dumps(tours_list),
             visa_supplier     = request.form.get('visa_supplier','').strip(),
             visa_type         = request.form.get('visa_type','').strip(),
             passport_number   = request.form.get('passport_number','').upper().strip(),
@@ -738,7 +747,7 @@ def add_sale():
              hotel_checkin,hotel_checkout,hotel_nights,hotel_net,
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
-             insurance_supplier,insurance_type,airline,pnr,baggage,
+             insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
              outbound_cost,return_cost)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
@@ -852,7 +861,7 @@ def edit_sale(sale_id):
             if tour_names[i].strip():
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
-        ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -3547,3 +3556,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
