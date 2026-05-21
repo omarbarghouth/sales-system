@@ -22,7 +22,7 @@ PER_PAGE = 50  # rows per page
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
-    """Get a healthy database connection. Auto-heals aborted transactions."""
+    """Get (or create) a per-request database connection."""
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = psycopg2.connect(
@@ -31,12 +31,15 @@ def get_db():
         )
         db.autocommit = False
     else:
-        # If connection is in aborted/error state, rollback to clean it
+        # If in INERROR state (aborted transaction), rollback to reset it
         try:
             if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
-                db.rollback()
+                # Only rollback if the transaction has actually errored
+                # (INTRANS_INERROR = 4, normal INTRANS = 2)
+                if db.get_transaction_status() == psycopg2.extensions.TRANSACTION_STATUS_INERROR:
+                    db.rollback()
         except Exception:
-            # Connection broken entirely — make a new one
+            # Connection is broken — replace it
             try: db.close()
             except: pass
             db = g._database = psycopg2.connect(
@@ -48,14 +51,12 @@ def get_db():
 
 @app.teardown_appcontext
 def close_connection(exception):
-    """Always close the connection at end of request — ensures next request gets fresh state."""
+    """Close DB connection at end of every request. Never commit here — execute_db handles commits."""
     db = getattr(g, '_database', None)
     if db is not None:
         try:
-            if exception:
-                db.rollback()
-            else:
-                db.commit()  # commit any uncommitted work
+            # Always rollback any uncommitted work (execute_db committed its own work already)
+            db.rollback()
         except Exception:
             pass
         try:
@@ -65,33 +66,41 @@ def close_connection(exception):
         g._database = None
 
 def query_db(query, args=(), one=False):
-    try:
-        cur = get_db().cursor()
-        cur.execute(query, args)
-        rv = cur.fetchall()
-        return (rv[0] if rv else None) if one else rv
-    except Exception as e:
-        try: get_db().rollback()
-        except: pass
-        logger.error(f"query_db error: {e} | query: {query[:120]}")
-        raise
-
-def execute_db(query, args=()):
-    """Execute INSERT/UPDATE/DELETE. For INSERT with RETURNING id, returns the new row id."""
+    db  = None
     try:
         db  = get_db()
         cur = db.cursor()
         cur.execute(query, args)
-        db.commit()
-        # If query has RETURNING clause, fetch the returned value
+        rv  = cur.fetchall()
+        return (rv[0] if rv else None) if one else rv
+    except Exception as e:
+        if db:
+            try: db.rollback()
+            except: pass
+        logger.error(f"query_db error: {e} | query: {query[:120]}")
+        raise
+
+def execute_db(query, args=()):
+    """Execute INSERT/UPDATE/DELETE. Fetch RETURNING before commit."""
+    db  = None
+    cur = None
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute(query, args)
+        # Fetch RETURNING value BEFORE commit (cursor closes after commit)
+        result = None
         if 'RETURNING' in query.upper():
             row = cur.fetchone()
             if row:
-                return row[0] if not hasattr(row, 'keys') else (row.get('id') or row[list(row.keys())[0]])
-        return None
+                result = row[0] if not hasattr(row, 'keys') else (
+                    row.get('id') or row[list(row.keys())[0]])
+        db.commit()
+        return result
     except Exception as e:
-        try: get_db().rollback()
-        except: pass
+        if db:
+            try: db.rollback()
+            except: pass
         logger.error(f"execute_db error: {e} | query: {query[:120]}")
         raise
 
@@ -716,7 +725,7 @@ def add_sale():
             transfer_pickup   = request.form.get('transfer_pickup','').strip(),
             transfer_vehicle  = request.form.get('transfer_vehicle','').strip(),
             transfer_net      = float(request.form.get('transfer_net',0) or 0),
-            tours_json        = _json.dumps(tours_list),
+            tours_json        = json.dumps(tours_list),
             visa_supplier     = request.form.get('visa_supplier','').strip(),
             visa_type         = request.form.get('visa_type','').strip(),
             passport_number   = request.form.get('passport_number','').upper().strip(),
@@ -738,7 +747,7 @@ def add_sale():
              hotel_checkin,hotel_checkout,hotel_nights,hotel_net,
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
-             insurance_supplier,insurance_type,airline,pnr,baggage,
+             insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
              outbound_cost,return_cost)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
@@ -749,7 +758,7 @@ def add_sale():
                 %s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,%s,%s,%s
             ) RETURNING id
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
@@ -852,7 +861,7 @@ def edit_sale(sale_id):
             if tour_names[i].strip():
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
-        ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -1011,21 +1020,21 @@ def statement():
                 except: pass
                 return []
 
-        # CREDIT: we sold to this company
+        # DEBIT: we sold to this company (they owe us — increases receivable)
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
             ledger_entries.append({
                 'date': s['sale_date'], 'ref': f"TXN-{s['id']:04d}",
                 'description': f"{s.get('service_type','FLIGHT')} — {s.get('customer','')}",
-                'debit': 0.0, 'credit': float(s['sell'] or 0), 'type': 'sale', 'id': s['id'],
+                'debit': float(s['sell'] or 0), 'credit': 0.0, 'type': 'sale', 'id': s['id'],
             })
 
-        # DEBIT: we bought from this company (flight outbound)
+        # CREDIT: we bought from this company (we owe them — increases payable)
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(buy_from))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
             cost = float(s.get('outbound_cost') or s.get('net') or 0)
             if cost > 0:
                 ledger_entries.append({'date': s['sale_date'], 'ref': f"PUR-{s['id']:04d}",
                     'description': f"Purchase (Flight) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # DEBIT: return supplier
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(return_supplier))=UPPER(%s){date_f_sale} AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s) ORDER BY sale_date ASC", [company, company] + (p_sale[1:] if len(p_sale)>1 else [])):
@@ -1033,7 +1042,7 @@ def statement():
             if cost > 0:
                 ledger_entries.append({'date': s['sale_date'], 'ref': f"RTN-{s['id']:04d}",
                     'description': f"Purchase (Return) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # DEBIT: hotel/transfer/visa/insurance supplier
         for supp_field, cost_field, label in [
@@ -1047,7 +1056,7 @@ def statement():
                 if cost > 0:
                     ledger_entries.append({'date': s['sale_date'], 'ref': f"{label[:3].upper()}-{s['id']:04d}",
                         'description': f"Purchase ({label}) — {s.get('customer','')}",
-                        'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                        'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # CREDIT: payment received from company
         for p in _q(f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_pay} ORDER BY pay_date ASC", p_pay):
@@ -1064,27 +1073,35 @@ def statement():
                 'debit': float(sp['amount'] or 0), 'credit': 0.0, 'type': 'payment_out', 'id': sp['id']})
 
         # Sort by date
-        ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
+        # Sort by date, then by type priority (sales/purchases before payments),
+        # then by ref — ensures payments always follow the transactions they settle
+        TYPE_ORDER = {'sale': 0, 'purchase': 1, 'payment_in': 2, 'payment_out': 3}
+        ledger_entries.sort(key=lambda x: (x['date'], TYPE_ORDER.get(x['type'], 9), x['ref']))
 
-        # Running balance
+        # ── Running balance (OUR perspective) ──────────────────────────────
+        # DEBIT  entries increase what THEY owe US  (+)
+        # CREDIT entries reduce  what THEY owe US   (-)
+        # balance = cumulative(DEBIT - CREDIT)
+        # Positive final balance = they owe us (net receivable)
+        # Negative final balance = we owe them (net payable)
         running = 0.0
         for e in ledger_entries:
-            running += e['credit'] - e['debit']
+            running += e['debit'] - e['credit']
             e['balance'] = round(running, 3)
 
         # Summary
-        sold    = sum(e['credit'] for e in ledger_entries if e['type']=='sale')
-        bought  = sum(e['debit']  for e in ledger_entries if e['type']=='purchase')
+        sold    = sum(e['debit']  for e in ledger_entries if e['type']=='sale')
+        bought  = sum(e['credit'] for e in ledger_entries if e['type']=='purchase')
         rcvd    = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
         paid_to = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
         net_bal = round(running, 3)
         summary = {
             'total_sold_to_them': sold, 'total_bought_from': bought,
-            'total_received': rcvd, 'total_paid_to_them': paid_to,
-            'net_receivable': round(sold - rcvd, 3),
+            'total_received': rcvd,     'total_paid_to_them': paid_to,
+            'net_receivable': round(sold   - rcvd,    3),
             'net_payable':    round(bought - paid_to, 3),
             'net_balance':    net_bal,
-            'status': 'CREDIT' if net_bal > 0.005 else ('DEBIT' if net_bal < -0.005 else 'SETTLED'),
+            'status': 'RECEIVABLE' if net_bal > 0.005 else ('PAYABLE' if net_bal < -0.005 else 'SETTLED'),
         }
 
     return render_template('statement.html',
@@ -1542,21 +1559,36 @@ def reset_data():
         db = get_db()
         cur = db.cursor()
 
-        # Get counts before delete for the log
-        cur.execute('SELECT COUNT(*) FROM sales')
-        sales_count = cur.fetchone()[0]
-        cur.execute('SELECT COUNT(*) FROM payments')
-        pay_count = cur.fetchone()[0]
+        # Get counts before delete — use list() to get first value from RealDictRow
+        cur.execute('SELECT COUNT(*) as n FROM sales')
+        sales_count = (cur.fetchone() or {}).get('n', 0)
+        cur.execute('SELECT COUNT(*) as n FROM payments')
+        pay_count = (cur.fetchone() or {}).get('n', 0)
 
         # Hard delete everything — permanent, not soft delete
-        cur.execute('DELETE FROM sales')
-        cur.execute('DELETE FROM payments')
-        cur.execute('DELETE FROM audit_logs')
+        tables_to_clear = [
+            'invoices','vouchers','packages','sales',
+            'payments','supplier_payments','audit_logs',
+        ]
+        for t in tables_to_clear:
+            try: cur.execute(f'DELETE FROM {t}')
+            except Exception: db.rollback()
 
-        # Reset auto-increment sequences so IDs start from 1 again
-        cur.execute("ALTER SEQUENCE sales_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE payments_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE audit_logs_id_seq RESTART WITH 1")
+        # Reset sequences
+        for seq in ['sales_id_seq','payments_id_seq','audit_logs_id_seq',
+                    'invoices_id_seq','vouchers_id_seq','packages_id_seq']:
+            try: cur.execute(f'ALTER SEQUENCE {seq} RESTART WITH 1')
+            except Exception: pass
+
+        # Reset document number sequences (INV/VCH/PKG → 0001)
+        try: cur.execute("UPDATE doc_sequences SET last_num=0")
+        except Exception: pass
+
+        # Clear master data cache (will be re-seeded from new sales)
+        try: cur.execute("DELETE FROM master_companies")
+        except Exception: pass
+        try: cur.execute("DELETE FROM master_suppliers")
+        except Exception: pass
 
         db.commit()
 
@@ -3547,3 +3579,4 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
