@@ -1,492 +1,540 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Alsondos Travel ERP{% endblock %}
-
-{% block extra_css %}
-<style>
-/* ── Dashboard Layout ─────────────────────────────────────────── */
-.dash-hero {
-  background: linear-gradient(135deg, #07111f 0%, #0f1d35 45%, #1a2f52 100%);
-  border-radius: var(--radius);
-  padding: 28px 32px;
-  margin-bottom: 22px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  border-bottom: 3px solid #C8A84B;
-}
-.dash-hero-title {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 26px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.2;
-}
-.dash-hero-sub { font-size: 13px; color: rgba(255,255,255,.5); margin-top: 4px; }
-.dash-hero-date {
-  text-align: right;
-  font-size: 13px;
-  color: rgba(255,255,255,.45);
-}
-.dash-hero-date strong { display: block; font-size: 22px; color: #C8A84B; font-family: 'Playfair Display', serif; }
-
-/* ── KPI Grid ─────────────────────────────────────────────────── */
-.kpi-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
-.kpi-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-lt);
-  box-shadow: var(--sh-sm);
-  padding: 18px 20px;
-  position: relative;
-  overflow: hidden;
-  transition: transform .15s, box-shadow .15s;
-}
-.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-}
-.kpi-card.kpi-navy::before  { background: var(--navy); }
-.kpi-card.kpi-green::before { background: var(--green); }
-.kpi-card.kpi-gold::before  { background: var(--gold); }
-.kpi-card.kpi-red::before   { background: var(--red); }
-.kpi-card.kpi-teal::before  { background: #0891b2; }
-
-.kpi-label { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
-.kpi-number { font-size: 24px; font-weight: 800; color: var(--navy-dk); font-family: 'Playfair Display', Georgia, serif; line-height: 1; }
-.kpi-number.green { color: var(--green); }
-.kpi-number.red   { color: var(--red); }
-.kpi-number.gold  { color: var(--gold-dk); }
-.kpi-number.teal  { color: #0891b2; }
-.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
-.kpi-icon-bg {
-  position: absolute;
-  right: 16px; top: 50%;
-  transform: translateY(-50%);
-  font-size: 36px;
-  opacity: .07;
-  color: var(--navy-dk);
-}
-
-/* ── Section grid ─────────────────────────────────────────────── */
-.dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
-.dash-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
-
-/* ── Chart ────────────────────────────────────────────────────── */
-.chart-wrap { position: relative; height: 200px; }
-
-/* ── Company leaderboard ──────────────────────────────────────── */
-.lb-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border-lt);
-}
-.lb-row:last-child { border-bottom: none; }
-.lb-rank {
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  background: var(--navy-lt);
-  color: var(--navy-dk);
-  font-size: 11px; font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.lb-rank.gold-rank { background: #fef3c7; color: #92400e; }
-.lb-rank.silver-rank { background: #f1f5f9; color: #475569; }
-.lb-rank.bronze-rank { background: #fef2f2; color: #7f1d1d; }
-.lb-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--navy-dk); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-bar-wrap { width: 80px; height: 5px; background: var(--border-lt); border-radius: 3px; }
-.lb-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--navy), #1a6fcf); }
-.lb-amount { font-size: 12px; font-weight: 700; color: var(--navy-dk); white-space: nowrap; min-width: 70px; text-align: right; }
-
-/* ── Tomorrow departures ──────────────────────────────────────── */
-.dep-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px;
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  margin-bottom: 6px;
-  border-left: 3px solid var(--gold);
-}
-.dep-route { font-size: 13px; font-weight: 700; color: var(--navy-dk); }
-.dep-sub { font-size: 11px; color: var(--muted); }
-
-/* ── Activity feed ────────────────────────────────────────────── */
-.act-row {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-lt);
-}
-.act-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  margin-top: 5px;
-  flex-shrink: 0;
-}
-.act-text { font-size: 12px; color: var(--text-2); line-height: 1.5; }
-.act-time { font-size: 10.5px; color: var(--muted-lt); }
-
-/* ── Status pills ─────────────────────────────────────────────── */
-.status-bar { display: flex; gap: 10px; flex-wrap: wrap; }
-.s-pill {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 12px; font-weight: 700;
-}
-
-/* ── Quick actions ────────────────────────────────────────────── */
-.qa-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
-.qa-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-  padding: 16px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-lt);
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-  color: var(--navy-dk);
-  font-size: 12px; font-weight: 600;
-  transition: all .15s;
-  text-align: center;
-}
-.qa-btn i { font-size: 20px; }
-.qa-btn:hover { background: var(--navy-lt); border-color: var(--navy); color: var(--navy-dk); transform: translateY(-2px); box-shadow: var(--sh-sm); }
-
-/* ── Month badge ──────────────────────────────────────────────── */
-.month-change { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
-.month-up   { background: #dcfce7; color: #15803d; }
-.month-down { background: #fee2e2; color: #b91c1c; }
-.month-flat { background: #f1f5f9; color: #64748b; }
-
-@media (max-width: 1100px) {
-  .kpi-grid-5  { grid-template-columns: repeat(3,1fr); }
-  .dash-grid   { grid-template-columns: 1fr; }
-  .dash-grid-3 { grid-template-columns: 1fr 1fr; }
-  .qa-grid     { grid-template-columns: repeat(2,1fr); }
-}
-</style>
-{% endblock %}
+{% block title %}Dashboard — ALSONDOS TRAVEL ERP{% endblock %}
 
 {% block content %}
 
-{# ── Hero banner ───────────────────────────────────────────────── #}
-<div class="dash-hero">
-  <div>
-    <div class="dash-hero-title">Alsondos Travel &amp; Tourism</div>
-    <div class="dash-hero-sub">ERP Operations Dashboard &nbsp;·&nbsp; Real-time overview</div>
+{# ── Compact Dashboard Header ─────────────────────────────── #}
+<div class="dash-banner">
+  <div class="dash-banner-left">
+    <img src="{{ url_for('static', filename='logo_white.png') }}" class="dash-banner-logo" alt="Alsondos"/>
+    <div>
+      <div class="dash-banner-title">Alsondos Travel &amp; Tourism — ERP</div>
+      <div class="dash-banner-sub">{{ today }} &nbsp;·&nbsp; Welcome back, <strong style="color:var(--gold)">{{ session.username }}</strong></div>
+    </div>
   </div>
-  <div class="dash-hero-date">
-    <strong>{{ today }}</strong>
-    <span>{{ today_str }}</span>
+  <div class="dash-banner-stats">
+    <div class="dash-stat">
+      <div class="dash-stat-val">{{ stats.total_transactions or 0 }}</div>
+      <div class="dash-stat-lbl">Transactions</div>
+    </div>
+    <div class="dash-stat-divider"></div>
+    <div class="dash-stat">
+      <div class="dash-stat-val">{{ top_companies|length }}</div>
+      <div class="dash-stat-lbl">Companies</div>
+    </div>
+    <div class="dash-stat-divider"></div>
+    <div class="dash-stat">
+      <div class="dash-stat-val" {% if tomorrow %}style="color:#fb8080"{% endif %}>{{ tomorrow|length }}</div>
+      <div class="dash-stat-lbl">Due Tomorrow</div>
+    </div>
   </div>
 </div>
 
-{# ── KPI Cards ─────────────────────────────────────────────────── #}
-{% set tm_sell = (this_month.sell if this_month else 0)|float %}
-{% set lm_sell = (last_month.sell if last_month else 0)|float %}
-{% set tm_profit = (this_month.profit if this_month else 0)|float %}
-{% set lm_profit = (last_month.profit if last_month else 0)|float %}
-{% set today_cnt = (today_sales.cnt if today_sales else 0)|int %}
-{% set today_rev = (today_sales.rev if today_sales else 0)|float %}
-
-<div class="kpi-grid-5">
-
-  <div class="kpi-card kpi-navy">
-    <i class="fas fa-exchange-alt kpi-icon-bg"></i>
+{# ── KPI Cards ────────────────────────────────────────────── #}
+<div class="kpi-grid">
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
     <div class="kpi-label">Total Transactions</div>
-    <div class="kpi-number">{{ (stats.total_transactions or 0)|int }}</div>
-    <div class="kpi-sub">
-      <i class="fas fa-calendar-day" style="color:var(--navy)"></i>
-      {{ today_cnt }} today
-    </div>
+    <div class="kpi-value">{{ stats.total_transactions or 0 }}</div>
+    <div class="kpi-sub">All time active</div>
   </div>
-
-  <div class="kpi-card kpi-green">
-    <i class="fas fa-chart-line kpi-icon-bg"></i>
+  <div class="kpi-box gold">
+    <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
     <div class="kpi-label">Total Revenue</div>
-    <div class="kpi-number green">{{ "%.3f"|format((stats.total_sell or 0)|float) }}</div>
+    <div class="kpi-value gold">JOD {{ "%.2f"|format((stats.total_sell or 0)|float) }}</div>
+    <div class="kpi-sub">Total invoiced</div>
+  </div>
+  <div class="kpi-box green">
+    <div class="kpi-icon"><i class="fas fa-coins"></i></div>
+    <div class="kpi-label">Net Profit</div>
+    <div class="kpi-value green">JOD {{ "%.2f"|format((stats.total_profit or 0)|float) }}</div>
     <div class="kpi-sub">
-      {% if lm_sell > 0 %}
-        {% set pct = ((tm_sell - lm_sell) / lm_sell * 100)|round(1) %}
-        <span class="month-change {% if pct > 0 %}month-up{% elif pct < 0 %}month-down{% else %}month-flat{% endif %}">
-          {% if pct > 0 %}▲{% elif pct < 0 %}▼{% endif %} {{ pct|abs }}% vs last month
-        </span>
-      {% else %}
-        JOD {{ "%.3f"|format(tm_sell) }} this month
-      {% endif %}
+      {% set sell = (stats.total_sell or 0)|float %}
+      {% set profit = (stats.total_profit or 0)|float %}
+      {{ "%.1f"|format((profit / sell * 100) if sell else 0) }}% margin
     </div>
   </div>
-
-  <div class="kpi-card kpi-gold">
-    <i class="fas fa-coins kpi-icon-bg"></i>
-    <div class="kpi-label">Total Profit</div>
-    <div class="kpi-number gold">{{ "%.3f"|format((stats.total_profit or 0)|float) }}</div>
-    <div class="kpi-sub">
-      {% if lm_profit > 0 %}
-        {% set ppct = ((tm_profit - lm_profit) / lm_profit * 100)|round(1) %}
-        <span class="month-change {% if ppct > 0 %}month-up{% elif ppct < 0 %}month-down{% else %}month-flat{% endif %}">
-          {% if ppct > 0 %}▲{% elif ppct < 0 %}▼{% endif %} {{ ppct|abs }}% vs last month
-        </span>
-      {% else %}
-        JOD {{ "%.3f"|format(tm_profit) }} this month
-      {% endif %}
-    </div>
+  <div class="kpi-box blue">
+    <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
+    <div class="kpi-label">Collected</div>
+    <div class="kpi-value">JOD {{ "%.2f"|format(total_paid|float) }}</div>
+    <div class="kpi-sub">Payments received</div>
   </div>
-
-  <div class="kpi-card kpi-teal">
-    <i class="fas fa-check-circle kpi-icon-bg"></i>
-    <div class="kpi-label">Total Collected</div>
-    <div class="kpi-number teal">{{ "%.3f"|format((total_paid or 0)|float) }}</div>
-    <div class="kpi-sub">
-      <i class="fas fa-money-bill-wave" style="color:#0891b2"></i>
-      JOD received
-    </div>
+  <div class="kpi-box red">
+    <div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+    <div class="kpi-label">Outstanding</div>
+    <div class="kpi-value red">JOD {{ "%.2f"|format(balance|float) }}</div>
+    <div class="kpi-sub">Still owed</div>
   </div>
-
-  <div class="kpi-card kpi-red">
-    <i class="fas fa-balance-scale kpi-icon-bg"></i>
-    <div class="kpi-label">Outstanding Balance</div>
-    <div class="kpi-number {% if balance > 0 %}red{% else %}green{% endif %}">{{ "%.3f"|format(balance|abs) }}</div>
+  <div class="kpi-box orange">
+    <div class="kpi-icon"><i class="fas fa-truck"></i></div>
+    <div class="kpi-label">Deliver Tomorrow</div>
+    <div class="kpi-value orange">{{ tomorrow|length }}</div>
     <div class="kpi-sub">
-      {% if balance > 0 %}<i class="fas fa-exclamation-circle" style="color:var(--red)"></i> receivable
-      {% elif balance < 0 %}<i class="fas fa-check" style="color:var(--green)"></i> credit
-      {% else %}<i class="fas fa-check-double" style="color:var(--green)"></i> settled{% endif %}
-    </div>
-  </div>
-
-</div>
-
-{# ── Status overview ───────────────────────────────────────────── #}
-<div class="card" style="padding:14px 20px;margin-bottom:18px">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Transaction Status</div>
-    <div class="status-bar">
-      <div class="s-pill" style="background:#dcfce7;color:#15803d">
-        <i class="fas fa-check-circle"></i> {{ (stats.done_count or 0)|int }} Done
-      </div>
-      <div class="s-pill" style="background:#fef9c3;color:#92400e">
-        <i class="fas fa-clock"></i> {{ (stats.still_count or 0)|int }} Pending
-      </div>
-      <div class="s-pill" style="background:#fee2e2;color:#b91c1c">
-        <i class="fas fa-times-circle"></i> {{ (stats.cancel_count or 0)|int }} Cancelled
-      </div>
+      <a href="{{ url_for('deliver_tomorrow') }}" style="color:var(--orange);font-weight:700">View List →</a>
     </div>
   </div>
 </div>
 
-{# ── Main grid: chart + top companies ─────────────────────────── #}
-<div class="dash-grid">
+{# ── Charts Row ───────────────────────────────────────────── #}
+<div class="chart-grid">
 
-  {# Revenue Chart #}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-chart-bar"></i> Monthly Revenue — {{ today_str[:4] }}</div>
-    <div class="card-body">
-      {% if monthly %}
-      <canvas id="revenueChart" height="200"></canvas>
+  {# Monthly Bar Chart #}
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <span><i class="fas fa-chart-bar" style="color:var(--navy)"></i> Monthly Revenue &amp; Profit</span>
+      <span style="font-size:11.5px;color:var(--muted);font-weight:400">This year</span>
+    </div>
+    <div class="chart-card-body">
+      {% if has_monthly_data %}
+      <canvas id="salesChart" style="max-height:220px"></canvas>
       {% else %}
-      <div style="text-align:center;padding:40px;color:var(--muted-lt)">
-        <i class="fas fa-chart-bar" style="font-size:32px;display:block;margin-bottom:10px;opacity:.3"></i>
-        No data for this year yet
+      <div class="chart-empty">
+        <i class="fas fa-chart-bar" style="font-size:28px;opacity:.2;display:block;margin-bottom:8px"></i>
+        No sales data yet for this year
       </div>
       {% endif %}
     </div>
   </div>
 
-  {# Top Companies Leaderboard #}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-trophy" style="color:var(--gold)"></i> Top Companies</div>
-    <div class="card-body" style="padding:10px 16px">
-      {% if top_companies %}
-        {% set max_total = top_companies[0].total|float %}
-        {% for co in top_companies %}
-        <div class="lb-row">
-          <div class="lb-rank {% if loop.index==1 %}gold-rank{% elif loop.index==2 %}silver-rank{% elif loop.index==3 %}bronze-rank{% endif %}">
-            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
-          </div>
-          <div class="lb-name" title="{{ co.company }}">{{ co.company }}</div>
-          <div class="lb-bar-wrap">
-            <div class="lb-bar" style="width:{{ [(co.total|float / max_total * 100)|round(0), 5]|max }}%"></div>
-          </div>
-          <div class="lb-amount">{{ "%.0f"|format(co.total|float) }}</div>
+  {# Status Donut #}
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <span><i class="fas fa-chart-pie" style="color:var(--navy)"></i> Booking Status</span>
+    </div>
+    <div class="chart-card-body">
+      {% if (stats.total_transactions or 0) > 0 %}
+      <canvas id="statusChart" style="max-height:190px"></canvas>
+      <div class="chart-legend">
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#1E7B34"></div> Done: {{ stats.done_count or 0 }}
         </div>
-        {% endfor %}
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#E67E22"></div> Still: {{ stats.still_count or 0 }}
+        </div>
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#8b1a1a"></div> Other: {{ stats.other_count or 0 }}
+        </div>
+      </div>
       {% else %}
-      <div style="text-align:center;padding:24px;color:var(--muted-lt)">No company data</div>
+      <div class="chart-empty">
+        <i class="fas fa-chart-pie" style="font-size:28px;opacity:.2;display:block;margin-bottom:8px"></i>No data yet
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Collection Rate Donut #}
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <span><i class="fas fa-circle-half-stroke" style="color:var(--navy)"></i> Collection Rate</span>
+    </div>
+    <div class="chart-card-body">
+      {% if (stats.total_sell or 0)|float > 0 %}
+      <canvas id="payChart" style="max-height:190px"></canvas>
+      <div class="chart-legend">
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#1E7B34"></div> JOD {{ "%.2f"|format(total_paid|float) }}
+        </div>
+        <div class="chart-legend-item">
+          <div class="chart-legend-dot" style="background:#8b1a1a"></div> JOD {{ "%.2f"|format(balance|float) }}
+        </div>
+      </div>
+      {% else %}
+      <div class="chart-empty">
+        <i class="fas fa-coins" style="font-size:28px;opacity:.2;display:block;margin-bottom:8px"></i>No data yet
+      </div>
       {% endif %}
     </div>
   </div>
 
 </div>
 
-{# ── Second grid: tomorrow departures + activity + quick actions ─ #}
-<div class="dash-grid-3">
+{# ── Data Tables Row ──────────────────────────────────────── #}
+<div class="grid-2 mb-6">
 
-  {# Tomorrow's Departures #}
+  {# Monthly Sales Table #}
   <div class="card">
     <div class="card-header">
-      <i class="fas fa-plane-departure" style="color:var(--gold)"></i>
-      Tomorrow's Departures
-      {% if tomorrow %}
-      <span style="margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">{{ tomorrow|length }}</span>
-      {% endif %}
+      <i class="fas fa-calendar-alt"></i> Monthly Sales — {{ today[-4:] }}
     </div>
-    <div class="card-body" style="padding:12px 16px;max-height:260px;overflow-y:auto">
-      {% if tomorrow %}
-        {% for t in tomorrow %}
-        <div class="dep-row">
-          <div>
-            <div class="dep-route">{{ t.from_loc }} → {{ t.to_loc }}</div>
-            <div class="dep-sub">{{ t.customer }} &nbsp;·&nbsp; {{ t.company }} &nbsp;·&nbsp; {{ t.tickets }} pax</div>
-          </div>
-          <span class="badge badge-{{ t.status|lower }}" style="margin-left:auto;white-space:nowrap">{{ t.status }}</span>
-        </div>
-        {% endfor %}
-      {% else %}
-      <div style="text-align:center;padding:24px;color:var(--muted-lt)">
-        <i class="fas fa-check-circle" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3;color:var(--green)"></i>
-        No departures tomorrow
-      </div>
-      {% endif %}
-    </div>
-  </div>
-
-  {# Recent Activity #}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-history"></i> Recent Activity</div>
-    <div class="card-body" style="padding:10px 16px;max-height:260px;overflow-y:auto">
-      {% if recent_logs %}
-        {% for log in recent_logs %}
-        <div class="act-row">
-          <div class="act-dot" style="background:
-            {% if log.action=='CREATE' %}var(--green)
-            {% elif log.action=='UPDATE' %}var(--gold)
-            {% elif log.action=='DELETE' %}var(--red)
-            {% else %}var(--navy){% endif %}">
-          </div>
-          <div style="flex:1;min-width:0">
-            <div class="act-text">
-              <strong>{{ log.action }}</strong>
-              {% if log.details %} — {{ log.details[:50] }}{% if log.details|length > 50 %}…{% endif %}{% endif %}
-            </div>
-            <div class="act-time">{{ log.created_at[:16] if log.created_at else '' }}</div>
-          </div>
-        </div>
-        {% endfor %}
-      {% else %}
-      <div style="text-align:center;padding:24px;color:var(--muted-lt)">No recent activity</div>
-      {% endif %}
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="text-right">Transactions</th>
+            <th class="text-right">Revenue (JOD)</th>
+            <th class="text-right">Profit (JOD)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set month_names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+          {% for m in monthly %}
+          <tr>
+            <td><strong>{{ month_names[(m.month or '1')|int] }}</strong></td>
+            <td class="text-right text-muted">{{ m.count }}</td>
+            <td class="text-right text-gold">{{ "%.2f"|format((m.total_sell or 0)|float) }}</td>
+            <td class="text-right text-green">{{ "%.2f"|format((m.total_profit or 0)|float) }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center text-muted" style="padding:24px">
+              No sales data yet for this year
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
-  {# Quick Actions #}
+  {# Top Companies #}
   <div class="card">
-    <div class="card-header"><i class="fas fa-bolt" style="color:var(--gold)"></i> Quick Actions</div>
-    <div class="card-body">
-      <div class="qa-grid">
-        <a href="{{ url_for('add_sale') }}" class="qa-btn">
-          <i class="fas fa-plus-circle" style="color:var(--red)"></i>New Sale
-        </a>
-        <a href="{{ url_for('payments') }}" class="qa-btn">
-          <i class="fas fa-money-bill-wave" style="color:var(--green)"></i>Payment
-        </a>
-        <a href="{{ url_for('statement') }}" class="qa-btn">
-          <i class="fas fa-balance-scale" style="color:var(--navy)"></i>Statement
-        </a>
-        <a href="{{ url_for('sales_report') }}" class="qa-btn">
-          <i class="fas fa-chart-bar" style="color:var(--gold-dk)"></i>Transactions
-        </a>
-        <a href="{{ url_for('deliver_tomorrow') }}" class="qa-btn">
-          <i class="fas fa-plane-departure" style="color:#0891b2"></i>Deliveries
-        </a>
-        <a href="{{ url_for('invoice_list') }}" class="qa-btn">
-          <i class="fas fa-file-invoice" style="color:var(--navy)"></i>Invoices
-        </a>
-        <a href="{{ url_for('voucher_list') }}" class="qa-btn">
-          <i class="fas fa-hotel" style="color:var(--gold-dk)"></i>Vouchers
-        </a>
-        {% if is_admin %}
-        <a href="{{ url_for('audit_log') }}" class="qa-btn">
-          <i class="fas fa-clipboard-list" style="color:var(--muted)"></i>Audit Log
-        </a>
-        {% endif %}
-      </div>
+    <div class="card-header">
+      <i class="fas fa-trophy" style="color:var(--gold)"></i> Top Companies
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Company</th><th class="text-right">Txns</th><th class="text-right">Revenue (JOD)</th></tr></thead>
+        <tbody>
+          {% for co in top_companies %}
+          <tr>
+            <td style="color:var(--muted);font-size:12px"><strong>{{ loop.index }}</strong></td>
+            <td>
+              <a href="{{ url_for('statement', company=co.company) }}"
+                 style="color:var(--navy);font-weight:700;text-decoration:none">{{ co.company }}</a>
+            </td>
+            <td class="text-right text-muted">{{ co.cnt }}</td>
+            <td class="text-right text-gold">{{ "%.2f"|format((co.total or 0)|float) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted" style="padding:24px">No company data yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
 </div>
+
+{# ── Recent Transactions (with Sales Agent) ─────────────────── #}
+{% if is_admin and recent_txns %}
+<div class="card mb-6">
+  <div class="card-header">
+    <i class="fas fa-list-alt"></i> Recent Transactions
+    <span style="font-size:11.5px;font-weight:400;opacity:.7;margin-left:6px">with sales agent tracking</span>
+    <a href="{{ url_for('sales_report') }}" style="margin-left:auto">View All →</a>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Company</th>
+          <th>Customer</th>
+          <th>Route</th>
+          <th class="text-right">Sell (JOD)</th>
+          <th class="text-right">Profit (JOD)</th>
+          <th>Status</th>
+          <th>
+            <span style="display:flex;align-items:center;gap:4px;color:var(--gold)">
+              <i class="fas fa-user-tie"></i> Agent
+            </span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_txns %}
+        <tr>
+          <td style="color:var(--muted-lt);font-size:11px">{{ s.id }}</td>
+          <td style="font-size:12.5px;white-space:nowrap">{{ s.sale_date }}</td>
+          <td>
+            <a href="{{ url_for('statement', company=s.company) }}"
+               style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:13px">
+              {{ s.company }}
+            </a>
+          </td>
+          <td style="font-size:13px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ s.customer }}">{{ s.customer }}</td>
+          <td style="white-space:nowrap;font-size:13px">
+            <strong>{{ s.from_loc }}</strong>
+            <span style="color:var(--gold);margin:0 2px;font-size:11px">→</span>
+            <strong>{{ s.to_loc }}</strong>
+          </td>
+          <td class="text-right" style="font-weight:700;color:var(--navy-dk);font-size:13px">
+            {{ "%.2f"|format((s.sell or 0)|float) }}
+          </td>
+          <td class="text-right text-green" style="font-size:13px">
+            {{ "%.2f"|format((s.profit or 0)|float) }}
+          </td>
+          <td>
+            <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+          </td>
+          <td>
+            {# Sales agent pill — clickable to filter report by agent #}
+            {% set agent = s.agent_display or s.agent_name or '' %}
+            {% if agent and agent != '—' %}
+            <a href="{{ url_for('sales_report', agent_id=s.created_by_user_id) }}"
+               style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;
+                      background:var(--purple-lt);color:var(--purple);
+                      padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+                      border:1px solid rgba(109,40,217,.15);white-space:nowrap;
+                      transition:background .15s,color .15s"
+               onmouseover="this.style.background='var(--purple)';this.style.color='#fff'"
+               onmouseout="this.style.background='var(--purple-lt)';this.style.color='var(--purple)'"
+               title="View all transactions by {{ agent }}">
+              <i class="fas fa-user-tie" style="font-size:9px"></i>
+              {{ agent }}
+            </a>
+            {% else %}
+            <span style="color:var(--muted-lt);font-size:11.5px">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Outstanding + Company Bar ─────────────────────────────── #}
+<div class="grid-2 mb-6">
+
+  {# Top Companies Horizontal Bar Chart #}
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <span><i class="fas fa-building" style="color:var(--navy)"></i> Revenue by Company</span>
+    </div>
+    <div class="chart-card-body">
+      {% if top_companies %}
+      <canvas id="companyChart" style="max-height:200px"></canvas>
+      {% else %}
+      <div class="chart-empty">
+        <i class="fas fa-building" style="font-size:28px;opacity:.2;display:block;margin-bottom:8px"></i>No company data
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Outstanding Balances #}
+  <div class="card">
+    <div class="card-header">
+      <i class="fas fa-exclamation-triangle" style="color:var(--gold)"></i> Outstanding Balances
+      <a href="{{ url_for('statement') }}" style="margin-left:auto">View All →</a>
+    </div>
+    {% if outstanding_by_company %}
+      {% for co in outstanding_by_company %}
+      <div class="outstanding-row">
+        <div>
+          <div class="outstanding-name">{{ co.company }}</div>
+          <div class="outstanding-sub">of JOD {{ "%.2f"|format((co.total_sell or 0)|float) }} invoiced</div>
+        </div>
+        <div class="outstanding-amt">JOD {{ "%.2f"|format((co.balance or 0)|float) }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:24px;text-align:center;color:var(--green);font-size:13.5px">
+        <i class="fas fa-check-circle" style="font-size:22px;display:block;margin-bottom:6px"></i>
+        All balances clear!
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ── Deliver Tomorrow Alert ───────────────────────────────── #}
+{% if tomorrow %}
+<div class="deliver-banner no-print">
+  <div class="deliver-icon">🚨</div>
+  <div>
+    <div class="deliver-title">Tickets to Deliver Tomorrow</div>
+    <div class="deliver-sub">Must be prepared today — action required!</div>
+  </div>
+  <div class="deliver-count">{{ tomorrow|length }}</div>
+  <a href="{{ url_for('deliver_tomorrow') }}" class="btn btn-print no-print">
+    <i class="fas fa-eye"></i> View Full List
+  </a>
+</div>
+<div class="table-wrap mb-6">
+  <table>
+    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Travel Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in tomorrow %}
+      <tr>
+        <td class="text-muted">{{ loop.index }}</td>
+        <td><strong>{{ t.company }}</strong></td>
+        <td>{{ t.customer }}</td>
+        <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
+        <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
+        <td><strong style="color:var(--red)">{{ t.travel_date }}</strong></td>
+        <td class="text-center">{{ t.tickets }}</td>
+        <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ── Recent Audit Activity ────────────────────────────────── #}
+{% if is_admin and recent_logs %}
+<div class="card">
+  <div class="card-header">
+    <i class="fas fa-clipboard-list"></i> Recent Activity
+    <a href="{{ url_for('audit_log') }}" style="margin-left:auto">View All →</a>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td style="font-size:11.5px;white-space:nowrap;color:var(--muted)">{{ log.created_at }}</td>
+          <td><strong>{{ log.username }}</strong></td>
+          <td>
+            <span class="badge {% if log.action=='CREATE' %}badge-done{% elif log.action=='DELETE' %}badge-cancel{% elif log.action=='LOGIN' %}badge-navy{% else %}badge-still{% endif %}">
+              {{ log.action }}
+            </span>
+          </td>
+          <td class="text-muted">{{ log.table_name }}</td>
+          <td style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.detail }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-{% if monthly %}
+Chart.defaults.font.family = "'Inter','Segoe UI',sans-serif";
+Chart.defaults.font.size   = 12;
+Chart.defaults.color       = '#6B7A99';
+
+const NAVY  = '#1B3A6B';
+const RED   = '#8b1a1a';
+const GOLD  = '#C8A84B';
+const GREEN = '#1E7B34';
+const ORG   = '#E67E22';
+const BLUE  = '#2980B9';
+
+// ── Monthly Bar Chart ─────────────────────────────────────
+{% if has_monthly_data %}
 (function(){
-  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var raw = {{ monthly|tojson }};
-
-  // Build full 12-month arrays
-  var labels = [], sell = [], profit = [];
-  for (var m = 1; m <= 12; m++) {
-    var mm = String(m).padStart(2,'0');
-    labels.push(months[m-1]);
-    var found = raw.find(function(r){ return r.month === mm; });
-    sell.push(found ? parseFloat(found.total_sell) : 0);
-    profit.push(found ? parseFloat(found.total_profit) : 0);
-  }
-
-  var ctx = document.getElementById('revenueChart').getContext('2d');
-  new Chart(ctx, {
+  var labels  = {{ chart_month_labels | tojson }};
+  var sells   = {{ chart_month_sells | tojson }};
+  var profits = {{ chart_month_profits | tojson }};
+  var mnames  = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  new Chart(document.getElementById('salesChart'), {
     type: 'bar',
     data: {
-      labels: labels,
+      labels: labels.map(function(m){ return mnames[parseInt(m)] || m; }),
       datasets: [
         {
           label: 'Revenue (JOD)',
-          data: sell,
-          backgroundColor: 'rgba(27,58,107,.85)',
+          data: sells,
+          backgroundColor: 'rgba(27,58,107,.75)',
+          borderColor: NAVY,
+          borderWidth: 1,
           borderRadius: 5,
-          order: 1,
         },
         {
           label: 'Profit (JOD)',
-          data: profit,
-          type: 'line',
-          borderColor: '#C8A84B',
-          backgroundColor: 'rgba(200,168,75,.12)',
-          borderWidth: 2.5,
-          pointBackgroundColor: '#C8A84B',
-          pointRadius: 4,
-          tension: 0.35,
-          fill: true,
-          order: 0,
+          data: profits,
+          backgroundColor: 'rgba(30,123,52,.65)',
+          borderColor: GREEN,
+          borderWidth: 1,
+          borderRadius: 5,
         }
       ]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
       plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 16 } },
+        legend: { position: 'top', labels: { boxWidth: 12, padding: 14 } },
         tooltip: {
           callbacks: {
             label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': JOD ' + ctx.parsed.y.toFixed(3);
+              return ' ' + ctx.dataset.label + ': JOD ' + ctx.parsed.y.toLocaleString('en', {minimumFractionDigits:2});
             }
           }
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
         y: {
+          beginAtZero: true,
           grid: { color: 'rgba(0,0,0,.05)' },
-          ticks: {
-            font: { size: 11 },
-            callback: function(v){ return v >= 1000 ? (v/1000).toFixed(1)+'k' : v; }
+          ticks: { callback: function(v){ return 'JOD ' + v.toLocaleString(); } }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+})();
+{% endif %}
+
+// ── Status Donut ──────────────────────────────────────────
+{% if (stats.total_transactions or 0) > 0 %}
+(function(){
+  new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Done', 'Still', 'Other'],
+      datasets: [{
+        data: [{{ stats.done_count or 0 }}, {{ stats.still_count or 0 }}, {{ stats.other_count or 0 }}],
+        backgroundColor: [GREEN, ORG, RED],
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.label + ': ' + ctx.parsed; } } }
+      }
+    }
+  });
+})();
+{% endif %}
+
+// ── Collection Rate Donut ─────────────────────────────────
+{% if (stats.total_sell or 0)|float > 0 %}
+(function(){
+  new Chart(document.getElementById('payChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Collected', 'Outstanding'],
+      datasets: [{
+        data: [{{ total_paid|float }}, {{ [balance|float, 0]|max }}],
+        backgroundColor: [GREEN, RED],
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx){
+              return ' ' + ctx.label + ': JOD ' + ctx.parsed.toLocaleString('en', {minimumFractionDigits:2});
+            }
           }
         }
       }
@@ -495,22 +543,76 @@
 })();
 {% endif %}
 
-// Animate KPI numbers
-document.querySelectorAll('.kpi-number').forEach(function(el){
-  var target = parseFloat(el.textContent.replace(/,/g,''));
-  if(isNaN(target) || target === 0) return;
-  var isInt = Number.isInteger(target) || el.textContent.indexOf('.')<0;
-  var start = 0, dur = 900, startTime = null;
-  function step(ts){
-    if(!startTime) startTime = ts;
-    var p = Math.min((ts-startTime)/dur, 1);
-    var eased = 1-Math.pow(1-p,3);
-    var cur = start + (target-start)*eased;
-    el.textContent = isInt ? Math.round(cur).toLocaleString() : cur.toFixed(3);
-    if(p<1) requestAnimationFrame(step);
-    else el.textContent = isInt ? target.toLocaleString() : target.toFixed(3);
-  }
-  requestAnimationFrame(step);
-});
+// ── Top Companies Horizontal Bar ──────────────────────────
+{% if top_companies %}
+(function(){
+  var names  = {{ chart_company_names | tojson }};
+  var totals = {{ chart_company_totals | tojson }};
+  var colors = [
+    'rgba(27,58,107,.8)','rgba(139,26,26,.7)','rgba(200,168,75,.7)',
+    'rgba(30,123,52,.7)','rgba(41,128,185,.7)','rgba(230,126,34,.7)',
+    'rgba(108,52,131,.7)','rgba(46,204,113,.7)','rgba(22,160,133,.7)','rgba(52,73,94,.7)'
+  ];
+  new Chart(document.getElementById('companyChart'), {
+    type: 'bar',
+    data: {
+      labels: names,
+      datasets: [{
+        label: 'Revenue (JOD)',
+        data: totals,
+        backgroundColor: colors.slice(0, names.length),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,.05)' },
+          ticks: { callback: function(v){ return 'JOD ' + v.toLocaleString(); } }
+        },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+})();
+{% endif %}
+
+// ── Service Type Bar Chart ────────────────────────────────────
+{% if svc_labels %}
+(function(){
+  var SVC_COLORS = {
+    'FLIGHT':'rgba(27,58,107,.8)','HOTEL':'rgba(200,168,75,.8)',
+    'PACKAGE':'rgba(139,26,26,.8)','VISA':'rgba(109,40,217,.8)',
+    'INSURANCE':'rgba(30,123,52,.8)','TRANSFER':'rgba(217,119,6,.8)',
+    'TOUR':'rgba(41,128,185,.8)'
+  };
+  var labels = {{ svc_labels | tojson }};
+  new Chart(document.getElementById('svcChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Revenue (JOD)',
+        data: {{ svc_sells | tojson }},
+        backgroundColor: labels.map(function(l){ return SVC_COLORS[l] || 'rgba(107,119,153,.7)'; }),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{display:false} },
+      scales:{
+        y:{ beginAtZero:true, ticks:{ callback:function(v){ return 'JOD '+v.toLocaleString(); }}},
+        x:{ grid:{display:false} }
+      }
+    }
+  });
+})();
+{% endif %}
 </script>
 {% endblock %}
