@@ -21,7 +21,7 @@
     <p>Select the service type then fill in the details</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('sales_report') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
 
@@ -461,10 +461,10 @@
 </div>
 
 <div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px;flex-wrap:wrap">
-  <a href="{{ url_for('sales_report') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
+  <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
   <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if edit else 'Add Transaction' }}</button>
   {% if edit and sale and ((sale.service_type|default('FLIGHT')) == 'PACKAGE') %}
-  <a href="{{ url_for('index') }}"
+  <a href="{{ url_for('auto_generate_voucher', sale_id=sale.id) }}"
      onclick="return confirm('Generate a professional voucher automatically from this package transaction?')"
      class="btn btn-gold btn-lg">
     <i class="fas fa-magic"></i> Generate Voucher

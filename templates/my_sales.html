@@ -7,7 +7,7 @@
     <p>{{ totals.count }} transactions · JOD {{ "%.2f"|format(totals.sell) }} revenue · JOD {{ "%.2f"|format(totals.profit) }} profit</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('add_sale') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
+    <a href="{{ url_for('add_sale_v2') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
   </div>
 </div>
 
@@ -33,7 +33,7 @@
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
     {% if filters.company or filters.status or filters.date_from or filters.date_to %}
-    <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>
+    <a href="{{ url_for('my_sales') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>
     {% endif %}
   </form>
 </div>
@@ -62,22 +62,22 @@
         <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
         <td>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <a href="{{ url_for('edit_sale') }}" class="btn btn-edit btn-xs" title="Edit"><i class="fas fa-pencil-alt"></i></a>
-            <a href="{{ url_for('index') }}" class="btn btn-xs btn-outline" title="Create Invoice"><i class="fas fa-file-invoice"></i></a>
+            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Invoice"><i class="fas fa-file-invoice"></i></a>
             {% if (s.service_type or 'FLIGHT') == 'PACKAGE' %}
-            <a href="{{ url_for('index') }}"
+            <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
                onclick="return confirm('Auto-generate voucher from this package?')"
                class="btn btn-gold btn-xs" title="Auto Generate Package Voucher">
               <i class="fas fa-magic"></i>
             </a>
             {% else %}
-            <a href="{{ url_for('index') }}" class="btn btn-xs btn-outline" title="Create Voucher"><i class="fas fa-hotel"></i></a>
+            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Voucher"><i class="fas fa-hotel"></i></a>
             {% endif %}
           </div>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="12" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
+      <tr><td colspan="12" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
       {% endfor %}
     </tbody>
     {% if sales %}

@@ -281,7 +281,7 @@
               <i class="fas fa-pencil-alt"></i>
             </a>
             {% if (s.service_type or '') == 'PACKAGE' %}
-            <a href="{{ url_for('index') }}"
+            <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
                onclick="return confirm('Auto-generate voucher from this package?')"
                class="btn btn-gold btn-xs" title="Generate Voucher">
               <i class="fas fa-magic"></i>

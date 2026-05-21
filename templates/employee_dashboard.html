@@ -42,13 +42,13 @@
     <div class="kpi-icon" style="background:#f3e5ff;color:#9b59b6"><i class="fas fa-percentage"></i></div>
     <div class="kpi-label">My Commission ({{ commission_rate|int }}%)</div>
     <div class="kpi-value" style="color:#9b59b6">JOD {{ "%.3f"|format((my_stats.commission or 0)|float) }}</div>
-    <div class="kpi-sub"><a href="{{ url_for('index') }}" style="color:#9b59b6;font-weight:700">Full report →</a></div>
+    <div class="kpi-sub"><a href="{{ url_for('my_commission') }}" style="color:#9b59b6;font-weight:700">Full report →</a></div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
     <div class="kpi-label">My Transactions</div>
     <div class="kpi-value">{{ my_stats.total_txns or 0 }}</div>
-    <div class="kpi-sub"><a href="{{ url_for('sales_report') }}" style="color:var(--navy);font-weight:700">View all →</a></div>
+    <div class="kpi-sub"><a href="{{ url_for('my_sales') }}" style="color:var(--navy);font-weight:700">View all →</a></div>
   </div>
   <div class="kpi-box blue">
     <div class="kpi-icon"><i class="fas fa-plane-departure"></i></div>
@@ -105,7 +105,7 @@
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total Commission Earned</div>
         <div style="font-size:32px;font-weight:900;color:#9b59b6;font-family:var(--font-hd)">JOD {{ "%.3f"|format((my_stats.commission or 0)|float) }}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:6px">{{ commission_rate|int }}% of JOD {{ "%.2f"|format((my_stats.total_profit or 0)|float) }} profit</div>
-        <a href="{{ url_for('index') }}" class="btn btn-sm" style="margin-top:14px;background:rgba(155,89,182,.1);color:#9b59b6;border-color:#9b59b6">
+        <a href="{{ url_for('my_commission') }}" class="btn btn-sm" style="margin-top:14px;background:rgba(155,89,182,.1);color:#9b59b6;border-color:#9b59b6">
           <i class="fas fa-chart-bar"></i> Full Commission Report
         </a>
       </div>
@@ -115,16 +115,16 @@
 
 {# ── Quick Actions ─────────────────────────────────────────── #}
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
-  <a href="{{ url_for('add_sale') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
-  <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="fas fa-file-invoice"></i> New Invoice</a>
-  <a href="{{ url_for('index') }}" class="btn btn-gold"><i class="fas fa-hotel"></i> New Voucher</a>
-  <a href="{{ url_for('index') }}" class="btn btn-outline"><i class="fas fa-box-open"></i> New Package</a>
+  <a href="{{ url_for('add_sale_v2') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
+  <a href="{{ url_for('new_invoice') }}" class="btn btn-primary"><i class="fas fa-file-invoice"></i> New Invoice</a>
+  <a href="{{ url_for('new_voucher') }}" class="btn btn-gold"><i class="fas fa-hotel"></i> New Voucher</a>
+  <a href="{{ url_for('new_package') }}" class="btn btn-outline"><i class="fas fa-box-open"></i> New Package</a>
 </div>
 
 {# ── Recent Transactions ───────────────────────────────────── #}
 <div class="grid-2 mb-6">
   <div class="card">
-    <div class="card-header"><i class="fas fa-exchange-alt"></i> My Recent Transactions <a href="{{ url_for('sales_report') }}" style="margin-left:auto">View All →</a></div>
+    <div class="card-header"><i class="fas fa-exchange-alt"></i> My Recent Transactions <a href="{{ url_for('my_sales') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>Date</th><th>Company</th><th>Customer</th><th>Route</th><th class="text-right">Sell (JOD)</th><th>Status</th></tr></thead>
@@ -172,40 +172,40 @@
 {# ── My Invoices & Vouchers ────────────────────────────────── #}
 <div class="grid-2">
   <div class="card">
-    <div class="card-header"><i class="fas fa-file-invoice"></i> My Recent Invoices <a href="{{ url_for('index') }}" style="margin-left:auto">View All →</a></div>
+    <div class="card-header"><i class="fas fa-file-invoice"></i> My Recent Invoices <a href="{{ url_for('invoice_list') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>Invoice #</th><th>Customer</th><th class="text-right">Total</th><th>Status</th></tr></thead>
         <tbody>
           {% for inv in my_invoices %}
           <tr>
-            <td><a href="{{ url_for('index') }}" style="color:var(--navy);font-weight:700">{{ inv.invoice_number }}</a></td>
+            <td><a href="{{ url_for('view_invoice', inv_id=inv.id) }}" style="color:var(--navy);font-weight:700">{{ inv.invoice_number }}</a></td>
             <td>{{ inv.customer }}</td>
             <td class="text-right text-gold">JOD {{ "%.2f"|format(inv.total|float) }}</td>
             <td><span class="badge badge-{% if inv.status=='PAID' %}done{% elif inv.status=='PARTIAL' %}still{% else %}cancel{% endif %}">{{ inv.status }}</span></td>
           </tr>
           {% else %}
-          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No invoices yet — <a href="{{ url_for('index') }}" style="color:var(--red)">Create one →</a></td></tr>
+          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No invoices yet — <a href="{{ url_for('new_invoice') }}" style="color:var(--red)">Create one →</a></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
   <div class="card">
-    <div class="card-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> My Recent Vouchers <a href="{{ url_for('index') }}" style="margin-left:auto">View All →</a></div>
+    <div class="card-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> My Recent Vouchers <a href="{{ url_for('voucher_list') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>Voucher #</th><th>Guest</th><th>Hotel</th><th>Check-In</th></tr></thead>
         <tbody>
           {% for v in my_vouchers %}
           <tr>
-            <td><a href="{{ url_for('index') }}" style="color:var(--navy);font-weight:700">{{ v.voucher_number }}</a></td>
+            <td><a href="{{ url_for('view_voucher', vch_id=v.id) }}" style="color:var(--navy);font-weight:700">{{ v.voucher_number }}</a></td>
             <td>{{ v.guest_name }}</td>
             <td>{{ v.hotel_name }}</td>
             <td style="font-size:12.5px">{{ v.checkin_date }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No vouchers yet — <a href="{{ url_for('index') }}" style="color:var(--red)">Create one →</a></td></tr>
+          <tr><td colspan="4" class="text-center text-muted" style="padding:18px">No vouchers yet — <a href="{{ url_for('new_voucher') }}" style="color:var(--red)">Create one →</a></td></tr>
           {% endfor %}
         </tbody>
       </table>
