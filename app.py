@@ -1020,21 +1020,21 @@ def statement():
                 except: pass
                 return []
 
-        # CREDIT: we sold to this company
+        # DEBIT: we sold to this company (they owe us — increases receivable)
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
             ledger_entries.append({
                 'date': s['sale_date'], 'ref': f"TXN-{s['id']:04d}",
                 'description': f"{s.get('service_type','FLIGHT')} — {s.get('customer','')}",
-                'debit': 0.0, 'credit': float(s['sell'] or 0), 'type': 'sale', 'id': s['id'],
+                'debit': float(s['sell'] or 0), 'credit': 0.0, 'type': 'sale', 'id': s['id'],
             })
 
-        # DEBIT: we bought from this company (flight outbound)
+        # CREDIT: we bought from this company (we owe them — increases payable)
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(buy_from))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
             cost = float(s.get('outbound_cost') or s.get('net') or 0)
             if cost > 0:
                 ledger_entries.append({'date': s['sale_date'], 'ref': f"PUR-{s['id']:04d}",
                     'description': f"Purchase (Flight) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # DEBIT: return supplier
         for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(return_supplier))=UPPER(%s){date_f_sale} AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s) ORDER BY sale_date ASC", [company, company] + (p_sale[1:] if len(p_sale)>1 else [])):
@@ -1042,7 +1042,7 @@ def statement():
             if cost > 0:
                 ledger_entries.append({'date': s['sale_date'], 'ref': f"RTN-{s['id']:04d}",
                     'description': f"Purchase (Return) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # DEBIT: hotel/transfer/visa/insurance supplier
         for supp_field, cost_field, label in [
@@ -1056,7 +1056,7 @@ def statement():
                 if cost > 0:
                     ledger_entries.append({'date': s['sale_date'], 'ref': f"{label[:3].upper()}-{s['id']:04d}",
                         'description': f"Purchase ({label}) — {s.get('customer','')}",
-                        'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                        'debit': 0.0, 'credit': cost, 'type': 'purchase', 'id': s['id']})
 
         # CREDIT: payment received from company
         for p in _q(f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_pay} ORDER BY pay_date ASC", p_pay):
@@ -1075,25 +1075,30 @@ def statement():
         # Sort by date
         ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
 
-        # Running balance
+        # ── Running balance (OUR perspective) ──────────────────────────────
+        # DEBIT  entries increase what THEY owe US  (+)
+        # CREDIT entries reduce  what THEY owe US   (-)
+        # balance = cumulative(DEBIT - CREDIT)
+        # Positive final balance = they owe us (net receivable)
+        # Negative final balance = we owe them (net payable)
         running = 0.0
         for e in ledger_entries:
-            running += e['credit'] - e['debit']
+            running += e['debit'] - e['credit']
             e['balance'] = round(running, 3)
 
         # Summary
-        sold    = sum(e['credit'] for e in ledger_entries if e['type']=='sale')
-        bought  = sum(e['debit']  for e in ledger_entries if e['type']=='purchase')
+        sold    = sum(e['debit']  for e in ledger_entries if e['type']=='sale')
+        bought  = sum(e['credit'] for e in ledger_entries if e['type']=='purchase')
         rcvd    = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
         paid_to = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
         net_bal = round(running, 3)
         summary = {
             'total_sold_to_them': sold, 'total_bought_from': bought,
-            'total_received': rcvd, 'total_paid_to_them': paid_to,
-            'net_receivable': round(sold - rcvd, 3),
+            'total_received': rcvd,     'total_paid_to_them': paid_to,
+            'net_receivable': round(sold   - rcvd,    3),
             'net_payable':    round(bought - paid_to, 3),
             'net_balance':    net_bal,
-            'status': 'CREDIT' if net_bal > 0.005 else ('DEBIT' if net_bal < -0.005 else 'SETTLED'),
+            'status': 'RECEIVABLE' if net_bal > 0.005 else ('PAYABLE' if net_bal < -0.005 else 'SETTLED'),
         }
 
     return render_template('statement.html',
