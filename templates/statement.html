@@ -11,17 +11,79 @@
 
 /* ── Print ──────────────────────────────────────────────────── */
 @media print {
-  @page { size:A4; margin:10mm 12mm 12mm 12mm; }
-  *               { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-  body, .main-content { margin:0 !important; padding:0 !important; background:#fff !important; }
-  .sidebar, .topbar, .page-header, .filter-bar, .no-print,
-  .stmt-kpi, .stmt-legend { display:none !important; }
-  .main-content   { margin-left:0 !important; width:100% !important; }
-  #stmtDoc        { display:block !important; box-shadow:none !important; border-radius:0 !important; }
-  table           { page-break-inside:auto; border-collapse:collapse; }
-  tr              { page-break-inside:avoid; }
-  thead           { display:table-header-group; }
-  tfoot           { display:table-footer-group; }
+  @page {
+    size: A4 portrait;
+    margin: 8mm 8mm 10mm 8mm;
+  }
+  /* Force colors */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* Kill entire page chrome */
+  body > * { display: none !important; }
+  .sidebar, .topbar, .page-header, .filter-bar,
+  .no-print, .stmt-kpi, .stmt-legend { display: none !important; }
+
+  /* Show only the document */
+  body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .main-content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #stmtDoc {
+    display: block !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Table: fit full width, no overflow */
+  table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    font-size: 9.5pt !important;
+  }
+  table thead th,
+  table tbody td,
+  table tfoot td {
+    padding: 5pt 6pt !important;
+    font-size: 9pt !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  /* Description column gets remaining space */
+  table th:nth-child(3),
+  table td:nth-child(3) { white-space: normal !important; word-break: break-word !important; }
+
+  /* Header/banner font sizes */
+  #stmtDoc [style*="font-size:32px"] { font-size: 22pt !important; }
+  #stmtDoc [style*="font-size:22px"] { font-size: 15pt !important; }
+  #stmtDoc [style*="height:72px"]    { height: 52px !important; }
+  #stmtDoc [style*="padding:28px"]   { padding: 14pt 16pt !important; }
+  #stmtDoc [style*="padding:16px 18px"] { padding: 8pt 10pt !important; }
+  #stmtDoc [style*="padding:14px 24px"] { padding: 8pt 12pt !important; }
+
+  /* Summary 4-col grid — smaller on print */
+  #stmtDoc [style*="grid-template-columns:1fr 1fr 1fr 1fr"] {
+    display: table !important;
+    width: 100% !important;
+  }
+  #stmtDoc [style*="font-size:19px"] { font-size: 13pt !important; }
+
+  /* Signature section */
+  #stmtDoc [style*="padding:22px 32px"] { padding: 10pt 12pt !important; }
+
+  /* Pagination */
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  .stmt-wrap { page-break-inside: auto; }
 }
 </style>
 {% endblock %}
