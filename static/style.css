@@ -740,31 +740,130 @@ tfoot td {
 }
 .req { color: var(--red); }
 
+/* ═══════════════════════════════════════════════════════════════
+   UNIFIED FORM CONTROLS — inputs, selects, textareas
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Base control ──────────────────────────────────────────── */
 .form-group input,
 .form-group select,
-.form-group textarea {
-  padding: 9px 13px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 13.5px;
-  color: var(--text);
-  background: #fff;
-  transition: border-color var(--dur), box-shadow var(--dur);
+.form-group textarea,
+.filter-bar input,
+.filter-bar select,
+.filter-bar textarea {
   width: 100%;
+  padding: 10px 14px;
+  font-size: 13.5px;
   font-family: var(--font);
+  font-weight: 500;
+  color: var(--text);
+  background: #f9fafb;
+  border: 1.5px solid #d1d9e6;
+  border-radius: 8px;
+  transition: border-color .18s, box-shadow .18s, background .18s;
   line-height: 1.5;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
-.form-group input:hover { border-color: #b8c4da; }
+
+/* ── Select — custom arrow ─────────────────────────────────── */
+.form-group select,
+.filter-bar select,
+select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231B3A6B' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 15px;
+  padding-right: 38px;
+  background-color: #f9fafb;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* ── Hover ─────────────────────────────────────────────────── */
+.form-group input:hover,
+.form-group select:hover,
+.form-group textarea:hover,
+.filter-bar input:hover,
+.filter-bar select:hover {
+  border-color: #a8b8d8;
+  background: #f5f7fc;
+}
+
+/* ── Focus ─────────────────────────────────────────────────── */
 .form-group input:focus,
 .form-group select:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.filter-bar input:focus,
+.filter-bar select:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px rgba(27,58,107,.08);
   background: #fff;
+  box-shadow: 0 0 0 3.5px rgba(27,58,107,.10);
 }
-.form-group select { cursor: pointer; }
-.form-group textarea { resize: vertical; min-height: 80px; }
+
+/* ── Disabled ──────────────────────────────────────────────── */
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+  background: #f1f5f9;
+  color: var(--muted);
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+  opacity: .75;
+}
+
+/* ── Textarea ──────────────────────────────────────────────── */
+.form-group textarea {
+  resize: vertical;
+  min-height: 82px;
+}
+
+/* ── Input type=number — no spinners ───────────────────────── */
+.form-group input[type="number"]::-webkit-inner-spin-button,
+.form-group input[type="number"]::-webkit-outer-spin-button { opacity: 1; }
+
+/* ── Readonly ──────────────────────────────────────────────── */
+.form-group input[readonly] {
+  background: #f8fafc;
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ── Standalone selects (outside .form-group) ─────────────── */
+select:not(.form-group select):not(.filter-bar select) {
+  padding: 9px 36px 9px 12px;
+  border: 1.5px solid #d1d9e6;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font);
+  font-weight: 500;
+  color: var(--text);
+  background: #f9fafb;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231B3A6B' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  transition: border-color .18s, box-shadow .18s;
+}
+select:not(.form-group select):not(.filter-bar select):hover {
+  border-color: #a8b8d8;
+}
+select:not(.form-group select):not(.filter-bar select):focus {
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(27,58,107,.10);
+  background-color: #fff;
+}
+
+
 .form-group small { font-size: 10.5px; color: var(--muted-lt); line-height: 1.4; }
 
 /* Profit / total display box */
