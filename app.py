@@ -1048,10 +1048,19 @@ def sales_report():
 @login_required
 def statement():
     """
-    Mutual B2B Company Ledger.
-    CREDIT  = we sold to this company  (their debt to us)
-    DEBIT   = we bought from this company (our debt to them)
-    Running balance: positive = they owe us, negative = we owe them.
+    Mutual B2B Company Ledger — CORRECT double-entry accounting model.
+
+    DEBIT  entries increase what they owe us    (positive effect on balance)
+    CREDIT entries decrease what they owe us    (negative effect on balance)
+
+    Sale to company     → DEBIT   (they owe us more)      balance ▲
+    Payment received    → CREDIT  (reduces their debt)    balance ▼
+    Purchase from them  → CREDIT  (we owe them more)      balance ▼
+    Payment made out    → DEBIT   (reduces our debt)      balance ▲
+
+    balance = Σ(DEBIT) − Σ(CREDIT)
+    Positive = net receivable (they owe us)
+    Negative = net payable    (we owe them)
     """
     company   = request.args.get('company', '').strip()
     date_from = request.args.get('date_from', '').strip()
@@ -1077,95 +1086,168 @@ def statement():
             date_f_pay  += ' AND pay_date<=%s';  p_pay.append(date_to)
 
         def _q(q, p):
-            try: return query_db(q, p) or []
+            try:
+                return query_db(q, p) or []
             except Exception:
                 try: get_db().rollback()
                 except: pass
                 return []
 
-        # CREDIT: we sold to this company
-        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+        # ── DEBIT: we sold to this company (they owe us) ─────────────────────
+        for s in _q(
+            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            f"AND UPPER(TRIM(company))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC",
+            p_sale
+        ):
             ledger_entries.append({
-                'date': s['sale_date'], 'ref': f"TXN-{s['id']:04d}",
+                'date':        s['sale_date'],
+                'ref':         f"TXN-{s['id']:04d}",
                 'description': f"{s.get('service_type','FLIGHT')} — {s.get('customer','')}",
-                'debit': 0.0, 'credit': float(s['sell'] or 0), 'type': 'sale', 'id': s['id'],
+                'debit':       float(s['sell'] or 0),
+                'credit':      0.0,
+                'type':        'sale',
+                'id':          s['id'],
             })
 
-        # DEBIT: we bought from this company (flight outbound)
-        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(buy_from))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+        # ── CREDIT: we bought from this company / outbound flight ─────────────
+        for s in _q(
+            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            f"AND UPPER(TRIM(buy_from))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC",
+            p_sale
+        ):
             cost = float(s.get('outbound_cost') or s.get('net') or 0)
             if cost > 0:
-                ledger_entries.append({'date': s['sale_date'], 'ref': f"PUR-{s['id']:04d}",
+                ledger_entries.append({
+                    'date':        s['sale_date'],
+                    'ref':         f"PUR-{s['id']:04d}",
                     'description': f"Purchase (Flight) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit':       0.0,
+                    'credit':      cost,
+                    'type':        'purchase',
+                    'id':          s['id'],
+                })
 
-        # DEBIT: return supplier
-        for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(return_supplier))=UPPER(%s){date_f_sale} AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s) ORDER BY sale_date ASC", [company, company] + (p_sale[1:] if len(p_sale)>1 else [])):
+        # ── CREDIT: return flight supplier ────────────────────────────────────
+        for s in _q(
+            f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            f"AND UPPER(TRIM(return_supplier))=UPPER(%s) "
+            f"AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s){date_f_sale} ORDER BY sale_date ASC",
+            [company, company] + (p_sale[1:] if len(p_sale) > 1 else [])
+        ):
             cost = float(s.get('return_cost') or 0)
             if cost > 0:
-                ledger_entries.append({'date': s['sale_date'], 'ref': f"RTN-{s['id']:04d}",
+                ledger_entries.append({
+                    'date':        s['sale_date'],
+                    'ref':         f"RTN-{s['id']:04d}",
                     'description': f"Purchase (Return) — {s.get('customer','')}",
-                    'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                    'debit':       0.0,
+                    'credit':      cost,
+                    'type':        'purchase',
+                    'id':          s['id'],
+                })
 
-        # DEBIT: hotel/transfer/visa/insurance supplier
+        # ── CREDIT: hotel / transfer / visa / insurance supplier ──────────────
         for supp_field, cost_field, label in [
-            ('hotel_supplier','hotel_net','Hotel'),
-            ('transfer_supplier','transfer_net','Transfer'),
-            ('visa_supplier','net','Visa'),
-            ('insurance_supplier','net','Insurance'),
+            ('hotel_supplier',    'hotel_net',    'Hotel'),
+            ('transfer_supplier', 'transfer_net', 'Transfer'),
+            ('visa_supplier',     'net',          'Visa'),
+            ('insurance_supplier','net',          'Insurance'),
         ]:
-            for s in _q(f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM({supp_field}))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC", p_sale):
+            for s in _q(
+                f"SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+                f"AND UPPER(TRIM({supp_field}))=UPPER(%s){date_f_sale} ORDER BY sale_date ASC",
+                p_sale
+            ):
                 cost = float(s.get(cost_field) or 0)
                 if cost > 0:
-                    ledger_entries.append({'date': s['sale_date'], 'ref': f"{label[:3].upper()}-{s['id']:04d}",
+                    ledger_entries.append({
+                        'date':        s['sale_date'],
+                        'ref':         f"{label[:3].upper()}-{s['id']:04d}",
                         'description': f"Purchase ({label}) — {s.get('customer','')}",
-                        'debit': cost, 'credit': 0.0, 'type': 'purchase', 'id': s['id']})
+                        'debit':       0.0,
+                        'credit':      cost,
+                        'type':        'purchase',
+                        'id':          s['id'],
+                    })
 
-        # CREDIT: payment received from company
-        for p in _q(f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND UPPER(TRIM(company))=UPPER(%s){date_f_pay} ORDER BY pay_date ASC", p_pay):
-            ledger_entries.append({'date': p['pay_date'], 'ref': f"PAY-{p['id']:04d}",
+        # ── CREDIT: payment received from company (reduces their debt) ────────
+        for p in _q(
+            f"SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE "
+            f"AND UPPER(TRIM(company))=UPPER(%s){date_f_pay} ORDER BY pay_date ASC",
+            p_pay
+        ):
+            ledger_entries.append({
+                'date':        p['pay_date'],
+                'ref':         f"PAY-{p['id']:04d}",
                 'description': f"Payment received — {p.get('notes','') or ''}",
-                'debit': 0.0, 'credit': float(p['amount'] or 0), 'type': 'payment_in', 'id': p['id']})
+                'debit':       0.0,
+                'credit':      float(p['amount'] or 0),
+                'type':        'payment_in',
+                'id':          p['id'],
+            })
 
-        # DEBIT: supplier payment made to this company
-        for sp in _q("SELECT * FROM supplier_payments WHERE deleted=FALSE AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date ASC", [company]):
+        # ── DEBIT: payment made to this company (reduces our debt) ────────────
+        for sp in _q(
+            "SELECT * FROM supplier_payments WHERE deleted=FALSE "
+            "AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date ASC",
+            [company]
+        ):
             if date_from and sp['pay_date'] < date_from: continue
             if date_to   and sp['pay_date'] > date_to:   continue
-            ledger_entries.append({'date': sp['pay_date'], 'ref': f"SPY-{sp['id']:04d}",
+            ledger_entries.append({
+                'date':        sp['pay_date'],
+                'ref':         f"SPY-{sp['id']:04d}",
                 'description': f"Payment made — {sp.get('notes','') or sp.get('service_type','')}",
-                'debit': float(sp['amount'] or 0), 'credit': 0.0, 'type': 'payment_out', 'id': sp['id']})
+                'debit':       float(sp['amount'] or 0),
+                'credit':      0.0,
+                'type':        'payment_out',
+                'id':          sp['id'],
+            })
 
-        # Sort by date
-        ledger_entries.sort(key=lambda x: (x['date'], x['ref']))
+        # ── Sort: by date, then type priority, then ref ───────────────────────
+        # On the same date: sales first → purchases → payments
+        # Prevents PAY-0001 appearing before TXN-0001 alphabetically
+        _TYPE_ORDER = {'sale': 0, 'purchase': 1, 'payment_in': 2, 'payment_out': 3}
+        ledger_entries.sort(
+            key=lambda x: (x['date'], _TYPE_ORDER.get(x['type'], 9), x['ref'])
+        )
 
-        # Running balance
+        # ── Running balance: DEBIT − CREDIT ──────────────────────────────────
         running = 0.0
         for e in ledger_entries:
-            running += e['credit'] - e['debit']
-            e['balance'] = round(running, 3)
+            running       += e['debit'] - e['credit']
+            e['balance']   = round(running, 3)
 
-        # Summary
-        sold    = sum(e['credit'] for e in ledger_entries if e['type']=='sale')
-        bought  = sum(e['debit']  for e in ledger_entries if e['type']=='purchase')
-        rcvd    = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
-        paid_to = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
-        net_bal = round(running, 3)
+        # ── Summary ───────────────────────────────────────────────────────────
+        total_invoiced = sum(e['debit']  for e in ledger_entries if e['type'] == 'sale')
+        total_purchased= sum(e['credit'] for e in ledger_entries if e['type'] == 'purchase')
+        total_received = sum(e['credit'] for e in ledger_entries if e['type'] == 'payment_in')
+        total_paid_out = sum(e['debit']  for e in ledger_entries if e['type'] == 'payment_out')
+        net_bal        = round(running, 3)
+
         summary = {
-            'total_sold_to_them': sold, 'total_bought_from': bought,
-            'total_received': rcvd, 'total_paid_to_them': paid_to,
-            'net_receivable': round(sold - rcvd, 3),
-            'net_payable':    round(bought - paid_to, 3),
-            'net_balance':    net_bal,
-            'status': 'CREDIT' if net_bal > 0.005 else ('DEBIT' if net_bal < -0.005 else 'SETTLED'),
+            'total_sold_to_them':  total_invoiced,
+            'total_bought_from':   total_purchased,
+            'total_received':      total_received,
+            'total_paid_to_them':  total_paid_out,
+            'net_receivable':      round(total_invoiced  - total_received, 3),
+            'net_payable':         round(total_purchased - total_paid_out, 3),
+            'net_balance':         net_bal,
+            'status': 'RECEIVABLE' if net_bal >  0.005
+                 else ('PAYABLE'   if net_bal < -0.005
+                 else  'SETTLED'),
         }
 
     return render_template('statement.html',
-        companies=companies, ledger=ledger_entries, summary=summary,
-        company=company, filters={'date_from': date_from, 'date_to': date_to},
+        companies=companies,
+        ledger=ledger_entries,
+        summary=summary,
+        company=company,
+        filters={'date_from': date_from, 'date_to': date_to},
         today=date.today().strftime('%d %B %Y'),
     )
 
-# ── Payments (paginated) ──────────────────────────────────────────────────────
+
 @app.route('/payments', methods=['GET', 'POST'])
 @login_required
 def payments():
