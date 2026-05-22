@@ -701,6 +701,19 @@ def add_sale():
                     'cost':     float(tour_costs[i])      if i < len(tour_costs) and tour_costs[i] else 0,
                     'notes':    tour_notes[i].strip()     if i < len(tour_notes)    else '',
                 })
+        # Build passengers list from form
+        _pax_n  = request.form.getlist('pax_name[]')
+        _pax_p  = request.form.getlist('pax_passport[]')
+        _pax_nt = request.form.getlist('pax_nationality[]')
+        _pax_d  = request.form.getlist('pax_dob[]')
+        passengers_list = [
+            {'name': _pax_n[i].strip(),
+             'passport':    _pax_p[i].strip()  if i < len(_pax_p)  else '',
+             'nationality': _pax_nt[i].strip() if i < len(_pax_nt) else '',
+             'dob':         _pax_d[i].strip()  if i < len(_pax_d)  else ''}
+            for i in range(len(_pax_n)) if _pax_n[i].strip()
+        ]
+
         extra_vals = dict(
             service_type      = service_type,
             hotel_supplier    = request.form.get('hotel_supplier','').strip(),
@@ -726,6 +739,7 @@ def add_sale():
             airline           = request.form.get('airline','').upper().strip(),
             pnr               = request.form.get('pnr','').upper().strip(),
             baggage           = request.form.get('baggage','').strip(),
+            passengers_json   = _json.dumps(passengers_list),
         )
         new_id = execute_db('''
             INSERT INTO sales
@@ -738,7 +752,7 @@ def add_sale():
              hotel_checkin,hotel_checkout,hotel_nights,hotel_net,
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
-             insurance_supplier,insurance_type,airline,pnr,baggage,
+             insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
              outbound_cost,return_cost)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
@@ -749,7 +763,7 @@ def add_sale():
                 %s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,%s,%s,%s
             ) RETURNING id
         ''', (
             (request.form.get('from_loc','').upper().strip() or '-'),
@@ -776,7 +790,7 @@ def add_sale():
             extra_vals['visa_supplier'],extra_vals['visa_type'],extra_vals['passport_number'],
             extra_vals['visa_status'],extra_vals['insurance_supplier'],extra_vals['insurance_type'],
             extra_vals['airline'],extra_vals['pnr'],extra_vals['baggage'],
-            extra_vals.get('passengers_json','[]'),
+            extra_vals['passengers_json'],
             float(request.form.get('outbound_cost',0) or 0),
             float(request.form.get('return_cost',0) or 0),
         ))
@@ -1037,9 +1051,9 @@ def sales_report():
         agents = query_db('SELECT id, username, COALESCE(full_name,username) AS display FROM users ORDER BY username') or []
 
     return render_template('report.html',
-        sales=sales, totals=totals, companies=companies, agents=agents,
+        sales=sales, totals=totals, companies=companies, svc_filter=svc_type, agents=agents,
         filters={'company':company,'status':status,'date_from':date_from,
-                 'date_to':date_to, 'agent_id':agent_id, 'svc_type':svc_type},
+                 'date_to':date_to, 'agent_id':agent_id, 'svc_type':svc_type, 'service_type':svc_type},
         page=page, total_pages=total_pages, total_rows=total_rows
     )
 
