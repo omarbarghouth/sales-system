@@ -1696,21 +1696,29 @@ def reset_data():
         db = get_db()
         cur = db.cursor()
 
-        # Get counts before delete for the log
-        cur.execute('SELECT COUNT(*) FROM sales')
-        sales_count = cur.fetchone()[0]
-        cur.execute('SELECT COUNT(*) FROM payments')
-        pay_count = cur.fetchone()[0]
+        # Get counts — RealDictCursor returns dict, use .get() not [0]
+        cur.execute('SELECT COUNT(*) AS n FROM sales')
+        row = cur.fetchone()
+        sales_count = row.get('n', 0) if hasattr(row, 'get') else row[0]
+        cur.execute('SELECT COUNT(*) AS n FROM payments')
+        row = cur.fetchone()
+        pay_count = row.get('n', 0) if hasattr(row, 'get') else row[0]
 
-        # Hard delete everything — permanent, not soft delete
-        cur.execute('DELETE FROM sales')
-        cur.execute('DELETE FROM payments')
-        cur.execute('DELETE FROM audit_logs')
+        # Hard delete all transactional data
+        for _t in ['invoices','vouchers','packages','sales',
+                   'payments','supplier_payments','audit_logs']:
+            try: cur.execute('DELETE FROM ' + _t)
+            except Exception: db.rollback()
 
-        # Reset auto-increment sequences so IDs start from 1 again
-        cur.execute("ALTER SEQUENCE sales_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE payments_id_seq RESTART WITH 1")
-        cur.execute("ALTER SEQUENCE audit_logs_id_seq RESTART WITH 1")
+        # Reset ID sequences to 1
+        for _seq in ['sales_id_seq','payments_id_seq','audit_logs_id_seq',
+                     'invoices_id_seq','vouchers_id_seq','packages_id_seq']:
+            try: cur.execute('ALTER SEQUENCE ' + _seq + ' RESTART WITH 1')
+            except Exception: pass
+
+        # Reset document number sequences (INV/VCH/PKG restart from 0001)
+        try: cur.execute("UPDATE doc_sequences SET last_num = 0")
+        except Exception: pass
 
         db.commit()
 
