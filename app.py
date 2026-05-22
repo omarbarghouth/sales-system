@@ -3253,9 +3253,47 @@ def api_suppliers():
 
 # ── Master Data Management Pages ─────────────────────────────────────────────
 
+
+def ensure_master_tables():
+    """Create master_companies / master_suppliers if they don't exist yet."""
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS master_companies (
+                id         SERIAL PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                phone      TEXT DEFAULT '',
+                email      TEXT DEFAULT '',
+                address    TEXT DEFAULT '',
+                notes      TEXT DEFAULT '',
+                is_active  BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS master_suppliers (
+                id           SERIAL PRIMARY KEY,
+                name         TEXT NOT NULL,
+                service_type TEXT DEFAULT 'FLIGHT',
+                phone        TEXT DEFAULT '',
+                email        TEXT DEFAULT '',
+                address      TEXT DEFAULT '',
+                notes        TEXT DEFAULT '',
+                is_active    BOOLEAN DEFAULT TRUE,
+                created_at   TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        db.commit()
+    except Exception as _e:
+        try: get_db().rollback()
+        except: pass
+        logger.warning(f"ensure_master_tables: {_e}")
+
 @app.route('/master/companies', methods=['GET', 'POST'])
 @admin_required
 def master_companies():
+    ensure_master_tables()
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':
@@ -3282,13 +3320,19 @@ def master_companies():
             execute_db('DELETE FROM master_companies WHERE id=%s', [cid])
             flash('Company deleted.', 'success')
         return redirect(url_for('master_companies'))
-    companies = query_db('SELECT * FROM master_companies ORDER BY name') or []
+    try:
+        companies = query_db('SELECT * FROM master_companies ORDER BY name') or []
+    except Exception:
+        try: get_db().rollback()
+        except: pass
+        companies = []
     return render_template('master_companies.html', companies=companies)
 
 
 @app.route('/master/suppliers', methods=['GET', 'POST'])
 @admin_required
 def master_suppliers():
+    ensure_master_tables()
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':
