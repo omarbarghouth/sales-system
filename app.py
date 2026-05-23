@@ -279,6 +279,85 @@ def log_action(action, table_name, record_id=None, detail=''):
     except Exception as e:
         logger.error(f"Audit log failed: {e}")
 
+def post_ledger(ref_type, ref_id, ref_table, company, description, debit, credit, entry_date=None):
+    """
+    Post an immutable accounting entry to the shadow ledger.
+    Never updates or deletes — use is_reversed=TRUE for corrections.
+    Called after every sale, payment, supplier payment, and refund.
+    """
+    try:
+        execute_db("""
+            INSERT INTO accounting_entries
+            (entry_date, ref_type, ref_id, ref_table, company, description, debit, credit, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            entry_date or str(date.today()),
+            ref_type,
+            ref_id,
+            ref_table,
+            company.upper().strip() if company else '',
+            description or '',
+            round(float(debit or 0), 3),
+            round(float(credit or 0), 3),
+            session.get('user_id') if 'user_id' in session else None,
+        ))
+    except Exception as _le:
+        logger.error(f"Ledger post failed ({ref_type}/{ref_id}): {_le}")
+        # Never crash the main flow — ledger is supplementary
+
+
+def post_sale_items(sale_id, service_type, supplier, description, net_cost, sell_price, quantity=1):
+    """Write a sale_item row. Called after every new sale."""
+    try:
+        execute_db("""
+            INSERT INTO sale_items (sale_id, service_type, supplier, description, net_cost, sell_price, quantity)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            sale_id,
+            (service_type or 'FLIGHT').upper(),
+            (supplier or '').upper().strip(),
+            description or '',
+            round(float(net_cost or 0), 3),
+            round(float(sell_price or 0), 3),
+            int(quantity or 1),
+        ))
+    except Exception as _si:
+        logger.error(f"sale_items post failed (sale {sale_id}): {_si}")
+
+
+def validate_ledger_balance(company):
+    """
+    Compare shadow ledger balance vs dynamic calculation.
+    Returns (ledger_balance, dynamic_balance, is_ok).
+    Run nightly or after reconciliation.
+    """
+    try:
+        ledger = query_db("""
+            SELECT COALESCE(SUM(debit - credit), 0) AS bal
+            FROM accounting_entries
+            WHERE UPPER(company)=UPPER(%s) AND is_reversed=FALSE
+        """, [company], one=True)
+        ledger_bal = float(ledger['bal'] if ledger else 0)
+
+        dynamic = query_db("""
+            SELECT
+              COALESCE((SELECT SUM(sell)   FROM sales            WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE),0) -
+              COALESCE((SELECT SUM(amount) FROM payments         WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE),0) +
+              COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE),0) -
+              COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE),0)
+            AS bal
+        """, [company, company, company, company], one=True)
+        dynamic_bal = float(dynamic['bal'] if dynamic else 0)
+
+        is_ok = abs(ledger_bal - dynamic_bal) < 0.01
+        if not is_ok:
+            logger.warning(f"Balance mismatch {company}: ledger={ledger_bal:.3f} dynamic={dynamic_bal:.3f}")
+        return ledger_bal, dynamic_bal, is_ok
+    except Exception as _e:
+        logger.error(f"validate_ledger_balance failed: {_e}")
+        return 0, 0, False
+
+
 def compute_ticket_status(outbound_delivery, return_delivery):
     """Auto-compute outbound/return status based on today's date."""
     today_str = str(date.today())
@@ -819,6 +898,23 @@ def add_sale():
                        f"{request.form.get('customer','').upper()} | {extra_vals['service_type']} | Sell:{sell}")
         except Exception:
             pass
+        # ── Shadow ledger entry ───────────────────────────────────────────────
+        if new_id:
+            _co  = request.form.get('company','').upper().strip()
+            _svc = extra_vals.get('service_type','FLIGHT')
+            _fl  = request.form.get('from_loc','') or ''
+            _tl  = request.form.get('to_loc','')   or ''
+            _cust= request.form.get('customer','')
+            _dt  = request.form.get('sale_date', str(date.today()))
+            post_ledger('SALE', new_id, 'sales', _co,
+                        f"{_svc} {_fl}{'→'+_tl if _tl else ''} | {_cust}",
+                        debit=sell, credit=0, entry_date=_dt)
+            post_sale_items(new_id, _svc,
+                            extra_vals.get('buy_from') or request.form.get('buy_from',''),
+                            f"{_svc} {_fl}{'→'+_tl if _tl else ''}",
+                            extra_vals.get('outbound_cost') or net,
+                            sell,
+                            request.form.get('tickets',1))
         flash('Transaction saved successfully.', 'success')
         return redirect(url_for('sales_report'))  # POST→REDIRECT→GET
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
@@ -1322,6 +1418,10 @@ def payments():
             (company_val, amount, pay_date, request.form.get('notes','').strip())
         )
         log_action('CREATE', 'payments', new_id, f"{company_val} | Amount:{amount}")
+        if new_id:
+            post_ledger('PAYMENT', new_id, 'payments', company_val,
+                        f"Payment received — {request.form.get('notes','') or ''}",
+                        debit=0, credit=amount, entry_date=pay_date)
         flash('Payment recorded successfully.', 'success')
         return redirect(url_for('payments'))
 
@@ -2278,6 +2378,117 @@ def init_extension_db():
         try: cur.execute(_idx)
         except Exception: pass
 
+    # ════════════════════════════════════════════════════════════════════════
+    # PHASE A — sale_items: one booking → multiple service line items
+    # ════════════════════════════════════════════════════════════════════════
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS sale_items (
+            id           SERIAL PRIMARY KEY,
+            sale_id      INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+            service_type TEXT NOT NULL DEFAULT 'FLIGHT',
+            supplier     TEXT DEFAULT '',
+            description  TEXT DEFAULT '',
+            net_cost     NUMERIC(12,3) DEFAULT 0,
+            sell_price   NUMERIC(12,3) DEFAULT 0,
+            quantity     INTEGER DEFAULT 1,
+            notes        TEXT DEFAULT '',
+            created_at   TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_items_svc     ON sale_items(service_type)")
+
+    # ════════════════════════════════════════════════════════════════════════
+    # PHASE B — accounting_entries: immutable shadow ledger
+    # ════════════════════════════════════════════════════════════════════════
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS accounting_entries (
+            id           SERIAL PRIMARY KEY,
+            entry_date   DATE NOT NULL,
+            ref_type     TEXT NOT NULL,
+            ref_id       INTEGER,
+            ref_table    TEXT NOT NULL,
+            company      TEXT NOT NULL,
+            description  TEXT DEFAULT '',
+            debit        NUMERIC(12,3) DEFAULT 0,
+            credit       NUMERIC(12,3) DEFAULT 0,
+            created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at   TIMESTAMP DEFAULT NOW(),
+            is_reversed  BOOLEAN DEFAULT FALSE,
+            reversed_by  INTEGER REFERENCES accounting_entries(id) ON DELETE SET NULL
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_acc_company ON accounting_entries(company, entry_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_acc_ref     ON accounting_entries(ref_table, ref_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_acc_date    ON accounting_entries(entry_date)")
+
+    # ════════════════════════════════════════════════════════════════════════
+    # PHASE C — refunds: cancellations and partial refunds
+    # ════════════════════════════════════════════════════════════════════════
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS refunds (
+            id                SERIAL PRIMARY KEY,
+            sale_id           INTEGER REFERENCES sales(id) ON DELETE SET NULL,
+            refund_date       DATE NOT NULL DEFAULT CURRENT_DATE,
+            refund_type       TEXT NOT NULL DEFAULT 'FULL',
+            company           TEXT NOT NULL,
+            customer          TEXT DEFAULT '',
+            gross_amount      NUMERIC(12,3) DEFAULT 0,
+            cancellation_fee  NUMERIC(12,3) DEFAULT 0,
+            refund_amount     NUMERIC(12,3) DEFAULT 0,
+            supplier_penalty  NUMERIC(12,3) DEFAULT 0,
+            supplier_refund   NUMERIC(12,3) DEFAULT 0,
+            reason            TEXT DEFAULT '',
+            status            TEXT DEFAULT 'PENDING',
+            processed_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            processed_at      TIMESTAMP,
+            created_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at        TIMESTAMP DEFAULT NOW(),
+            notes             TEXT DEFAULT ''
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_refunds_sale    ON refunds(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_refunds_company ON refunds(company, refund_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_refunds_status  ON refunds(status)")
+
+    # ════════════════════════════════════════════════════════════════════════
+    # PHASE D — company_id / supplier_id alongside existing TEXT columns
+    # TEXT columns stay — these are additive FK references only
+    # ════════════════════════════════════════════════════════════════════════
+    for _col_sql in [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS company_id  INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES master_suppliers(id)  ON DELETE SET NULL",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
+        "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES master_suppliers(id) ON DELETE SET NULL",
+    ]:
+        try: cur.execute(_col_sql)
+        except Exception: pass
+
+    # Backfill company_id from master_companies where name matches
+    try:
+        cur.execute("""
+            UPDATE sales s SET company_id = mc.id
+            FROM master_companies mc
+            WHERE UPPER(TRIM(s.company)) = UPPER(TRIM(mc.name))
+              AND s.company_id IS NULL
+        """)
+        cur.execute("""
+            UPDATE payments p SET company_id = mc.id
+            FROM master_companies mc
+            WHERE UPPER(TRIM(p.company)) = UPPER(TRIM(mc.name))
+              AND p.company_id IS NULL
+        """)
+        cur.execute("""
+            UPDATE sales s SET supplier_id = ms.id
+            FROM master_suppliers ms
+            WHERE UPPER(TRIM(s.buy_from)) = UPPER(TRIM(ms.name))
+              AND s.supplier_id IS NULL
+        """)
+    except Exception: pass
+
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_company_id  ON sales(company_id)  WHERE company_id IS NOT NULL")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_supplier_id ON sales(supplier_id) WHERE supplier_id IS NOT NULL")
+
     db.commit()
     cur.close()
     db.close()
@@ -2644,6 +2855,22 @@ def add_sale_v2():
                        f"{request.form.get('customer','').upper()} | Sell:{sell}")
         except Exception:
             pass
+        # ── Shadow ledger + sale_items ────────────────────────────────────────
+        if new_id:
+            _co  = request.form.get('company','').upper().strip()
+            _svc = service_type
+            _fl  = request.form.get('from_loc','') or ''
+            _tl  = request.form.get('to_loc','')   or ''
+            _cust= request.form.get('customer','')
+            _dt  = request.form.get('sale_date', str(date.today()))
+            post_ledger('SALE', new_id, 'sales', _co,
+                        f"{_svc} {_fl}{'→'+_tl if _tl else ''} | {_cust}",
+                        debit=sell, credit=0, entry_date=_dt)
+            post_sale_items(new_id, _svc,
+                            request.form.get('buy_from',''),
+                            f"{_svc} {_fl}{'→'+_tl if _tl else ''}",
+                            _oc, sell,
+                            request.form.get('tickets',1))
         flash('Transaction saved successfully.', 'success')
         # POST → REDIRECT → GET: prevents duplicate submission on back/refresh
         if session.get('user_role') != 'admin':
@@ -3104,6 +3331,109 @@ def _get_supplier_list():
     return rows
 
 
+
+# ── Refunds ───────────────────────────────────────────────────────────────────
+@app.route('/refunds', methods=['GET','POST'])
+@login_required
+def refunds():
+    if request.method == 'POST':
+        action = request.form.get('action','create')
+
+        if action == 'create':
+            sale_id     = request.form.get('sale_id') or None
+            company     = request.form.get('company','').upper().strip()
+            customer    = request.form.get('customer','').upper().strip()
+            refund_type = request.form.get('refund_type','FULL')
+            gross_amt   = round(float(request.form.get('gross_amount',0) or 0), 3)
+            cancel_fee  = round(float(request.form.get('cancellation_fee',0) or 0), 3)
+            refund_amt  = round(float(request.form.get('refund_amount',0) or 0), 3)
+            sup_penalty = round(float(request.form.get('supplier_penalty',0) or 0), 3)
+            sup_refund  = round(float(request.form.get('supplier_refund',0) or 0), 3)
+            reason      = request.form.get('reason','').strip()
+            refund_date = request.form.get('refund_date', str(date.today()))
+
+            if not company:
+                flash('Company is required.', 'danger')
+                return redirect(url_for('refunds'))
+
+            rid = execute_db("""
+                INSERT INTO refunds
+                (sale_id, refund_date, refund_type, company, customer,
+                 gross_amount, cancellation_fee, refund_amount,
+                 supplier_penalty, supplier_refund, reason, created_by)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (sale_id, refund_date, refund_type, company, customer,
+                  gross_amt, cancel_fee, refund_amt,
+                  sup_penalty, sup_refund, reason, session.get('user_id')))
+
+            # Post to ledger: reverse the original sale credit
+            if rid:
+                post_ledger('REFUND', rid, 'refunds', company,
+                            f"Refund {refund_type} — {reason or customer}",
+                            debit=0, credit=gross_amt, entry_date=refund_date)
+                if cancel_fee > 0:
+                    post_ledger('CANCEL_FEE', rid, 'refunds', company,
+                                f"Cancellation fee retained",
+                                debit=cancel_fee, credit=0, entry_date=refund_date)
+
+            log_action('CREATE','refunds', rid, f"{company} | {refund_type} | JOD {refund_amt}")
+            flash(f'Refund created — JOD {refund_amt:.3f} for {company}.', 'success')
+            return redirect(url_for('refunds'))
+
+        elif action == 'process':
+            rid    = int(request.form.get('refund_id'))
+            status = request.form.get('status','PROCESSED')
+            execute_db("""
+                UPDATE refunds SET status=%s, processed_by=%s, processed_at=NOW()
+                WHERE id=%s
+            """, (status, session.get('user_id'), rid))
+            log_action('UPDATE','refunds', rid, f"Status→{status}")
+            flash(f'Refund #{rid:04d} marked as {status}.', 'success')
+            return redirect(url_for('refunds'))
+
+    # GET
+    status_f = request.args.get('status','')
+    company_f = request.args.get('company','').strip()
+
+    q = """
+        SELECT r.*, s.from_loc, s.to_loc, s.travel_date,
+               s.service_type, u.username as processed_by_name
+        FROM refunds r
+        LEFT JOIN sales s ON r.sale_id = s.id
+        LEFT JOIN users u ON r.processed_by = u.id
+        WHERE 1=1
+    """
+    params = []
+    if status_f:
+        q += " AND r.status=%s"; params.append(status_f)
+    if company_f:
+        q += " AND UPPER(r.company)=UPPER(%s)"; params.append(company_f)
+    q += " ORDER BY r.created_at DESC LIMIT 100"
+    refund_list = query_db(q, params) or []
+
+    # Summary totals
+    totals = query_db("""
+        SELECT
+            COUNT(*)                                         as total_count,
+            COALESCE(SUM(gross_amount),0)                   as total_gross,
+            COALESCE(SUM(refund_amount),0)                  as total_refunded,
+            COALESCE(SUM(cancellation_fee),0)               as total_fees,
+            COALESCE(SUM(CASE WHEN status='PENDING' THEN 1 END),0) as pending_count
+        FROM refunds
+    """, one=True)
+
+    try:    companies = get_companies_list()
+    except: companies = []
+
+    return render_template('refunds.html',
+        refunds=refund_list, totals=totals,
+        companies=companies,
+        filters={'status': status_f, 'company': company_f},
+        today=str(date.today()),
+    )
+
+
 @app.route('/supplier-statement')
 @login_required
 def supplier_statement():
@@ -3231,6 +3561,15 @@ def add_supplier_payment():
         INSERT INTO supplier_payments (supplier, amount, pay_date, service_type, notes)
         VALUES (%s,%s,%s,%s,%s)
     """, (supplier.upper(), amount, pay_date, svc_type.upper(), notes))
+    sp_new_id = execute_db("""
+        SELECT id FROM supplier_payments ORDER BY id DESC LIMIT 1
+    """)
+    try:
+        post_ledger('PURCHASE', sp_new_id or 0, 'supplier_payments',
+                    supplier.upper(),
+                    f"Payment made to {supplier.upper()} — {svc_type}",
+                    debit=amount, credit=0, entry_date=pay_date)
+    except Exception: pass
     log_action('CREATE', 'supplier_payments', 0,
                f"Supplier payment: {supplier.upper()} JOD {amount}")
     flash(f'Payment of JOD {amount:.3f} recorded for {supplier.upper()}.', 'success')
