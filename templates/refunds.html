@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Refunds & Cancellations — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-undo-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Refunds &amp; Cancellations</h1>
+    <p>Track customer refunds, cancellation fees and supplier penalties</p>
+  </div>
+</div>
+
+{# ── Summary KPIs ──────────────────────────────────────────────── #}
+{% if totals %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-receipt"></i></div>
+    <div class="kpi-label">Total Refunds</div>
+    <div class="kpi-value navy">{{ totals.total_count or 0 }}</div>
+    <div class="kpi-sub">{{ totals.pending_count or 0 }} pending</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-file-invoice-dollar"></i></div>
+    <div class="kpi-label">Gross Cancelled</div>
+    <div class="kpi-value red">{{ "%.3f"|format((totals.total_gross or 0)|float) }}</div>
+    <div class="kpi-sub">JOD original value</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-hand-holding-usd"></i></div>
+    <div class="kpi-label">Total Refunded</div>
+    <div class="kpi-value green">{{ "%.3f"|format((totals.total_refunded or 0)|float) }}</div>
+    <div class="kpi-sub">JOD returned to customers</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--gold-dk)"><i class="fas fa-percent"></i></div>
+    <div class="kpi-label">Fees Retained</div>
+    <div class="kpi-value gold">{{ "%.3f"|format((totals.total_fees or 0)|float) }}</div>
+    <div class="kpi-sub">JOD cancellation fees</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid-2">
+
+  {# ── New Refund Form ───────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><i class="fas fa-plus-circle"></i> New Refund / Cancellation</div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="action" value="create">
+        <div class="form-grid form-grid-2" style="margin-bottom:14px">
+
+          <div class="form-group">
+            <label>Company <span class="req">*</span></label>
+            <select name="company" required>
+              <option value="">— Select —</option>
+              {% for co in companies %}
+              <option value="{{ co }}">{{ co }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Refund Date</label>
+            <input type="date" name="refund_date" value="{{ today }}" required>
+          </div>
+
+          <div class="form-group">
+            <label>Customer Name</label>
+            <input type="text" name="customer" placeholder="Passenger name" style="text-transform:uppercase">
+          </div>
+
+          <div class="form-group">
+            <label>Type</label>
+            <select name="refund_type">
+              <option value="FULL">Full Refund</option>
+              <option value="PARTIAL">Partial Refund</option>
+              <option value="CREDIT_NOTE">Credit Note</option>
+              <option value="CANCELLATION">Cancellation (no refund)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Sale ID (optional)</label>
+            <input type="number" name="sale_id" placeholder="Link to TXN-XXXX">
+          </div>
+
+          <div class="form-group">
+            <label>Original Amount (JOD)</label>
+            <input type="number" step="0.001" name="gross_amount" placeholder="0.000" oninput="calcRefund()">
+          </div>
+
+          <div class="form-group">
+            <label>Cancellation Fee (JOD)</label>
+            <input type="number" step="0.001" name="cancellation_fee" id="cancelFee" placeholder="0.000" oninput="calcRefund()">
+          </div>
+
+          <div class="form-group">
+            <label>Refund to Customer (JOD)</label>
+            <input type="number" step="0.001" name="refund_amount" id="refundAmt" placeholder="0.000" style="font-weight:700;color:var(--green)">
+          </div>
+
+          <div class="form-group">
+            <label>Supplier Penalty (JOD)</label>
+            <input type="number" step="0.001" name="supplier_penalty" placeholder="0.000">
+          </div>
+
+          <div class="form-group">
+            <label>Supplier Refund (JOD)</label>
+            <input type="number" step="0.001" name="supplier_refund" placeholder="0.000">
+          </div>
+
+          <div class="form-group" style="grid-column:span 2">
+            <label>Reason</label>
+            <input type="text" name="reason" placeholder="Flight cancelled, customer request, visa rejected…">
+          </div>
+
+        </div>
+        <button type="submit" class="btn btn-red" style="width:100%">
+          <i class="fas fa-undo-alt"></i> Create Refund
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# ── Filters ───────────────────────────────────────────────────── #}
+  <div class="card">
+    <div class="card-header"><i class="fas fa-filter"></i> Filter Refunds</div>
+    <div class="card-body">
+      <form method="GET">
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Company</label>
+          <select name="company" onchange="this.form.submit()">
+            <option value="">All Companies</option>
+            {% for co in companies %}
+            <option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            {% for s in ['PENDING','PROCESSED','REJECTED'] %}
+            <option value="{{ s }}" {% if filters.status==s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+
+      {# Accounting impact note #}
+      <div style="margin-top:18px;padding:14px;background:var(--navy-lt);border-radius:var(--radius-sm);font-size:12.5px;color:var(--navy-dk);line-height:1.7">
+        <strong>Accounting effect of a refund:</strong><br>
+        Original sale: <span style="color:var(--red)">DR 350.000</span> (they owe us)<br>
+        Refund issued: <span style="color:var(--green)">CR 350.000</span> (wipes debt)<br>
+        Cancel fee kept: <span style="color:var(--red)">DR 35.000</span> (we keep)<br>
+        <strong>Net refund: JOD 315.000</strong>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Refunds Table ─────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <i class="fas fa-list"></i> Refund Records
+    <span style="margin-left:auto;font-size:12px;opacity:.6">{{ refunds|length }} records</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>Date</th>
+          <th>Company</th>
+          <th>Customer</th>
+          <th>Type</th>
+          <th>TXN</th>
+          <th class="text-right">Gross</th>
+          <th class="text-right">Fee</th>
+          <th class="text-right">Refunded</th>
+          <th>Status</th>
+          <th>Reason</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in refunds %}
+        <tr>
+          <td><strong style="color:var(--navy-dk)">REF-{{ "%04d"|format(r.id) }}</strong></td>
+          <td style="font-size:12px;color:var(--muted);font-family:monospace">{{ r.refund_date }}</td>
+          <td style="font-weight:600;font-size:13px">{{ r.company }}</td>
+          <td style="font-size:12px">{{ r.customer or '—' }}</td>
+          <td>
+            <span class="badge" style="
+              {% if r.refund_type=='FULL' %}background:#fee2e2;color:#7f1d1d
+              {% elif r.refund_type=='PARTIAL' %}background:#fef9c3;color:#78350f
+              {% elif r.refund_type=='CREDIT_NOTE' %}background:#e0f2fe;color:#0c4a6e
+              {% else %}background:#f1f5f9;color:#475569{% endif %}">
+              {{ r.refund_type }}
+            </span>
+          </td>
+          <td style="font-size:12px">
+            {% if r.sale_id %}<a href="{{ url_for('edit_sale', sale_id=r.sale_id) }}" style="color:var(--navy)">TXN-{{ "%04d"|format(r.sale_id) }}</a>{% else %}—{% endif %}
+          </td>
+          <td class="text-right" style="color:var(--red);font-weight:600">{{ "%.3f"|format((r.gross_amount or 0)|float) }}</td>
+          <td class="text-right" style="color:var(--gold-dk);font-weight:600">{{ "%.3f"|format((r.cancellation_fee or 0)|float) }}</td>
+          <td class="text-right" style="color:var(--green);font-weight:700">{{ "%.3f"|format((r.refund_amount or 0)|float) }}</td>
+          <td>
+            <span class="badge badge-{{ r.status|lower }}">{{ r.status }}</span>
+          </td>
+          <td style="font-size:12px;color:var(--text-2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.reason }}">{{ r.reason or '—' }}</td>
+          <td>
+            {% if r.status == 'PENDING' %}
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="action" value="process">
+              <input type="hidden" name="refund_id" value="{{ r.id }}">
+              <input type="hidden" name="status" value="PROCESSED">
+              <button type="submit" class="btn btn-sm btn-green" onclick="return confirm('Mark as processed?')">
+                <i class="fas fa-check"></i>
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12" class="text-center text-muted" style="padding:32px">
+          <i class="fas fa-undo-alt" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>
+          No refunds recorded.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function calcRefund() {
+  var gross  = parseFloat(document.querySelector('[name=gross_amount]').value)  || 0;
+  var fee    = parseFloat(document.getElementById('cancelFee').value)           || 0;
+  var refund = Math.max(0, gross - fee);
+  document.getElementById('refundAmt').value = refund.toFixed(3);
+}
+</script>
+{% endblock %}

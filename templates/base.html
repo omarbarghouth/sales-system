@@ -64,6 +64,10 @@
        class="sb-link {% if request.endpoint=='payments' %}active{% endif %}">
       <i class="fas fa-money-bill-wave"></i> Payments
     </a>
+    <a href="{{ url_for('refunds') }}"
+       class="sb-link {% if request.endpoint=='refunds' %}active{% endif %}">
+      <i class="fas fa-undo-alt"></i> Refunds
+    </a>
 
     <div class="sb-section">Documents</div>
     <a href="{{ url_for('invoice_list') }}"
