@@ -2250,6 +2250,34 @@ def init_extension_db():
     ]:
         cur.execute(idx)
 
+    # ── Money: REAL → NUMERIC(12,3) — exact decimal, no float rounding ─────
+    for _sql in [
+        "ALTER TABLE sales ALTER COLUMN net          TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN sell         TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN profit       TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN outbound_cost TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN return_cost  TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN hotel_net    TYPE NUMERIC(12,3)",
+        "ALTER TABLE sales ALTER COLUMN transfer_net TYPE NUMERIC(12,3)",
+        "ALTER TABLE payments ALTER COLUMN amount    TYPE NUMERIC(12,3)",
+        "ALTER TABLE supplier_payments ALTER COLUMN amount TYPE NUMERIC(12,3)",
+    ]:
+        try: cur.execute(_sql)
+        except Exception: pass
+
+    # ── Performance indexes ──────────────────────────────────────────────────
+    for _idx in [
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_date ON sales (company, sale_date) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sales_svc_type ON sales (service_type) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sales_buy_from ON sales (buy_from) WHERE deleted=FALSE AND buy_from IS NOT NULL AND buy_from<>''",
+        "CREATE INDEX IF NOT EXISTS idx_payments_company ON payments (company, pay_date) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sup_pay_supplier ON supplier_payments (supplier, pay_date) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sales_travel_date ON sales (travel_date) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sales_status ON sales (status) WHERE deleted=FALSE",
+    ]:
+        try: cur.execute(_idx)
+        except Exception: pass
+
     db.commit()
     cur.close()
     db.close()
