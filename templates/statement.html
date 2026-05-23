@@ -1,99 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Account Statement — {{ company or 'Select Company' }}{% endblock %}
 
-{% block extra_css %}
-<style>
-/* ── Screen layout ──────────────────────────────────────────── */
-.stmt-wrap   { background:#fff; border-radius:10px; box-shadow:0 2px 20px rgba(0,0,0,.08); overflow:hidden; }
-.stmt-kpi    { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
-.stmt-legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; }
-.leg-pill    { padding:3px 12px; border-radius:20px; font-weight:600; }
-
-/* ── Print ──────────────────────────────────────────────────── */
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 8mm 8mm 10mm 8mm;
-  }
-  /* Force colors */
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-  /* Kill entire page chrome */
-  body > * { display: none !important; }
-  .sidebar, .topbar, .page-header, .filter-bar,
-  .no-print, .stmt-kpi, .stmt-legend { display: none !important; }
-
-  /* Show only the document */
-  body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  .main-content {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-  #stmtDoc {
-    display: block !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow: visible !important;
-  }
-
-  /* Table: fit full width, no overflow */
-  table {
-    width: 100% !important;
-    table-layout: fixed !important;
-    border-collapse: collapse !important;
-    font-size: 9.5pt !important;
-  }
-  table thead th,
-  table tbody td,
-  table tfoot td {
-    padding: 5pt 6pt !important;
-    font-size: 9pt !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-  /* Description column gets remaining space */
-  table th:nth-child(3),
-  table td:nth-child(3) { white-space: normal !important; word-break: break-word !important; }
-
-  /* Header/banner font sizes */
-  #stmtDoc [style*="font-size:32px"] { font-size: 22pt !important; }
-  #stmtDoc [style*="font-size:22px"] { font-size: 15pt !important; }
-  #stmtDoc [style*="height:72px"]    { height: 52px !important; }
-  #stmtDoc [style*="padding:28px"]   { padding: 14pt 16pt !important; }
-  #stmtDoc [style*="padding:16px 18px"] { padding: 8pt 10pt !important; }
-  #stmtDoc [style*="padding:14px 24px"] { padding: 8pt 12pt !important; }
-
-  /* Summary 4-col grid — smaller on print */
-  #stmtDoc [style*="grid-template-columns:1fr 1fr 1fr 1fr"] {
-    display: table !important;
-    width: 100% !important;
-  }
-  #stmtDoc [style*="font-size:19px"] { font-size: 13pt !important; }
-
-  /* Signature section */
-  #stmtDoc [style*="padding:22px 32px"] { padding: 10pt 12pt !important; }
-
-  /* Pagination */
-  tr { page-break-inside: avoid; }
-  thead { display: table-header-group; }
-  tfoot { display: table-footer-group; }
-  .stmt-wrap { page-break-inside: auto; }
+{% block extra_css %}<style>
+/* ── Screen ───────────────────────────────────────────────── */
+.stmt-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.stmt-legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.leg{padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700}
+/* ── Print ────────────────────────────────────────────────── */
+@media print{
+  @page{size:A4 portrait;margin:10mm 10mm 12mm 10mm}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body>*{display:none!important}
+  .sidebar,.topbar,.page-header,.filter-bar,.no-print,
+  .stmt-kpis,.stmt-legend{display:none!important}
+  body{margin:0!important;background:#fff!important}
+  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important}
+  #stmtDoc{display:block!important;box-shadow:none!important;border-radius:0!important;width:100%!important;overflow:visible!important}
+  table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;font-size:8.5pt!important}
+  th,td{padding:4pt 5pt!important;font-size:8pt!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td:nth-child(3),th:nth-child(3){white-space:normal!important;word-break:break-word!important}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  tfoot{display:table-footer-group}
 }
-</style>
-{% endblock %}
+</style>{% endblock %}
 
 {% block content %}
-{# ── Page Header ────────────────────────────────────────────── #}
+{# ── Header ─────────────────────────────────────────────────── #}
 <div class="page-header no-print">
   <div class="page-header-left">
     <h1><i class="fas fa-balance-scale" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Account Statement</h1>
-    <p>Mutual B2B ledger — receivables, payables & running balance</p>
+    <p>Mutual B2B ledger · full debit / credit / running balance</p>
   </div>
   <div class="page-header-actions">
     {% if company and ledger %}
@@ -105,7 +42,7 @@
 {# ── Filters ─────────────────────────────────────────────────── #}
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%">
-    <div class="form-group" style="flex:2;min-width:220px">
+    <div class="form-group" style="flex:2;min-width:200px">
       <label>Company</label>
       <select name="company" onchange="this.form.submit()" style="font-weight:700">
         <option value="">— Select Company —</option>
@@ -114,45 +51,52 @@
         {% endfor %}
       </select>
     </div>
-    <div class="form-group" style="min-width:130px">
+    <div class="form-group" style="min-width:120px">
       <label>From</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
-    <div class="form-group" style="min-width:130px">
+    <div class="form-group" style="min-width:120px">
       <label>To</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
+    </div>
+    <div class="form-group" style="min-width:120px">
+      <label>Service</label>
+      <select name="svc_type" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for s in ['FLIGHT','HOTEL','VISA','INSURANCE','TRANSFER','TOUR','PACKAGE'] %}
+        <option value="{{ s }}" {% if filters.svc_type==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
     </div>
     {% if company %}<a href="{{ url_for('statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end" title="Clear"><i class="fas fa-times"></i></a>{% endif %}
   </form>
 </div>
 
 {% if company and summary %}
-
-{# ── KPI Cards (screen only) ─────────────────────────────────── #}
-<div class="stmt-kpi no-print">
+{# ── KPI cards ────────────────────────────────────────────────── #}
+<div class="stmt-kpis no-print">
   <div class="kpi-box">
-    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-arrow-circle-right"></i></div>
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-file-invoice-dollar"></i></div>
     <div class="kpi-label">Invoiced to Them</div>
-    <div class="kpi-value red">{{ "%.3f"|format(summary.total_sold_to_them) }}</div>
-    <div class="kpi-sub">Sales (DR)</div>
+    <div class="kpi-value red">{{ "%.3f"|format(summary.total_sold) }}</div>
+    <div class="kpi-sub">Sales · DR</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-arrow-circle-left"></i></div>
+    <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-hand-holding-usd"></i></div>
     <div class="kpi-label">Payments Received</div>
     <div class="kpi-value green">{{ "%.3f"|format(summary.total_received) }}</div>
-    <div class="kpi-sub">Cash in (CR)</div>
+    <div class="kpi-sub">Cash in · CR</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-shopping-cart"></i></div>
-    <div class="kpi-label">Purchases from Them</div>
-    <div class="kpi-value navy">{{ "%.3f"|format(summary.total_bought_from) }}</div>
-    <div class="kpi-sub">Purchases (CR)</div>
+    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-shopping-bag"></i></div>
+    <div class="kpi-label">Bought from Them</div>
+    <div class="kpi-value navy">{{ "%.3f"|format(summary.total_bought) }}</div>
+    <div class="kpi-sub">Purchases · CR</div>
   </div>
-  <div class="kpi-box {% if summary.status=='RECEIVABLE' %}red{% elif summary.status=='PAYABLE' %}green{% endif %}"
-       style="border:2px solid {% if summary.status=='RECEIVABLE' %}var(--red){% elif summary.status=='PAYABLE' %}var(--green){% else %}var(--gold){% endif %}">
+  <div class="kpi-box" style="border:2px solid {% if summary.status=='RECEIVABLE' %}var(--red){% elif summary.status=='PAYABLE' %}var(--green){% else %}var(--gold){% endif %}">
     <div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
     <div class="kpi-label">Net Balance</div>
-    <div class="kpi-value {% if summary.status=='RECEIVABLE' %}red{% elif summary.status=='PAYABLE' %}green{% else %}gold{% endif %}" style="font-size:18px">
+    <div class="kpi-value {% if summary.status=='RECEIVABLE' %}red{% elif summary.status=='PAYABLE' %}green{% else %}gold{% endif %}" style="font-size:19px">
       {{ "%.3f"|format(summary.net_balance|abs) }}
     </div>
     <div class="kpi-sub" style="font-weight:700">
@@ -163,98 +107,96 @@
   </div>
 </div>
 
-{# ── Net balance bar (screen only) ───────────────────────────── #}
-<div class="no-print card" style="padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-  <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px">
-    <span>Net Receivable: <strong style="color:var(--red)">JOD {{ "%.3f"|format(summary.net_receivable) }}</strong></span>
-    <span>Net Payable: <strong style="color:var(--navy)">JOD {{ "%.3f"|format(summary.net_payable) }}</strong></span>
+{# ── Balance bar ──────────────────────────────────────────────── #}
+<div class="no-print card" style="padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;gap:20px;font-size:13px;flex-wrap:wrap">
+    <span>Receivable: <strong style="color:var(--red)">JOD {{ "%.3f"|format(summary.net_receivable) }}</strong></span>
+    <span>Payable: <strong style="color:var(--navy)">JOD {{ "%.3f"|format(summary.net_payable) }}</strong></span>
+    <span style="color:var(--muted)">{{ summary.entry_count }} entries</span>
   </div>
   <strong style="font-size:15px;color:{% if summary.status=='RECEIVABLE' %}var(--red){% elif summary.status=='PAYABLE' %}var(--green){% else %}var(--gold-dk){% endif %}">
     {% if summary.status=='RECEIVABLE' %}{{ company }} owes us JOD {{ "%.3f"|format(summary.net_balance) }}
     {% elif summary.status=='PAYABLE' %}We owe {{ company }} JOD {{ "%.3f"|format(summary.net_balance|abs) }}
-    {% else %}Account fully settled ✓{% endif %}
+    {% else %}✓ Fully settled{% endif %}
   </strong>
 </div>
 
-{# ══════════════════════════════════════════════════════════════
-   THE PRINT DOCUMENT — only #stmtDoc survives @media print
+{# ═══════════════════════════════════════════════════════════════
+   PRINT DOCUMENT
 ═══════════════════════════════════════════════════════════════ #}
-<div id="stmtDoc" class="stmt-wrap">
+<div id="stmtDoc" style="background:#fff;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.08);overflow:hidden;margin-bottom:20px">
 
-  {# ── Branded header ──────────────────────────────────────── #}
-  <div style="background:linear-gradient(135deg,#07111f 0%,#0f1d35 50%,#1a2f52 100%);padding:28px 32px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;border-bottom:4px solid #C8A84B">
+  {# ── Branded header ──────────────────────────────────────────── #}
+  <div style="background:linear-gradient(135deg,#07111f 0%,#0f1d35 55%,#1a2f52 100%);padding:26px 30px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:4px solid #C8A84B">
     <div>
-      <img src="{{ url_for('static',filename='logo_white.png') }}"
-           style="height:72px;width:auto;display:block;margin-bottom:10px;filter:drop-shadow(0 2px 12px rgba(0,0,0,.4))">
-      <div style="color:rgba(255,255,255,.55);font-size:11.5px;line-height:1.8">
-        Alsondos Travel &amp; Tourism<br>
-        Amman, Jordan &nbsp;·&nbsp; Travel Agency
-      </div>
+      <img src="{{ url_for('static',filename='logo_white.png') }}" style="height:64px;width:auto;display:block;margin-bottom:8px;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))">
+      <div style="color:rgba(255,255,255,.5);font-size:11px;line-height:1.9">Alsondos Travel &amp; Tourism<br>Amman, Jordan · Travel Agency</div>
     </div>
     <div style="text-align:right">
-      <div style="font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:900;color:#fff;line-height:1;letter-spacing:-.5px">ACCOUNT STATEMENT</div>
-      <div style="font-size:15px;font-weight:800;color:#C8A84B;margin-top:9px;letter-spacing:.5px;text-transform:uppercase">{{ company }}</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:28px;font-weight:900;color:#fff;letter-spacing:-.5px">ACCOUNT STATEMENT</div>
+      <div style="font-size:15px;font-weight:800;color:#C8A84B;margin-top:8px;text-transform:uppercase;letter-spacing:.5px">{{ company }}</div>
       <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:5px" id="stmtDate">{{ today }}</div>
       {% if filters.date_from or filters.date_to %}
-      <div style="font-size:11px;color:rgba(200,168,75,.6);margin-top:3px">
-        Period: {{ filters.date_from or '—' }} → {{ filters.date_to or 'present' }}
+      <div style="font-size:10.5px;color:rgba(200,168,75,.6);margin-top:3px">
+        {{ filters.date_from or '—' }} → {{ filters.date_to or 'present' }}
+        {% if filters.svc_type %} · {{ filters.svc_type }}{% endif %}
       </div>
       {% endif %}
     </div>
   </div>
 
-  {# ── 4-column summary ──────────────────────────────────────── #}
+  {# ── 4-col summary row ───────────────────────────────────────── #}
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid #e2e8f0">
-    {% for label, val, color, sub in [
-      ('Invoiced (DR)',       summary.total_sold_to_them,  '#7f1d1d', 'Sales to company'),
-      ('Payments In (CR)',    summary.total_received,      '#14532d', 'Received from company'),
-      ('Purchases (CR)',      summary.total_bought_from,   '#1e3a5f', 'Bought from company'),
-      ('Payments Out (DR)',   summary.total_paid_to_them,  '#78350f', 'Paid to company'),
+    {% for lbl,val,color,sub in [
+      ('Invoiced (DR)',    summary.total_sold,     '#7f1d1d','Sales to company'),
+      ('Received (CR)',   summary.total_received,  '#14532d','Payments received'),
+      ('Purchases (CR)',  summary.total_bought,    '#1e3a5f','Bought from company'),
+      ('Paid Out (DR)',   summary.total_paid_out,  '#78350f','Payments made'),
     ] %}
-    <div style="padding:16px 18px;border-right:1px solid #e2e8f0;text-align:center{% if loop.last %};border-right:none{% endif %}">
-      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px">{{ label }}</div>
-      <div style="font-size:19px;font-weight:800;color:{{ color }};font-family:'Playfair Display',Georgia,serif">{{ "%.3f"|format(val) }}</div>
+    <div style="padding:14px 16px;text-align:center;border-right:1px solid #e2e8f0{% if loop.last %};border-right:none{% endif %}">
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:5px">{{ lbl }}</div>
+      <div style="font-size:17px;font-weight:800;color:{{ color }};font-family:'Playfair Display',Georgia,serif">{{ "%.3f"|format(val) }}</div>
       <div style="font-size:9.5px;color:#94a3b8;margin-top:3px">{{ sub }}</div>
     </div>
     {% endfor %}
   </div>
 
-  {# ── Net balance banner ────────────────────────────────────── #}
-  <div style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;
+  {# ── Balance banner ──────────────────────────────────────────── #}
+  <div style="padding:12px 22px;display:flex;justify-content:space-between;align-items:center;
     background:{% if summary.status=='RECEIVABLE' %}linear-gradient(90deg,#450a0a,#7f1d1d)
     {% elif summary.status=='PAYABLE' %}linear-gradient(90deg,#052e16,#14532d)
     {% else %}linear-gradient(90deg,#0f172a,#1e293b){% endif %}">
-    <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.5px">
-      Balance as of {{ today }}
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.4px">
+      Net Balance · {{ today }}
     </div>
-    <div style="font-family:'Playfair Display',Georgia,serif;font-size:22px;font-weight:900;
+    <div style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:900;
       color:{% if summary.status=='RECEIVABLE' %}#fca5a5{% elif summary.status=='PAYABLE' %}#86efac{% else %}#C8A84B{% endif %}">
       JOD {{ "%.3f"|format(summary.net_balance|abs) }}
-      <span style="font-size:13px;font-weight:600;margin-left:8px;opacity:.85">
+      <span style="font-size:12px;font-weight:600;margin-left:8px;opacity:.85">
         {% if summary.status=='RECEIVABLE' %}— {{ company }} owes us ▲
         {% elif summary.status=='PAYABLE' %}— We owe {{ company }} ▼
-        {% else %}— Fully Settled ✓{% endif %}
+        {% else %}— Settled ✓{% endif %}
       </span>
     </div>
   </div>
 
-  {# ── Ledger table ──────────────────────────────────────────── #}
+  {# ── Ledger table ────────────────────────────────────────────── #}
   <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12.5px">
       <thead>
         <tr style="background:#0f1d35">
-          <th style="padding:10px 14px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7);white-space:nowrap;width:90px">Date</th>
-          <th style="padding:10px 14px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7);white-space:nowrap;width:85px">Reference</th>
-          <th style="padding:10px 14px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.7)">Description</th>
-          <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#fca5a5;white-space:nowrap;width:100px">
-            Debit (JOD)<br><span style="font-size:8px;opacity:.6;font-weight:400">They owe us ▲</span>
-          </th>
-          <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#86efac;white-space:nowrap;width:100px">
-            Credit (JOD)<br><span style="font-size:8px;opacity:.6;font-weight:400">Offsets debt ▼</span>
-          </th>
-          <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#C8A84B;white-space:nowrap;width:110px">
-            Balance (JOD)<br><span style="font-size:8px;opacity:.6;font-weight:400">+ = receivable</span>
-          </th>
+          {% for col,w,align,color in [
+            ('Date',        '88px', 'left',  'rgba(255,255,255,.7)'),
+            ('Reference',   '82px', 'left',  'rgba(255,255,255,.7)'),
+            ('Description', '*',    'left',  'rgba(255,255,255,.7)'),
+            ('Passenger',   '110px','left',  'rgba(255,255,255,.7)'),
+            ('Svc',         '72px', 'center','rgba(255,255,255,.7)'),
+            ('Debit (JOD)', '95px', 'right', '#fca5a5'),
+            ('Credit (JOD)','95px', 'right', '#86efac'),
+            ('Balance',     '105px','right', '#C8A84B'),
+          ] %}
+          <th style="padding:9px 10px;text-align:{{ align }};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:{{ color }};white-space:nowrap;{% if w!='*' %}width:{{ w }};{% endif %}">{{ col }}</th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -264,8 +206,10 @@
           {% elif e.type=='payment_out' %}background:#fefce8
           {% elif e.type=='purchase' %}background:#f8fafc
           {% else %}background:#fff{% endif %}">
-          <td style="padding:9px 14px;color:#64748b;font-size:11.5px;white-space:nowrap;font-family:'Courier New',monospace">{{ e.date }}</td>
-          <td style="padding:9px 14px">
+
+          <td style="padding:8px 10px;color:#64748b;font-size:11.5px;white-space:nowrap;font-family:monospace">{{ e.date }}</td>
+
+          <td style="padding:8px 10px">
             <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap;
               {% if e.type=='sale' %}background:#fee2e2;color:#7f1d1d
               {% elif e.type=='purchase' %}background:#e0f2fe;color:#0c4a6e
@@ -274,44 +218,47 @@
               {{ e.ref }}
             </span>
           </td>
-          <td style="padding:9px 14px;color:#1e293b;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ e.description }}">
-            {{ e.description }}
+
+          <td style="padding:8px 10px;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ e.description }}">{{ e.description }}</td>
+
+          <td style="padding:8px 10px;font-size:11.5px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.passenger or '—' }}</td>
+
+          <td style="padding:8px 10px;text-align:center">
+            {% if e.svc %}
+            <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:#e8eef8;color:#1B3A6B;white-space:nowrap">{{ e.svc[:4] }}</span>
+            {% endif %}
           </td>
-          <td style="padding:9px 14px;text-align:right;font-weight:{% if e.debit>0 %}700{% else %}400{% endif %};color:{% if e.debit>0 %}#7f1d1d{% else %}#cbd5e1{% endif %};font-size:13px">
+
+          <td style="padding:8px 10px;text-align:right;font-weight:{% if e.debit>0 %}700{% else %}400{% endif %};color:{% if e.debit>0 %}#7f1d1d{% else %}#cbd5e1{% endif %};font-size:13px">
             {% if e.debit > 0 %}{{ "%.3f"|format(e.debit) }}{% else %}—{% endif %}
           </td>
-          <td style="padding:9px 14px;text-align:right;font-weight:{% if e.credit>0 %}700{% else %}400{% endif %};color:{% if e.credit>0 %}#14532d{% else %}#cbd5e1{% endif %};font-size:13px">
+
+          <td style="padding:8px 10px;text-align:right;font-weight:{% if e.credit>0 %}700{% else %}400{% endif %};color:{% if e.credit>0 %}#14532d{% else %}#cbd5e1{% endif %};font-size:13px">
             {% if e.credit > 0 %}{{ "%.3f"|format(e.credit) }}{% else %}—{% endif %}
           </td>
-          <td style="padding:9px 14px;text-align:right;font-weight:700;font-size:13px;
-            color:{% if e.balance>0.005 %}#7f1d1d{% elif e.balance<-0.005 %}#14532d{% else %}#64748b{% endif %}">
+
+          <td style="padding:8px 10px;text-align:right;font-weight:700;font-size:13px;color:{% if e.balance>0.005 %}#7f1d1d{% elif e.balance<-0.005 %}#14532d{% else %}#64748b{% endif %}">
             {{ "%.3f"|format(e.balance) }}
-            {% if e.balance>0.005 %}<span style="font-size:8px;font-weight:400;opacity:.7"> DR</span>
-            {% elif e.balance<-0.005 %}<span style="font-size:8px;font-weight:400;opacity:.7"> CR</span>{% endif %}
+            {% if e.balance>0.005 %}<span style="font-size:8px;opacity:.6"> DR</span>
+            {% elif e.balance<-0.005 %}<span style="font-size:8px;opacity:.6"> CR</span>{% endif %}
           </td>
+
         </tr>
         {% else %}
-        <tr>
-          <td colspan="6" style="padding:36px;text-align:center;color:#94a3b8;font-size:13px">
-            No transactions found for <strong>{{ company }}</strong>{% if filters.date_from or filters.date_to %} in this period{% endif %}.
-          </td>
-        </tr>
+        <tr><td colspan="8" style="padding:32px;text-align:center;color:#94a3b8;font-size:13px">
+          No transactions found for <strong>{{ company }}</strong>{% if filters.date_from or filters.date_to %} in this period{% endif %}.
+        </td></tr>
         {% endfor %}
       </tbody>
       {% if ledger %}
       <tfoot>
         <tr style="background:#f8fafc;border-top:2px solid #e2e8f0">
-          <td colspan="3" style="padding:11px 14px;font-size:10.5px;font-weight:800;color:#0f1d35;text-transform:uppercase;letter-spacing:.4px">
-            Totals — {{ ledger|length }} entries
+          <td colspan="5" style="padding:10px;font-size:10.5px;font-weight:800;color:#0f1d35;text-transform:uppercase;letter-spacing:.4px">
+            Totals · {{ summary.entry_count }} entries
           </td>
-          <td style="padding:11px 14px;text-align:right;font-size:14px;font-weight:800;color:#7f1d1d">
-            {{ "%.3f"|format(ledger|sum(attribute='debit')) }}
-          </td>
-          <td style="padding:11px 14px;text-align:right;font-size:14px;font-weight:800;color:#14532d">
-            {{ "%.3f"|format(ledger|sum(attribute='credit')) }}
-          </td>
-          <td style="padding:11px 14px;text-align:right;font-size:15px;font-weight:900;
-            color:{% if summary.status=='RECEIVABLE' %}#7f1d1d{% elif summary.status=='PAYABLE' %}#14532d{% else %}#64748b{% endif %}">
+          <td style="padding:10px;text-align:right;font-size:14px;font-weight:800;color:#7f1d1d">{{ "%.3f"|format(summary.total_debit) }}</td>
+          <td style="padding:10px;text-align:right;font-size:14px;font-weight:800;color:#14532d">{{ "%.3f"|format(summary.total_credit) }}</td>
+          <td style="padding:10px;text-align:right;font-size:15px;font-weight:900;color:{% if summary.status=='RECEIVABLE' %}#7f1d1d{% elif summary.status=='PAYABLE' %}#14532d{% else %}#64748b{% endif %}">
             {{ "%.3f"|format(summary.net_balance) }}
           </td>
         </tr>
@@ -320,48 +267,45 @@
     </table>
   </div>
 
-  {# ── Signature lines ───────────────────────────────────────── #}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:22px 32px;border-top:1px solid #e2e8f0">
+  {# ── Signature lines ─────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 28px;border-top:1px solid #e2e8f0">
     <div>
-      <div style="height:1px;background:#cbd5e1;margin-bottom:6px"></div>
+      <div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
       <div style="font-size:10.5px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel &amp; Tourism</div>
     </div>
     <div>
-      <div style="height:1px;background:#cbd5e1;margin-bottom:6px"></div>
-      <div style="font-size:10.5px;color:#94a3b8;text-align:center">Acknowledged — {{ company }} &nbsp;·&nbsp; Date: ___________</div>
+      <div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
+      <div style="font-size:10.5px;color:#94a3b8;text-align:center">Acknowledged — {{ company }} · Date: ___________</div>
     </div>
   </div>
 
-  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:10px 24px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8">
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 22px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8">
     <span>Alsondos Travel &amp; Tourism · Amman, Jordan · Computer-generated statement</span>
     <span id="stmtFooter">{{ today }}</span>
   </div>
+</div>
 
-</div>{# end stmtDoc #}
-
-{# ── Legend (screen only) ─────────────────────────────────────── #}
+{# ── Legend ───────────────────────────────────────────────────── #}
 <div class="stmt-legend no-print">
-  <span class="leg-pill" style="background:#fee2e2;color:#7f1d1d">TXN = Sale (Debit)</span>
-  <span class="leg-pill" style="background:#dcfce7;color:#14532d">PAY = Payment received (Credit)</span>
-  <span class="leg-pill" style="background:#e0f2fe;color:#0c4a6e">PUR/HOT/TRF = Purchase from them (Credit)</span>
-  <span class="leg-pill" style="background:#fef9c3;color:#78350f">SPY = Payment made to them (Debit)</span>
+  <span class="leg" style="background:#fee2e2;color:#7f1d1d">TXN = Sale (DR)</span>
+  <span class="leg" style="background:#dcfce7;color:#14532d">PAY = Payment received (CR)</span>
+  <span class="leg" style="background:#e0f2fe;color:#0c4a6e">PUR/HOT/VIS = Purchase (CR)</span>
+  <span class="leg" style="background:#fef9c3;color:#78350f">SPY = Payment made (DR)</span>
 </div>
 
 {% else %}
 <div class="card" style="text-align:center;padding:52px">
-  <i class="fas fa-balance-scale" style="font-size:44px;color:var(--border);display:block;margin-bottom:16px;opacity:.35"></i>
-  <div style="font-size:17px;font-weight:700;color:var(--navy-dk);margin-bottom:8px">Select a Company</div>
-  <div style="font-size:13px;color:var(--muted)">The statement shows all transactions, purchases and payments in a running balance ledger.</div>
+  <i class="fas fa-balance-scale" style="font-size:42px;color:var(--border);display:block;margin-bottom:14px;opacity:.35"></i>
+  <div style="font-size:17px;font-weight:700;color:var(--navy-dk);margin-bottom:7px">Select a Company</div>
+  <div style="font-size:13px;color:var(--muted)">Full debit/credit ledger with passenger names, PNR, service type and running balance.</div>
 </div>
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
+{% block extra_js %}<script>
 (function(){
   var d=new Date(),mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var ts=String(d.getDate()).padStart(2,'0')+' '+mo[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   ['stmtDate','stmtFooter'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=ts;});
 })();
-</script>
-{% endblock %}
+</script>{% endblock %}
