@@ -812,7 +812,7 @@ def add_sale():
             extra_vals['airline'],extra_vals['pnr'],extra_vals['baggage'],
             extra_vals['passengers_json'],
             float(request.form.get('outbound_cost',0) or 0),
-            float(request.form.get('return_cost',0) or 0),
+            float(request.form.get('return_cost',0) or 0)
         ))
         try:
             log_action('CREATE','sales',new_id,
