@@ -749,7 +749,7 @@ def add_sale():
             transfer_pickup   = request.form.get('transfer_pickup','').strip(),
             transfer_vehicle  = request.form.get('transfer_vehicle','').strip(),
             transfer_net      = float(request.form.get('transfer_net',0) or 0),
-            tours_json        = _json.dumps(tours_list),
+            tours_json        = json.dumps(tours_list),
             visa_supplier     = request.form.get('visa_supplier','').strip(),
             visa_type         = request.form.get('visa_type','').strip(),
             passport_number   = request.form.get('passport_number','').upper().strip(),
@@ -759,7 +759,7 @@ def add_sale():
             airline           = request.form.get('airline','').upper().strip(),
             pnr               = request.form.get('pnr','').upper().strip(),
             baggage           = request.form.get('baggage','').strip(),
-            passengers_json   = _json.dumps(passengers_list),
+            passengers_json   = json.dumps(passengers_list),
         )
         new_id = execute_db('''
             INSERT INTO sales
@@ -884,7 +884,6 @@ def edit_sale(sale_id):
         service_type  = request.form.get('service_type', 'FLIGHT').upper().strip()
 
         # Tours
-        _json = json
         tour_names     = request.form.getlist('tour_name[]')
         tour_dates     = request.form.getlist('tour_date[]')
         tour_pickups   = request.form.getlist('tour_pickup[]')
@@ -933,7 +932,7 @@ def edit_sale(sale_id):
             transfer_pickup=request.form.get('transfer_pickup','').strip(),
             transfer_vehicle=request.form.get('transfer_vehicle','').strip(),
             transfer_net=float(request.form.get('transfer_net', 0) or 0),
-            tours_json=_json.dumps(tours_list),
+            tours_json=json.dumps(tours_list),
             visa_supplier=request.form.get('visa_supplier','').strip(),
             visa_type=request.form.get('visa_type','').strip(),
             passport_number=request.form.get('passport_number','').upper().strip(),
@@ -943,7 +942,7 @@ def edit_sale(sale_id):
             airline=request.form.get('airline','').upper().strip(),
             pnr=request.form.get('pnr','').upper().strip(),
             baggage=request.form.get('baggage','').strip(),
-            passengers_json=_json.dumps(passengers_list),
+            passengers_json=json.dumps(passengers_list),
             outbound_cost=float(request.form.get('outbound_cost', 0) or 0),
             return_cost=float(request.form.get('return_cost', 0) or 0),
         )
