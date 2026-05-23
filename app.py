@@ -22,7 +22,14 @@ PER_PAGE = 50  # rows per page
 
 # ── Database helpers ──────────────────────────────────────────────────────────
 def get_db():
-    """Get a healthy database connection. Auto-heals aborted transactions."""
+    """
+    Get a per-request database connection.
+    Auto-heals only when the connection is in INERROR state
+    (transaction aborted due to a failed query).
+    Does NOT roll back STATUS_IN_TRANSACTION — that is the normal
+    idle state between queries and rolling it back would destroy
+    valid uncommitted work from earlier in the same request.
+    """
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = psycopg2.connect(
@@ -31,12 +38,13 @@ def get_db():
         )
         db.autocommit = False
     else:
-        # If connection is in aborted/error state, rollback to clean it
         try:
-            if db.status == psycopg2.extensions.STATUS_IN_TRANSACTION:
+            txn_status = db.get_transaction_status()
+            if txn_status == psycopg2.extensions.TRANSACTION_STATUS_INERROR:
+                # Previous query failed — rollback to recover the connection
                 db.rollback()
         except Exception:
-            # Connection broken entirely — make a new one
+            # Connection is broken entirely — create a fresh one
             try: db.close()
             except: pass
             db = g._database = psycopg2.connect(
@@ -48,14 +56,16 @@ def get_db():
 
 @app.teardown_appcontext
 def close_connection(exception):
-    """Always close the connection at end of request — ensures next request gets fresh state."""
+    """
+    Teardown: rollback any uncommitted work then close.
+    NEVER commits here — execute_db() is the only place that commits.
+    Double-committing causes 'no transaction in progress' errors on the
+    next request that reuses the connection.
+    """
     db = getattr(g, '_database', None)
     if db is not None:
         try:
-            if exception:
-                db.rollback()
-            else:
-                db.commit()  # commit any uncommitted work
+            db.rollback()   # clear any uncommitted state (safe even if nothing pending)
         except Exception:
             pass
         try:
@@ -65,33 +75,43 @@ def close_connection(exception):
         g._database = None
 
 def query_db(query, args=(), one=False):
-    try:
-        cur = get_db().cursor()
-        cur.execute(query, args)
-        rv = cur.fetchall()
-        return (rv[0] if rv else None) if one else rv
-    except Exception as e:
-        try: get_db().rollback()
-        except: pass
-        logger.error(f"query_db error: {e} | query: {query[:120]}")
-        raise
-
-def execute_db(query, args=()):
-    """Execute INSERT/UPDATE/DELETE. For INSERT with RETURNING id, returns the new row id."""
+    db  = None
     try:
         db  = get_db()
         cur = db.cursor()
         cur.execute(query, args)
-        db.commit()
-        # If query has RETURNING clause, fetch the returned value
+        rv  = cur.fetchall()
+        return (rv[0] if rv else None) if one else rv
+    except Exception as e:
+        if db:
+            try: db.rollback()
+            except: pass
+        logger.error(f"query_db error: {e} | query: {query[:120]}")
+        raise
+
+def execute_db(query, args=()):
+    """Execute INSERT/UPDATE/DELETE. Returns RETURNING value when present."""
+    db  = None
+    cur = None
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute(query, args)
+        # CRITICAL: fetch RETURNING value BEFORE commit
+        # psycopg2 closes the cursor result set after commit()
+        result = None
         if 'RETURNING' in query.upper():
             row = cur.fetchone()
             if row:
-                return row[0] if not hasattr(row, 'keys') else (row.get('id') or row[list(row.keys())[0]])
-        return None
+                result = row[0] if not hasattr(row, 'keys') else (
+                    row.get('id') or row[list(row.keys())[0]])
+        db.commit()
+        return result
     except Exception as e:
-        try: get_db().rollback()
-        except: pass
+        # Use captured db ref — never call get_db() in except (may re-enter error)
+        if db:
+            try: db.rollback()
+            except: pass
         logger.error(f"execute_db error: {e} | query: {query[:120]}")
         raise
 
@@ -794,10 +814,13 @@ def add_sale():
             float(request.form.get('outbound_cost',0) or 0),
             float(request.form.get('return_cost',0) or 0),
         ))
-        log_action('CREATE', 'sales', new_id,
-                   f"{request.form.get('customer','').upper()} | {extra_vals['service_type']} | Sell:{sell}")
-        flash('Sale added successfully.', 'success')
-        return redirect(url_for('sales_report'))
+        try:
+            log_action('CREATE','sales',new_id,
+                       f"{request.form.get('customer','').upper()} | {extra_vals['service_type']} | Sell:{sell}")
+        except Exception:
+            pass
+        flash('Transaction saved successfully.', 'success')
+        return redirect(url_for('sales_report'))  # POST→REDIRECT→GET
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
 
 
@@ -2576,11 +2599,16 @@ def add_sale_v2():
             _oc,                                                           # 49 outbound_cost
             _rc,                                                           # 50 return_cost
         ))
-        log_action('CREATE', 'sales', new_id,
-                   f"{request.form.get('customer','').upper()} | Sell:{sell}")
-        flash('Transaction added successfully.', 'success')
-        redirect_to = url_for('my_sales') if session.get('user_role') != 'admin' else url_for('sales_report')
-        return redirect(redirect_to)
+        try:
+            log_action('CREATE','sales',new_id,
+                       f"{request.form.get('customer','').upper()} | Sell:{sell}")
+        except Exception:
+            pass
+        flash('Transaction saved successfully.', 'success')
+        # POST → REDIRECT → GET: prevents duplicate submission on back/refresh
+        if session.get('user_role') != 'admin':
+            return redirect(url_for('my_sales'))
+        return redirect(url_for('sales_report'))
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
 
 
