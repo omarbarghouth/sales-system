@@ -16,9 +16,18 @@
   body{margin:0!important;background:#fff!important}
   .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important}
   #stmtDoc{display:block!important;box-shadow:none!important;border-radius:0!important;width:100%!important;overflow:visible!important}
-  table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;font-size:8.5pt!important}
-  th,td{padding:4pt 5pt!important;font-size:8pt!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  td:nth-child(3),th:nth-child(3){white-space:normal!important;word-break:break-word!important}
+  table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
+  th,td{padding:3pt 5pt!important;font-size:7.5pt!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap!important}
+  /* Column widths for A4 (~190mm usable) */
+  table th:nth-child(1),table td:nth-child(1){width:20mm!important}  /* Date */
+  table th:nth-child(2),table td:nth-child(2){width:18mm!important}  /* Ref */
+  table th:nth-child(3),table td:nth-child(3){width:46mm!important;white-space:normal!important;word-wrap:break-word!important}  /* Description */
+  table th:nth-child(4),table td:nth-child(4){width:22mm!important}  /* Passenger */
+  table th:nth-child(5),table td:nth-child(5){width:14mm!important}  /* Svc */
+  table th:nth-child(6),table td:nth-child(6){width:22mm!important}  /* Debit */
+  table th:nth-child(7),table td:nth-child(7){width:22mm!important}  /* Credit */
+  table th:nth-child(8),table td:nth-child(8){width:16mm!important}  /* Travel Date */
+  table th:nth-child(9),table td:nth-child(9){width:20mm!important}  /* Balance */
   tr{page-break-inside:avoid}
   thead{display:table-header-group}
   tfoot{display:table-footer-group}
@@ -185,18 +194,14 @@
     <table style="width:100%;border-collapse:collapse;font-size:12.5px">
       <thead>
         <tr style="background:#0f1d35">
-          {% for col,w,align,color in [
-            ('Date',        '88px', 'left',  'rgba(255,255,255,.7)'),
-            ('Reference',   '82px', 'left',  'rgba(255,255,255,.7)'),
-            ('Description', '*',    'left',  'rgba(255,255,255,.7)'),
-            ('Passenger',   '110px','left',  'rgba(255,255,255,.7)'),
-            ('Svc',         '72px', 'center','rgba(255,255,255,.7)'),
-            ('Debit (JOD)', '95px', 'right', '#fca5a5'),
-            ('Credit (JOD)','95px', 'right', '#86efac'),
-            ('Balance',     '105px','right', '#C8A84B'),
-          ] %}
-          <th style="padding:9px 10px;text-align:{{ align }};font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:{{ color }};white-space:nowrap;{% if w!='*' %}width:{{ w }};{% endif %}">{{ col }}</th>
-          {% endfor %}
+          <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:90px;white-space:nowrap">Date</th>
+          <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:80px;white-space:nowrap">Ref</th>
+          <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7)">Description / Passenger</th>
+          <th style="padding:9px 10px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:65px;white-space:nowrap">Svc</th>
+          <th style="padding:9px 10px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:72px;white-space:nowrap">Travel Date</th>
+          <th style="padding:9px 10px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#fca5a5;width:92px;white-space:nowrap">Debit (JOD)</th>
+          <th style="padding:9px 10px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#86efac;width:92px;white-space:nowrap">Credit (JOD)</th>
+          <th style="padding:9px 10px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#C8A84B;width:100px;white-space:nowrap">Balance</th>
         </tr>
       </thead>
       <tbody>
@@ -207,10 +212,10 @@
           {% elif e.type=='purchase' %}background:#f8fafc
           {% else %}background:#fff{% endif %}">
 
-          <td style="padding:8px 10px;color:#64748b;font-size:11.5px;white-space:nowrap;font-family:monospace">{{ e.date }}</td>
+          <td style="padding:7px 10px;color:#64748b;font-size:11px;white-space:nowrap;font-family:monospace">{{ e.date }}</td>
 
-          <td style="padding:8px 10px">
-            <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap;
+          <td style="padding:7px 10px">
+            <span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
               {% if e.type=='sale' %}background:#fee2e2;color:#7f1d1d
               {% elif e.type=='purchase' %}background:#e0f2fe;color:#0c4a6e
               {% elif e.type=='payment_in' %}background:#dcfce7;color:#14532d
@@ -219,14 +224,18 @@
             </span>
           </td>
 
-          <td style="padding:8px 10px;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ e.description }}">{{ e.description }}</td>
+          <td style="padding:7px 10px;color:#1e293b;line-height:1.4">
+            <div style="font-size:12.5px;font-weight:500">{{ e.description }}</div>
+            {% if e.passenger %}<div style="font-size:11px;color:#64748b;margin-top:1px">{{ e.passenger }}</div>{% endif %}
+          </td>
 
-          <td style="padding:8px 10px;font-size:11.5px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.passenger or '—' }}</td>
-
-          <td style="padding:8px 10px;text-align:center">
+          <td style="padding:7px 10px;text-align:center">
             {% if e.svc %}
             <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:#e8eef8;color:#1B3A6B;white-space:nowrap">{{ e.svc[:4] }}</span>
             {% endif %}
+          </td>
+          <td style="padding:7px 10px;text-align:center;font-size:11px;color:#475569;white-space:nowrap;font-family:monospace">
+            {{ e.travel_date or '—' }}
           </td>
 
           <td style="padding:8px 10px;text-align:right;font-weight:{% if e.debit>0 %}700{% else %}400{% endif %};color:{% if e.debit>0 %}#7f1d1d{% else %}#cbd5e1{% endif %};font-size:13px">
