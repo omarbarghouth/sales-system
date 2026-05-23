@@ -1139,6 +1139,7 @@ def statement():
                 'debit':       float(s['sell'] or 0),
                 'credit':      0.0,
                 'type':        'sale',
+                'travel_date': s.get('travel_date','') or '',
                 'id':          s['id'],
             })
 
@@ -1230,6 +1231,7 @@ def statement():
                 'debit':       0.0,
                 'credit':      float(p['amount'] or 0),
                 'type':        'payment_in',
+                'travel_date': '',
                 'id':          p['id'],
             })
 
@@ -1251,6 +1253,7 @@ def statement():
                 'debit':       float(sp['amount'] or 0),
                 'credit':      0.0,
                 'type':        'payment_out',
+                'travel_date': '',
                 'id':          sp['id'],
             })
 
