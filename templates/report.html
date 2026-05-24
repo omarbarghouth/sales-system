@@ -61,7 +61,9 @@
         <option value="">All</option>
         <option value="STILL"  {% if filters.status=='STILL'  %}selected{% endif %}>Still</option>
         <option value="DONE"   {% if filters.status=='DONE'   %}selected{% endif %}>Done</option>
-        <option value="CANCEL" {% if filters.status=='CANCEL' %}selected{% endif %}>Cancelled</option>
+        <option value="CANCEL"   {% if filters.status=='CANCEL'   %}selected{% endif %}>Cancelled</option>
+        <option value="REFUNDED" {% if filters.status=='REFUNDED' %}selected{% endif %}>Refunded</option>
+        <option value="PARTIAL"  {% if filters.status=='PARTIAL'  %}selected{% endif %}>Partial Refund</option>
       </select>
     </div>
 
@@ -229,6 +231,8 @@
           {% if s.via %}
           <br><span style="color:var(--muted-lt);font-size:10.5px">via {{ s.via }}</span>
           {% endif %}
+          {% if s.ticket_number|default('') %}<br><span style="font-family:monospace;font-size:10px;color:var(--navy-dk)">🎫 {{ s.ticket_number }}</span>{% endif %}
+          {% if s.return_ticket_number|default('') %}<br><span style="font-family:monospace;font-size:10px;color:var(--gold-dk)">↩ {{ s.return_ticket_number }}</span>{% endif %}
         </td>
 
         <td>

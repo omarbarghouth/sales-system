@@ -227,6 +227,8 @@
           <td style="padding:7px 10px;color:#1e293b;line-height:1.4">
             <div style="font-size:12.5px;font-weight:500">{{ e.description }}</div>
             {% if e.passenger %}<div style="font-size:11px;color:#64748b;margin-top:1px">{{ e.passenger }}</div>{% endif %}
+            {% if e.ticket_number|default('') %}<div style="font-family:monospace;font-size:10.5px;color:#94a3b8;margin-top:1px">🎫 {{ e.ticket_number }}</div>{% endif %}
+            {% if e.return_ticket_number|default('') %}<div style="font-family:monospace;font-size:10.5px;color:#b45309;margin-top:1px">↩ {{ e.return_ticket_number }}</div>{% endif %}
           </td>
 
           <td style="padding:7px 10px;text-align:center">

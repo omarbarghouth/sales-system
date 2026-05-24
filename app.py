@@ -13,7 +13,23 @@ from flask import (Flask, render_template, request, redirect,
 import bcrypt
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'alsondos-secret-change-in-production-2024')
+
+# ── Secret key — validated at startup ────────────────────────────────────────
+_SECRET_KEY      = os.environ.get('SECRET_KEY', '')
+_FALLBACK_KEY    = 'alsondos-secret-change-in-production-2024'
+_KNOWN_WEAK_KEYS = {_FALLBACK_KEY, 'secret', 'dev', 'development', 'test', 'changeme'}
+if not _SECRET_KEY or _SECRET_KEY in _KNOWN_WEAK_KEYS:
+    import warnings
+    warnings.warn(
+        "SECURITY WARNING: SECRET_KEY is not set or is using the insecure default. "
+        "Set a strong SECRET_KEY environment variable before going to production. "
+        "Sessions signed with the default key are forgeable.",
+        stacklevel=1,
+    )
+app.secret_key = _SECRET_KEY or _FALLBACK_KEY
+
+# ── Session lifetime: 8 hours idle timeout ────────────────────────────────────
+app.permanent_session_lifetime = timedelta(hours=8)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -268,14 +284,34 @@ except Exception as _db_err:
     logger.error(f"init_db error: {_db_err}")
 
 # ── Audit log helper ──────────────────────────────────────────────────────────
-def log_action(action, table_name, record_id=None, detail=''):
+def _get_client_ip():
+    """
+    Return the real client IP.
+    Behind Nginx the actual IP arrives in X-Forwarded-For; remote_addr is 127.0.0.1.
+    We take only the first (leftmost) entry to avoid spoofing via chained proxies.
+    """
     try:
-        uid      = session.get('user_id')
-        uname    = session.get('username', 'system')
+        xff = request.headers.get('X-Forwarded-For', '')
+        if xff:
+            return xff.split(',')[0].strip()
+        return request.remote_addr or ''
+    except Exception:
+        return ''
+
+def log_action(action, table_name, record_id=None, detail=''):
+    """
+    Write an audit log entry.
+    SEC-07: Captures client IP address for every action.
+    detail should be a human-readable summary; structured data can be embedded as JSON.
+    """
+    try:
+        uid   = session.get('user_id')
+        uname = session.get('username', 'system')
+        ip    = _get_client_ip()
         execute_db('''
-            INSERT INTO audit_logs (user_id, username, action, table_name, record_id, detail)
-            VALUES (%s,%s,%s,%s,%s,%s)
-        ''', (uid, uname, action, table_name, record_id, detail))
+            INSERT INTO audit_logs (user_id, username, action, table_name, record_id, detail, ip_address)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        ''', (uid, uname, action, table_name, record_id, detail, ip))
     except Exception as e:
         logger.error(f"Audit log failed: {e}")
 
@@ -328,34 +364,78 @@ def post_sale_items(sale_id, service_type, supplier, description, net_cost, sell
 def validate_ledger_balance(company):
     """
     Compare shadow ledger balance vs dynamic calculation.
-    Returns (ledger_balance, dynamic_balance, is_ok).
-    Run nightly or after reconciliation.
+    Returns (ledger_balance, dynamic_balance, is_ok, detail_dict).
+
+    Dynamic balance formula:
+      total_sold_to_company          (sales.sell   where company=X)
+      - total_received_from_company  (payments.amount where company=X)
+      + total_purchased_from_supplier(outbound_cost/net where buy_from=X)
+      - total_paid_to_supplier       (supplier_payments.amount where supplier=X)
+
+    Positive = they owe us (net receivable).
+    Negative = we owe them (net payable).
+
+    ACC-02 FIX: previous version had identical supplier_payments sub-queries on
+    both + and - sides, causing them to cancel to zero (always wrong).
     """
     try:
-        ledger = query_db("""
-            SELECT COALESCE(SUM(debit - credit), 0) AS bal
+        ledger_row = query_db("""
+            SELECT
+                COALESCE(SUM(debit),  0) AS total_debit,
+                COALESCE(SUM(credit), 0) AS total_credit,
+                COALESCE(SUM(debit - credit), 0) AS bal
             FROM accounting_entries
             WHERE UPPER(company)=UPPER(%s) AND is_reversed=FALSE
         """, [company], one=True)
-        ledger_bal = float(ledger['bal'] if ledger else 0)
+        ledger_bal   = float(ledger_row['bal']          if ledger_row else 0)
+        ledger_dr    = float(ledger_row['total_debit']  if ledger_row else 0)
+        ledger_cr    = float(ledger_row['total_credit'] if ledger_row else 0)
 
-        dynamic = query_db("""
-            SELECT
-              COALESCE((SELECT SUM(sell)   FROM sales            WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE),0) -
-              COALESCE((SELECT SUM(amount) FROM payments         WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE),0) +
-              COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE),0) -
-              COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE),0)
-            AS bal
-        """, [company, company, company, company], one=True)
-        dynamic_bal = float(dynamic['bal'] if dynamic else 0)
+        # Dynamic components — each calculated independently.
+        # ACC-03: exclude archived records to stay consistent with what statement() shows.
+        sold_row = query_db(
+            "SELECT COALESCE(SUM(sell),0) AS v FROM sales WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE",
+            [company], one=True)
+        rcvd_row = query_db(
+            "SELECT COALESCE(SUM(amount),0) AS v FROM payments WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE",
+            [company], one=True)
+        purch_row = query_db(
+            """SELECT COALESCE(SUM(
+                   CASE WHEN outbound_cost > 0 THEN outbound_cost ELSE COALESCE(net,0) END
+               ),0) AS v
+               FROM sales WHERE UPPER(buy_from)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE""",
+            [company], one=True)
+        paid_row = query_db(
+            "SELECT COALESCE(SUM(amount),0) AS v FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE",
+            [company], one=True)
+
+        total_sold     = float(sold_row['v']  if sold_row  else 0)
+        total_received = float(rcvd_row['v']  if rcvd_row  else 0)
+        total_purchased= float(purch_row['v'] if purch_row else 0)
+        total_paid_out = float(paid_row['v']  if paid_row  else 0)
+
+        dynamic_bal = total_sold - total_received + total_purchased - total_paid_out
+        dynamic_bal = round(dynamic_bal, 3)
 
         is_ok = abs(ledger_bal - dynamic_bal) < 0.01
         if not is_ok:
-            logger.warning(f"Balance mismatch {company}: ledger={ledger_bal:.3f} dynamic={dynamic_bal:.3f}")
-        return ledger_bal, dynamic_bal, is_ok
+            logger.warning(
+                f"Balance mismatch [{company}]: ledger={ledger_bal:.3f} dynamic={dynamic_bal:.3f} "
+                f"(sold={total_sold:.3f} rcvd={total_received:.3f} "
+                f"purch={total_purchased:.3f} paid_out={total_paid_out:.3f})"
+            )
+        detail = {
+            'total_sold':      total_sold,
+            'total_received':  total_received,
+            'total_purchased': total_purchased,
+            'total_paid_out':  total_paid_out,
+            'ledger_debit':    ledger_dr,
+            'ledger_credit':   ledger_cr,
+        }
+        return ledger_bal, dynamic_bal, is_ok, detail
     except Exception as _e:
         logger.error(f"validate_ledger_balance failed: {_e}")
-        return 0, 0, False
+        return 0, 0, False, {}
 
 
 def compute_ticket_status(outbound_delivery, return_delivery):
@@ -486,13 +566,24 @@ def login():
             return render_template('login.html', next=request.args.get('next',''))
         user = query_db('SELECT * FROM users WHERE username=%s', [username], one=True)
         if user and bcrypt.checkpw(password, user['password_hash'].encode()):
+            # SEC-01: reject disabled accounts BEFORE granting session
+            if not user.get('is_active', True):
+                log_action('LOGIN_DENIED', 'users', user['id'],
+                           f"Login blocked — account disabled: {username}")
+                flash('Your account has been disabled. Please contact your administrator.', 'danger')
+                return render_template('login.html', next=request.args.get('next', ''))
             session.clear()
             session['user_id']   = user['id']
             session['username']  = user['username']
             session['user_role'] = user['role']
-            session.permanent    = True
+            session.permanent    = True   # uses app.permanent_session_lifetime = 8h
             log_action('LOGIN', 'users', user['id'], f"User {username} logged in")
-            next_page = request.form.get('next') or url_for('index')
+            # SEC-06: validate next= is a safe relative URL (prevent open redirect)
+            _next = request.form.get('next', '').strip()
+            if _next and _next.startswith('/') and not _next.startswith('//'):
+                next_page = _next
+            else:
+                next_page = url_for('index')
             return redirect(next_page)
         flash('Invalid username or password.', 'danger')
     return render_template('login.html', next=request.args.get('next', ''))
@@ -752,9 +843,13 @@ def index():
     )
 
 # ── Sales ─────────────────────────────────────────────────────────────────────
+# Phase 4: GET /add redirects to the active /add-v2 route.
+# POST /add is kept for backward-compat (direct form submissions from older bookmarks).
 @app.route('/add', methods=['GET', 'POST'])
 @login_required
 def add_sale():
+    if request.method == 'GET':
+        return redirect(url_for('add_sale_v2'), 301)
     try:
         companies = get_companies_list()
     except Exception:
@@ -939,6 +1034,8 @@ def safe_sale(sale):
         'travel_date':'','return_date':'','via':'','remarks':'',
         'from_loc':'','to_loc':'','outbound_delivery':'',
         'return_delivery':'','outbound_status':'','return_status':'',
+        # Phase 3 — ticket numbers
+        'ticket_number':'','return_ticket_number':'',
     }
     for k,v in defaults.items():
         if k not in d or d[k] is None: d[k] = v
@@ -1041,9 +1138,21 @@ def edit_sale(sale_id):
             passengers_json=json.dumps(passengers_list),
             outbound_cost=float(request.form.get('outbound_cost', 0) or 0),
             return_cost=float(request.form.get('return_cost', 0) or 0),
+            # Phase 3 — ticket numbers
+            ticket_number=request.form.get('ticket_number','').strip(),
+            return_ticket_number=request.form.get('return_ticket_number','').strip(),
         )
 
         try:
+            # ACC-01 / ACC-04 — Snapshot old values BEFORE update for ledger reversal
+            _old = query_db(
+                'SELECT sell, company, sale_date FROM sales WHERE id=%s AND deleted=FALSE',
+                [sale_id], one=True
+            )
+            _old_sell    = float(_old['sell']    if _old else 0)
+            _old_company = str(_old['company']   if _old else '').upper().strip()
+            _old_date    = str(_old['sale_date'] if _old else str(date.today()))
+
             execute_db("""
                 UPDATE sales SET
                     from_loc=%s, to_loc=%s, via=%s, trip_type=%s, buy_from=%s,
@@ -1057,7 +1166,8 @@ def edit_sale(sale_id):
                     transfer_supplier=%s, transfer_type=%s, transfer_pickup=%s, transfer_vehicle=%s, transfer_net=%s,
                     tours_json=%s, visa_supplier=%s, visa_type=%s, passport_number=%s, visa_status=%s,
                     insurance_supplier=%s, insurance_type=%s, airline=%s, pnr=%s, baggage=%s,
-                    passengers_json=%s, outbound_cost=%s, return_cost=%s
+                    passengers_json=%s, outbound_cost=%s, return_cost=%s,
+                    ticket_number=%s, return_ticket_number=%s
                 WHERE id=%s
             """, (
                 (request.form.get('from_loc', '').upper().strip() or '-'),
@@ -1081,10 +1191,42 @@ def edit_sale(sale_id):
                 ev['tours_json'], ev['visa_supplier'], ev['visa_type'], ev['passport_number'], ev['visa_status'],
                 ev['insurance_supplier'], ev['insurance_type'], ev['airline'], ev['pnr'], ev['baggage'],
                 ev['passengers_json'], ev['outbound_cost'], ev['return_cost'],
+                ev['ticket_number'], ev['return_ticket_number'],
                 sale_id,
             ))
+
+            # ACC-01 / ACC-04 — Reverse original ledger entry, post corrective entry
+            _orig_entry = query_db(
+                """SELECT id FROM accounting_entries
+                   WHERE ref_type='SALE' AND ref_id=%s AND ref_table='sales'
+                     AND is_reversed=FALSE
+                   ORDER BY id DESC LIMIT 1""",
+                [sale_id], one=True
+            )
+            _new_company  = request.form.get('company', _old_company).upper().strip()
+            _new_sale_date= request.form.get('sale_date', _old_date)
+            _new_customer = request.form.get('customer', '').upper().strip()
+            _svc_label    = ev['service_type']
+            _fl           = request.form.get('from_loc', '') or ''
+            _tl           = request.form.get('to_loc',   '') or ''
+            if _orig_entry:
+                execute_db(
+                    "UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s",
+                    [_orig_entry['id']]
+                )
+                post_ledger(
+                    'SALE_REVERSAL', sale_id, 'sales', _old_company,
+                    f"Reversal of SALE-{sale_id:04d} (edit by {session.get('username','')})",
+                    debit=0, credit=_old_sell, entry_date=_old_date
+                )
+            post_ledger(
+                'SALE', sale_id, 'sales', _new_company,
+                f"{_svc_label} {_fl}{'→'+_tl if _tl else ''} | {_new_customer} (corrected)",
+                debit=sell, credit=0, entry_date=_new_sale_date
+            )
+
             log_action('UPDATE', 'sales', sale_id,
-                       f"{request.form.get('customer','').upper()} | {ev['service_type']} | Sell:{sell}")
+                       f"{_new_customer} | {_svc_label} | OldSell:{_old_sell} NewSell:{sell}")
             flash('Transaction updated successfully.', 'success')
             return redirect(url_for('sales_report'))
 
@@ -1227,16 +1369,18 @@ def statement():
             if fl and tl: desc += " " + fl + chr(8594) + tl
             if pnr:       desc += " [" + pnr + "]"
             ledger_entries.append({
-                'date':        s['sale_date'],
-                'ref':         "TXN-%04d" % s['id'],
-                'description': desc,
-                'passenger':   pax,
-                'svc':         svc,
-                'debit':       float(s['sell'] or 0),
-                'credit':      0.0,
-                'type':        'sale',
-                'travel_date': s.get('travel_date','') or '',
-                'id':          s['id'],
+                'date':               s['sale_date'],
+                'ref':                "TXN-%04d" % s['id'],
+                'description':        desc,
+                'passenger':          pax,
+                'svc':                svc,
+                'debit':              float(s['sell'] or 0),
+                'credit':             0.0,
+                'type':               'sale',
+                'travel_date':        s.get('travel_date','') or '',
+                'id':                 s['id'],
+                'ticket_number':      s.get('ticket_number','') or '',
+                'return_ticket_number': s.get('return_ticket_number','') or '',
             })
 
         # CREDIT: bought from this company (outbound flight)
@@ -1312,8 +1456,9 @@ def statement():
                     })
 
         # CREDIT: payment received
+        # ACC-03: add is_archived=FALSE so archived payments don't appear in active statement
         for p in _q(
-            "SELECT * FROM payments WHERE deleted=FALSE "
+            "SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE "
             "AND UPPER(TRIM(company))=UPPER(%s)" + fp + " ORDER BY pay_date,id",
             pp
         ):
@@ -1332,8 +1477,9 @@ def statement():
             })
 
         # DEBIT: payment made to supplier
+        # ACC-03: add is_archived=FALSE so archived supplier payments don't distort balance
         for sp in _q(
-            "SELECT * FROM supplier_payments WHERE deleted=FALSE "
+            "SELECT * FROM supplier_payments WHERE deleted=FALSE AND is_archived=FALSE "
             "AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date,id",
             [company]
         ):
@@ -1413,14 +1559,49 @@ def payments():
         except ValueError:
             flash('Amount must be a positive number.', 'danger')
             return redirect(url_for('payments'))
-        new_id = execute_db(
-            'INSERT INTO payments (company, amount, pay_date, notes) VALUES (%s,%s,%s,%s)',
-            (company_val, amount, pay_date, request.form.get('notes','').strip())
+        # ACC-06: duplicate payment guard — warn if same company/amount/date exists
+        _force = request.form.get('force_duplicate', '').strip() == '1'
+        _dup = query_db(
+            """SELECT id FROM payments
+               WHERE UPPER(TRIM(company))=UPPER(%s)
+                 AND ABS(amount - %s) < 0.001
+                 AND pay_date = %s
+                 AND deleted = FALSE
+               LIMIT 1""",
+            [company_val, amount, pay_date], one=True
         )
-        log_action('CREATE', 'payments', new_id, f"{company_val} | Amount:{amount}")
+        if _dup and not _force:
+            flash(
+                f'⚠️ Warning: A payment of JOD {amount:.3f} for {company_val} on {pay_date} '
+                f'already exists (ID #{_dup["id"]}). If this is intentional, '
+                f'submit again to confirm.',
+                'warning'
+            )
+            # Re-render the payments page with force flag pre-set in a hidden field
+            page = max(1, int(request.args.get('page', 1)))
+            base_q = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC, id DESC'
+            all_payments, total_rows, total_pages = paginate(base_q, [], page)
+            total_paid = query_db(
+                'SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
+            )['t']
+            return render_template('payments.html',
+                payments=all_payments, companies=companies,
+                total_paid=total_paid, today=str(date.today()),
+                page=page, total_pages=total_pages, total_rows=total_rows,
+                dup_warn=True,
+                dup_company=company_val, dup_amount=amount,
+                dup_date=pay_date, dup_notes=request.form.get('notes','').strip(),
+            )
+        notes_val = request.form.get('notes','').strip()
+        new_id = execute_db(
+            'INSERT INTO payments (company, amount, pay_date, notes) VALUES (%s,%s,%s,%s) RETURNING id',
+            (company_val, amount, pay_date, notes_val)
+        )
+        log_action('CREATE', 'payments', new_id,
+                   f"{company_val} | Amount:{amount}" + (" [FORCE-DUPLICATE]" if _force else ""))
         if new_id:
             post_ledger('PAYMENT', new_id, 'payments', company_val,
-                        f"Payment received — {request.form.get('notes','') or ''}",
+                        f"Payment received — {notes_val or ''}",
                         debit=0, credit=amount, entry_date=pay_date)
         flash('Payment recorded successfully.', 'success')
         return redirect(url_for('payments'))
@@ -1453,16 +1634,44 @@ def edit_payment(pay_id):
             flash('Amount must be a positive number.', 'danger')
             return render_template('edit_payment.html', payment=payment,
                                    companies=companies, today=str(date.today()))
+        new_company  = request.form.get('company','').upper().strip()
+        new_pay_date = request.form.get('pay_date', str(date.today()))
+        new_notes    = request.form.get('notes','').strip()
+        old_amount   = float(payment['amount'] or 0)
+        old_company  = str(payment['company'] or '').upper().strip()
+
+        # ACC-01 / ACC-04: reverse original ledger entry, post corrective entry
+        # Step 1 — find original accounting_entries row for this payment
+        _orig_entry = query_db(
+            """SELECT id FROM accounting_entries
+               WHERE ref_type='PAYMENT' AND ref_id=%s AND ref_table='payments'
+                 AND is_reversed=FALSE
+               ORDER BY id DESC LIMIT 1""",
+            [pay_id], one=True
+        )
+        if _orig_entry:
+            # Mark original as reversed
+            execute_db(
+                "UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s",
+                [_orig_entry['id']]
+            )
+            # Post reversal (debit what was credited, credit what was debited)
+            post_ledger('PAYMENT_REVERSAL', pay_id, 'payments', old_company,
+                        f"Reversal of payment PAY-{pay_id:04d} (edit correction)",
+                        debit=old_amount, credit=0, entry_date=new_pay_date)
+
+        # Step 2 — update the payments row
         execute_db('''
             UPDATE payments SET company=%s, amount=%s, pay_date=%s, notes=%s WHERE id=%s
-        ''', (
-            request.form.get('company','').upper().strip(),
-            amount,
-            request.form.get('pay_date', str(date.today())),
-            request.form.get('notes','').strip(),
-            pay_id
-        ))
-        log_action('UPDATE', 'payments', pay_id, f"Amount:{amount}")
+        ''', (new_company, amount, new_pay_date, new_notes, pay_id))
+
+        # Step 3 — post corrective ledger entry with new values
+        post_ledger('PAYMENT', pay_id, 'payments', new_company,
+                    f"Payment received (corrected) — {new_notes or ''}",
+                    debit=0, credit=amount, entry_date=new_pay_date)
+
+        log_action('UPDATE', 'payments', pay_id,
+                   f"Corrected: {old_company} JOD {old_amount} → {new_company} JOD {amount}")
         flash('Payment updated successfully.', 'success')
         return redirect(url_for('payments'))
     return render_template('edit_payment.html',
@@ -2087,6 +2296,20 @@ def init_extension_db():
         EXCEPTION WHEN duplicate_column THEN NULL; END $$;
     """)
 
+    # ── Add ip_address to audit_logs (SEC-07) ────────────────────────────────
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address TEXT DEFAULT '';
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    """)
+
+    # ── Ticket numbers on sales (Phase 3) ────────────────────────────────────
+    for _tn_col in [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS ticket_number TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_ticket_number TEXT DEFAULT ''",
+    ]:
+        cur.execute(f"DO $$ BEGIN {_tn_col}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
+
     # ── Extend users table ────────────────────────────────────────────────────
     extra_user_cols = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT ''",
@@ -2374,6 +2597,16 @@ def init_extension_db():
         "CREATE INDEX IF NOT EXISTS idx_sup_pay_supplier ON supplier_payments (supplier, pay_date) WHERE deleted=FALSE",
         "CREATE INDEX IF NOT EXISTS idx_sales_travel_date ON sales (travel_date) WHERE deleted=FALSE",
         "CREATE INDEX IF NOT EXISTS idx_sales_status ON sales (status) WHERE deleted=FALSE",
+        # Phase 4 — UPPER() functional indexes for case-insensitive company/supplier lookups
+        # Turns O(n) seqscans in statement() into O(log n) index scans
+        "CREATE INDEX IF NOT EXISTS idx_sales_company_upper    ON sales (UPPER(TRIM(company))) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_sales_buy_from_upper   ON sales (UPPER(TRIM(buy_from))) WHERE deleted=FALSE AND buy_from IS NOT NULL AND buy_from<>''",
+        "CREATE INDEX IF NOT EXISTS idx_payments_company_upper ON payments (UPPER(TRIM(company))) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_supp_pay_upper         ON supplier_payments (UPPER(TRIM(supplier))) WHERE deleted=FALSE",
+        "CREATE INDEX IF NOT EXISTS idx_accounting_company_upper ON accounting_entries (UPPER(company)) WHERE is_reversed=FALSE",
+        # Delivery page performance
+        "CREATE INDEX IF NOT EXISTS idx_sales_outbound_delivery ON sales (outbound_delivery) WHERE deleted=FALSE AND outbound_delivery IS NOT NULL AND outbound_delivery<>''",
+        "CREATE INDEX IF NOT EXISTS idx_sales_return_delivery   ON sales (return_delivery)   WHERE deleted=FALSE AND return_delivery   IS NOT NULL AND return_delivery  <>''",
     ]:
         try: cur.execute(_idx)
         except Exception: pass
@@ -2774,8 +3007,10 @@ def add_sale_v2():
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
-        _oc = float(request.form.get('outbound_cost',0) or 0)
-        _rc = float(request.form.get('return_cost',0) or 0)
+        _oc  = float(request.form.get('outbound_cost',0) or 0)
+        _rc  = float(request.form.get('return_cost',0) or 0)
+        _tkn = request.form.get('ticket_number','').strip()         # Phase 3
+        _rtn = request.form.get('return_ticket_number','').strip()  # Phase 3
         new_id = execute_db("""
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
@@ -2786,7 +3021,8 @@ def add_sale_v2():
              hotel_checkin,hotel_checkout,hotel_nights,hotel_net,
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
-             insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,outbound_cost,return_cost)
+             insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
+             outbound_cost,return_cost,ticket_number,return_ticket_number)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
@@ -2796,7 +3032,8 @@ def add_sale_v2():
                 %s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s
             ) RETURNING id
         """, (
             (request.form.get('from_loc','').upper().strip() or '-'),  # 1  from_loc
@@ -2849,6 +3086,8 @@ def add_sale_v2():
             ev['passengers_json'],                                         # 48 passengers_json
             _oc,                                                           # 49 outbound_cost
             _rc,                                                           # 50 return_cost
+            _tkn,                                                          # 51 ticket_number
+            _rtn,                                                          # 52 return_ticket_number
         ))
         try:
             log_action('CREATE','sales',new_id,
@@ -2909,6 +3148,15 @@ def my_edit_sale(sale_id):
         tours_list=[{'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''} for i in range(len(tour_names)) if tour_names[i].strip()]
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        # ACC-01 / ACC-04 — Snapshot old values BEFORE update for ledger reversal
+        _old2 = query_db(
+            'SELECT sell, company, sale_date FROM sales WHERE id=%s AND deleted=FALSE',
+            [sale_id], one=True
+        )
+        _old2_sell    = float(_old2['sell']    if _old2 else 0)
+        _old2_company = str(_old2['company']   if _old2 else '').upper().strip()
+        _old2_date    = str(_old2['sale_date'] if _old2 else str(date.today()))
+
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -2921,7 +3169,8 @@ def my_edit_sale(sale_id):
                 hotel_checkin=%s,hotel_checkout=%s,hotel_nights=%s,hotel_net=%s,
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
-                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s
+                insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,passengers_json=%s,
+                ticket_number=%s,return_ticket_number=%s
             WHERE id=%s
         ''', (
             request.form.get('from_loc','').upper().strip(),request.form.get('to_loc','').upper().strip(),
@@ -2937,9 +3186,42 @@ def my_edit_sale(sale_id):
             ev['transfer_supplier'],ev['transfer_type'],ev['transfer_pickup'],ev['transfer_vehicle'],ev['transfer_net'],
             ev['tours_json'],ev['visa_supplier'],ev['visa_type'],ev['passport_number'],ev['visa_status'],
             ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
+            request.form.get('ticket_number','').strip(),
+            request.form.get('return_ticket_number','').strip(),
             sale_id
         ))
-        log_action('UPDATE','sales',sale_id,f"{ev['service_type']} | Sell:{sell}")
+
+        # ACC-01 / ACC-04 — Reverse original ledger entry, post corrective entry
+        _orig2 = query_db(
+            """SELECT id FROM accounting_entries
+               WHERE ref_type='SALE' AND ref_id=%s AND ref_table='sales'
+                 AND is_reversed=FALSE
+               ORDER BY id DESC LIMIT 1""",
+            [sale_id], one=True
+        )
+        _new2_company  = request.form.get('company', _old2_company).upper().strip()
+        _new2_date     = request.form.get('sale_date', _old2_date)
+        _new2_customer = request.form.get('customer', '').upper().strip()
+        _fl2 = request.form.get('from_loc','') or ''
+        _tl2 = request.form.get('to_loc','')   or ''
+        if _orig2:
+            execute_db(
+                "UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s",
+                [_orig2['id']]
+            )
+            post_ledger(
+                'SALE_REVERSAL', sale_id, 'sales', _old2_company,
+                f"Reversal of SALE-{sale_id:04d} (edit by {session.get('username','')})",
+                debit=0, credit=_old2_sell, entry_date=_old2_date
+            )
+        post_ledger(
+            'SALE', sale_id, 'sales', _new2_company,
+            f"{ev['service_type']} {_fl2}{'→'+_tl2 if _tl2 else ''} | {_new2_customer} (corrected)",
+            debit=sell, credit=0, entry_date=_new2_date
+        )
+
+        log_action('UPDATE','sales',sale_id,
+                   f"{_new2_customer} | {ev['service_type']} | OldSell:{_old2_sell} NewSell:{sell}")
         flash('Transaction updated.','success')
         return redirect(url_for('my_sales'))
     return render_template('add.html', sale=sale, companies=companies, edit=True)
@@ -3384,6 +3666,20 @@ def refunds():
                                 f"Cancellation fee retained",
                                 debit=cancel_fee, credit=0, entry_date=refund_date)
 
+            # ACC-05: mark the original sale as REFUNDED / PARTIAL so the report
+            # reflects the cancellation and avoids double-counting on statements.
+            if rid and sale_id:
+                try:
+                    _new_status = 'REFUNDED' if refund_type == 'FULL' else 'PARTIAL'
+                    execute_db(
+                        "UPDATE sales SET status=%s WHERE id=%s AND deleted=FALSE",
+                        [_new_status, sale_id]
+                    )
+                    log_action('UPDATE', 'sales', int(sale_id),
+                               f"Status→{_new_status} due to refund #{rid}")
+                except Exception as _rfe:
+                    logger.error(f"ACC-05 sale status update failed: {_rfe}")
+
             log_action('CREATE','refunds', rid, f"{company} | {refund_type} | JOD {refund_amt}")
             flash(f'Refund created — JOD {refund_amt:.3f} for {company}.', 'success')
             return redirect(url_for('refunds'))
@@ -3595,13 +3891,12 @@ def supplier_statement():
             })
 
         # ── DEBIT: we paid this supplier ─────────────────────────────────────
+        # ACC-03: filter is_archived=FALSE; move date range into SQL (not Python)
         for sp in _q(
-            "SELECT * FROM supplier_payments WHERE deleted=FALSE "
-            "AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date,id",
-            [sup_upper]
+            "SELECT * FROM supplier_payments WHERE deleted=FALSE AND is_archived=FALSE "
+            "AND UPPER(TRIM(supplier))=UPPER(%s)" + dp + " ORDER BY pay_date,id",
+            [sup_upper] + pp
         ):
-            if date_from and str(sp['pay_date']) < date_from: continue
-            if date_to   and str(sp['pay_date']) > date_to:   continue
             ledger_entries.append({
                 'date':        sp['pay_date'],
                 'ref':         "SPY-%04d" % sp['id'],
@@ -3679,20 +3974,18 @@ def add_supplier_payment():
     except ValueError:
         flash('Invalid payment amount.', 'danger')
         return redirect(url_for('supplier_statement'))
-    execute_db("""
-        INSERT INTO supplier_payments (supplier, amount, pay_date, service_type, notes)
-        VALUES (%s,%s,%s,%s,%s)
-    """, (supplier.upper(), amount, pay_date, svc_type.upper(), notes))
+    # ACC-07: use RETURNING id — eliminates race condition from separate SELECT
     sp_new_id = execute_db("""
-        SELECT id FROM supplier_payments ORDER BY id DESC LIMIT 1
-    """)
+        INSERT INTO supplier_payments (supplier, amount, pay_date, service_type, notes)
+        VALUES (%s,%s,%s,%s,%s) RETURNING id
+    """, (supplier.upper(), amount, pay_date, svc_type.upper(), notes))
     try:
-        post_ledger('PURCHASE', sp_new_id or 0, 'supplier_payments',
+        post_ledger('SUPPLIER_PAYMENT', sp_new_id or 0, 'supplier_payments',
                     supplier.upper(),
                     f"Payment made to {supplier.upper()} — {svc_type}",
                     debit=amount, credit=0, entry_date=pay_date)
     except Exception: pass
-    log_action('CREATE', 'supplier_payments', 0,
+    log_action('CREATE', 'supplier_payments', sp_new_id or 0,
                f"Supplier payment: {supplier.upper()} JOD {amount}")
     flash(f'Payment of JOD {amount:.3f} recorded for {supplier.upper()}.', 'success')
     # Return to same supplier filter

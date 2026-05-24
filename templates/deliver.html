@@ -53,19 +53,33 @@
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th>
-          <th>Via</th><th>Buy From</th><th>Tickets</th><th>Travel Date</th><th>Status</th>
+          <th>#</th><th>Company</th><th>Customer</th><th>Route</th>
+          <th>Airline / PNR</th><th>Ticket No.</th>
+          <th>Buy From</th><th>Tix</th><th>Travel Date</th><th>Status</th>
         </tr>
       </thead>
       <tbody>
         {% for t in tickets %}
         <tr>
-          <td>{{ loop.index }}</td>
+          <td style="color:var(--muted);font-size:11.5px">{{ loop.index }}</td>
           <td><strong>{{ t.company }}</strong></td>
           <td>{{ t.customer }}</td>
-          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-          <td class="text-muted">{{ t.via or '—' }}</td>
+          <td style="white-space:nowrap">
+            <strong style="color:var(--navy)">{{ t.from_loc }}</strong>
+            <span style="color:var(--gold);margin:0 2px">→</span>
+            <strong style="color:var(--navy)">{{ t.to_loc }}</strong>
+            {% if t.via %}<br><span style="font-size:10.5px;color:var(--muted)">via {{ t.via }}</span>{% endif %}
+          </td>
+          <td style="font-size:12px">
+            {% if t.airline %}<strong>{{ t.airline }}</strong>{% endif %}
+            {% if t.pnr %}<br><span style="font-family:monospace;font-size:11px;color:var(--navy-dk)">{{ t.pnr }}</span>{% endif %}
+            {% if not t.airline and not t.pnr %}—{% endif %}
+          </td>
+          <td style="font-family:monospace;font-size:11px">
+            {% if t.ticket_number|default('') %}<span style="color:var(--navy-dk)">{{ t.ticket_number }}</span>{% endif %}
+            {% if t.return_ticket_number|default('') %}<br><span style="color:var(--gold-dk)">↩ {{ t.return_ticket_number }}</span>{% endif %}
+            {% if not t.ticket_number|default('') and not t.return_ticket_number|default('') %}—{% endif %}
+          </td>
           <td style="font-size:12.5px">{{ t.buy_from or t.return_supplier or '—' }}</td>
           <td class="text-center"><strong>{{ t.tickets }}</strong></td>
           <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or t.return_date or '—' }}</td>

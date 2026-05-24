@@ -116,6 +116,19 @@
         <label>Baggage</label>
         <input type="text" name="baggage" placeholder="e.g. 23kg + 7kg" value="{{ (sale.baggage|default('')) if sale else '' }}">
       </div>
+      {# Phase 3 — Ticket numbers #}
+      <div class="form-group">
+        <label>Outbound Ticket No.</label>
+        <input type="text" name="ticket_number" placeholder="e.g. 512-1234567890"
+               value="{{ (sale.ticket_number|default('')) if sale else '' }}"
+               style="font-family:monospace;font-weight:700;letter-spacing:.5px">
+      </div>
+      <div class="form-group">
+        <label>Return Ticket No.</label>
+        <input type="text" name="return_ticket_number" placeholder="Leave blank for one-way"
+               value="{{ (sale.return_ticket_number|default('')) if sale else '' }}"
+               style="font-family:monospace;font-weight:700;letter-spacing:.5px">
+      </div>
     </div>
     {# Outbound sector #}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">

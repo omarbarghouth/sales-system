@@ -550,14 +550,17 @@ tfoot td {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.badge-done    { background: var(--green-lt);  color: #166534; border: 1px solid rgba(34,197,94,.2); }
-.badge-still   { background: var(--orange-lt); color: #92400e; border: 1px solid rgba(245,158,11,.2); }
-.badge-cancel  { background: var(--red-lt);    color: #991b1b; border: 1px solid rgba(239,68,68,.2); }
-.badge-pending { background: var(--gold-lt);   color: var(--gold-dk); border: 1px solid rgba(200,168,75,.2); }
-.badge-navy    { background: var(--navy-lt);   color: var(--navy); border: 1px solid rgba(27,58,107,.12); }
-.badge-blue    { background: var(--blue-lt);   color: var(--blue); border: 1px solid rgba(41,128,185,.15); }
-.badge-active  { background: var(--green-lt);  color: #166534; border: 1px solid rgba(34,197,94,.2); }
-.badge-inactive{ background: #f1f5f9;           color: #64748b; border: 1px solid #e2e8f0; }
+.badge-done     { background: var(--green-lt);  color: #166534; border: 1px solid rgba(34,197,94,.2); }
+.badge-still    { background: var(--orange-lt); color: #92400e; border: 1px solid rgba(245,158,11,.2); }
+.badge-cancel   { background: var(--red-lt);    color: #991b1b; border: 1px solid rgba(239,68,68,.2); }
+.badge-pending  { background: var(--gold-lt);   color: var(--gold-dk); border: 1px solid rgba(200,168,75,.2); }
+.badge-navy     { background: var(--navy-lt);   color: var(--navy); border: 1px solid rgba(27,58,107,.12); }
+.badge-blue     { background: var(--blue-lt);   color: var(--blue); border: 1px solid rgba(41,128,185,.15); }
+.badge-active   { background: var(--green-lt);  color: #166534; border: 1px solid rgba(34,197,94,.2); }
+.badge-inactive { background: #f1f5f9;           color: #64748b; border: 1px solid #e2e8f0; }
+/* Phase 3 — refund statuses */
+.badge-refunded { background: #ede9fe; color: #5b21b6; border: 1px solid rgba(139,92,246,.2); }
+.badge-partial  { background: #fdf4ff; color: #86198f; border: 1px solid rgba(217,70,239,.2); }
 
 /* ══════════════════════════════════════════════════════════════
    BUTTONS — Premium Depth
