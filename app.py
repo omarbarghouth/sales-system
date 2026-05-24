@@ -3311,24 +3311,31 @@ def payment_receipt(pay_id):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _get_supplier_list():
-    """Aggregate all unique suppliers from the sales table across all types."""
-    rows = query_db("""
-        SELECT DISTINCT supplier, svc FROM (
-            SELECT NULLIF(TRIM(buy_from),'')      AS supplier, 'FLIGHT'    AS svc FROM sales WHERE deleted=FALSE AND buy_from IS NOT NULL AND buy_from <> ''
-            UNION
-            SELECT NULLIF(TRIM(return_supplier),''), 'FLIGHT'               FROM sales WHERE deleted=FALSE AND return_supplier IS NOT NULL AND return_supplier <> ''
-            UNION
-            SELECT NULLIF(TRIM(hotel_supplier),''), 'HOTEL'                 FROM sales WHERE deleted=FALSE AND hotel_supplier IS NOT NULL AND hotel_supplier <> ''
-            UNION
-            SELECT NULLIF(TRIM(transfer_supplier),''), 'TRANSFER'           FROM sales WHERE deleted=FALSE AND transfer_supplier IS NOT NULL AND transfer_supplier <> ''
-            UNION
-            SELECT NULLIF(TRIM(visa_supplier),''), 'VISA'                   FROM sales WHERE deleted=FALSE AND visa_supplier IS NOT NULL AND visa_supplier <> ''
-            UNION
-            SELECT NULLIF(TRIM(insurance_supplier),''), 'INSURANCE'         FROM sales WHERE deleted=FALSE AND insurance_supplier IS NOT NULL AND insurance_supplier <> ''
-        ) t WHERE supplier IS NOT NULL
-        ORDER BY supplier
-    """) or []
-    return rows
+    """Return a sorted list of unique supplier name strings."""
+    try:
+        rows = query_db("""
+            SELECT DISTINCT supplier FROM (
+                SELECT NULLIF(TRIM(buy_from),'')         AS supplier FROM sales WHERE deleted=FALSE AND buy_from IS NOT NULL AND buy_from <> ''
+                UNION
+                SELECT NULLIF(TRIM(return_supplier),'')               FROM sales WHERE deleted=FALSE AND return_supplier IS NOT NULL AND return_supplier <> ''
+                UNION
+                SELECT NULLIF(TRIM(hotel_supplier),'')                FROM sales WHERE deleted=FALSE AND hotel_supplier IS NOT NULL AND hotel_supplier <> ''
+                UNION
+                SELECT NULLIF(TRIM(transfer_supplier),'')             FROM sales WHERE deleted=FALSE AND transfer_supplier IS NOT NULL AND transfer_supplier <> ''
+                UNION
+                SELECT NULLIF(TRIM(visa_supplier),'')                 FROM sales WHERE deleted=FALSE AND visa_supplier IS NOT NULL AND visa_supplier <> ''
+                UNION
+                SELECT NULLIF(TRIM(insurance_supplier),'')            FROM sales WHERE deleted=FALSE AND insurance_supplier IS NOT NULL AND insurance_supplier <> ''
+                UNION
+                SELECT NULLIF(TRIM(company),'')                       FROM sales WHERE deleted=FALSE AND company IS NOT NULL AND company <> ''
+                UNION
+                SELECT NULLIF(TRIM(supplier),'')                      FROM supplier_payments WHERE deleted=FALSE AND supplier IS NOT NULL AND supplier <> ''
+            ) t WHERE supplier IS NOT NULL
+            ORDER BY supplier
+        """) or []
+        return [r['supplier'] for r in rows if r.get('supplier')]
+    except Exception:
+        return []
 
 
 
