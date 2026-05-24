@@ -3437,106 +3437,221 @@ def refunds():
 @app.route('/supplier-statement')
 @login_required
 def supplier_statement():
-    supplier    = request.args.get('supplier', '').strip()
-    svc_type    = request.args.get('svc_type', '').strip()
-    date_from   = request.args.get('date_from', '').strip()
-    date_to     = request.args.get('date_to', '').strip()
-
-    # Build the purchases query — one row per purchase line from sales
-    q_parts = []
-    params  = []
-
-    base = """
-        SELECT s.id, s.sale_date, s.company, s.customer,
-               s.service_type,
-               %s AS supplier_name,
-               %s AS purchase_type,
-               %s AS net_cost
-        FROM sales s
-        WHERE s.deleted=FALSE AND s.is_archived=FALSE
-          AND NULLIF(TRIM(%s),'') IS NOT NULL
     """
+    Mutual supplier ledger.
 
-    # Outbound flight supplier
-    q_parts.append(base % ("s.buy_from","'FLIGHT'","s.outbound_cost","s.buy_from"))
-    # Return flight supplier (if different)
-    q_parts.append("""
-        SELECT s.id, s.sale_date, s.company, s.customer,
-               s.service_type,
-               s.return_supplier AS supplier_name,
-               'FLIGHT' AS purchase_type,
-               s.return_cost AS net_cost
-        FROM sales s
-        WHERE s.deleted=FALSE AND s.is_archived=FALSE
-          AND NULLIF(TRIM(s.return_supplier),'') IS NOT NULL
-          AND TRIM(s.return_supplier) <> TRIM(COALESCE(s.buy_from,''))
-    """)
-    # Hotel supplier
-    q_parts.append(base % ("s.hotel_supplier","'HOTEL'","s.hotel_net","s.hotel_supplier"))
-    # Transfer supplier
-    q_parts.append(base % ("s.transfer_supplier","'TRANSFER'","s.transfer_net","s.transfer_supplier"))
-    # Visa supplier
-    q_parts.append(base % ("s.visa_supplier","'VISA'","s.net","s.visa_supplier"))
-    # Insurance supplier
-    q_parts.append(base % ("s.insurance_supplier","'INSURANCE'","s.net","s.insurance_supplier"))
+    We track BOTH directions with the same company:
+      PAYABLE  = we bought from them (we owe them)
+      RECEIVABLE = they bought from us (they owe us)
 
-    union_q = " UNION ALL ".join(q_parts)
-    full_q  = f"SELECT * FROM ({union_q}) t WHERE supplier_name IS NOT NULL AND TRIM(supplier_name)<>''"
+    Running balance = DEBIT − CREDIT
+    Positive = they owe us (net receivable)
+    Negative = we owe them (net payable)
+    """
+    supplier  = request.args.get('supplier', '').strip()
+    svc_type  = request.args.get('svc_type', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to   = request.args.get('date_to', '').strip()
 
-    filters = []
-    fparams = []
+    ledger_entries = []
+
     if supplier:
-        filters.append("UPPER(supplier_name) = UPPER(%s)")
-        fparams.append(supplier)
-    if svc_type:
-        filters.append("purchase_type = %s")
-        fparams.append(svc_type.upper())
-    if date_from:
-        filters.append("sale_date >= %s")
-        fparams.append(date_from)
-    if date_to:
-        filters.append("sale_date <= %s")
-        fparams.append(date_to)
-    if filters:
-        full_q += " AND " + " AND ".join(filters)
-    full_q += " ORDER BY sale_date DESC, id DESC"
+        sup_upper = supplier.upper().strip()
 
-    purchases = query_db(full_q, fparams) or []
+        def _q(q, p):
+            try:    return query_db(q, p) or []
+            except:
+                try: get_db().rollback()
+                except: pass
+                return []
 
-    # Total net cost purchased from this supplier
-    total_net = sum(float(p['net_cost'] or 0) for p in purchases)
+        ds = ''   # date filter for sale_date
+        dp = ''   # date filter for pay_date
+        ps = []   # params for sales queries
+        pp = []   # params for payment queries
 
-    # Total paid to this supplier (from supplier_payments table)
-    paid_q = "SELECT COALESCE(SUM(amount),0) as s FROM supplier_payments WHERE deleted=FALSE"
-    paid_params = []
-    if supplier:
-        paid_q += " AND UPPER(supplier)=UPPER(%s)"
-        paid_params.append(supplier)
-    paid_row   = query_db(paid_q, paid_params, one=True)
-    total_paid = float(paid_row['s'] if paid_row else 0)
-    balance    = round(total_net - total_paid, 3)
+        if date_from:
+            ds += ' AND s.sale_date>=%s';  ps.append(date_from)
+            dp += ' AND pay_date>=%s';     pp.append(date_from)
+        if date_to:
+            ds += ' AND s.sale_date<=%s';  ps.append(date_to)
+            dp += ' AND pay_date<=%s';     pp.append(date_to)
+        if svc_type:
+            ds += " AND UPPER(TRIM(s.service_type))=%s"; ps.append(svc_type.upper())
 
-    # Payments list for this supplier
-    pay_q = "SELECT * FROM supplier_payments WHERE deleted=FALSE"
-    pay_p = []
-    if supplier:
-        pay_q += " AND UPPER(supplier)=UPPER(%s)"; pay_p.append(supplier)
-    pay_q += " ORDER BY pay_date DESC"
-    supplier_pays = query_db(pay_q, pay_p) or []
+        # ── CREDIT: we bought outbound ticket from this supplier ─────────────
+        for s in _q(
+            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            "AND UPPER(TRIM(buy_from))=UPPER(%s)" + ds + " ORDER BY sale_date,id",
+            [sup_upper] + ps
+        ):
+            cost = float(s.get('outbound_cost') or s.get('net') or 0)
+            if cost > 0:
+                fl = s.get('from_loc',''); tl = s.get('to_loc','')
+                ledger_entries.append({
+                    'date':        s['sale_date'],
+                    'ref':         "PUR-%04d" % s['id'],
+                    'description': "Flight " + fl + ("→"+tl if tl else ''),
+                    'customer':    s.get('customer',''),
+                    'svc':         'FLIGHT',
+                    'debit':       0.0,
+                    'credit':      cost,
+                    'type':        'purchase',
+                    'id':          s['id'],
+                })
 
-    # Supplier list for dropdown
+        # ── CREDIT: we bought return ticket from this supplier ───────────────
+        for s in _q(
+            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            "AND UPPER(TRIM(return_supplier))=UPPER(%s) "
+            "AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s)" + ds + " ORDER BY sale_date,id",
+            [sup_upper, sup_upper] + ps
+        ):
+            cost = float(s.get('return_cost') or 0)
+            if cost > 0:
+                tl = s.get('to_loc',''); fl = s.get('from_loc','')
+                ledger_entries.append({
+                    'date':        s['sale_date'],
+                    'ref':         "RTN-%04d" % s['id'],
+                    'description': "Return Flight " + tl + ("→"+fl if fl else ''),
+                    'customer':    s.get('customer',''),
+                    'svc':         'FLIGHT',
+                    'debit':       0.0,
+                    'credit':      cost,
+                    'type':        'purchase',
+                    'id':          s['id'],
+                })
+
+        # ── CREDIT: hotel/transfer/visa/insurance from this supplier ─────────
+        for supp_field, cost_field, label, svctag in [
+            ('hotel_supplier',    'hotel_net',    'Hotel',     'HOTEL'),
+            ('transfer_supplier', 'transfer_net', 'Transfer',  'TRANSFER'),
+            ('visa_supplier',     'net',          'Visa',      'VISA'),
+            ('insurance_supplier','net',          'Insurance', 'INSURANCE'),
+        ]:
+            for s in _q(
+                "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+                "AND UPPER(TRIM(" + supp_field + "))=UPPER(%s)" + ds + " ORDER BY sale_date,id",
+                [sup_upper] + ps
+            ):
+                cost = float(s.get(cost_field) or 0)
+                if cost > 0:
+                    detail = ''
+                    if label == 'Hotel'  and s.get('hotel_name'): detail = ' - ' + s['hotel_name']
+                    elif label == 'Visa' and s.get('visa_type'):  detail = ' - ' + s['visa_type']
+                    ledger_entries.append({
+                        'date':        s['sale_date'],
+                        'ref':         label[:3].upper() + "-%04d" % s['id'],
+                        'description': label + detail,
+                        'customer':    s.get('customer',''),
+                        'svc':         svctag,
+                        'debit':       0.0,
+                        'credit':      cost,
+                        'type':        'purchase',
+                        'id':          s['id'],
+                    })
+
+        # ── DEBIT: supplier bought from us (they owe us) ─────────────────────
+        for s in _q(
+            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
+            "AND UPPER(TRIM(company))=UPPER(%s)" + ds + " ORDER BY sale_date,id",
+            [sup_upper] + ps
+        ):
+            ledger_entries.append({
+                'date':        s['sale_date'],
+                'ref':         "TXN-%04d" % s['id'],
+                'description': (s.get('service_type') or 'FLIGHT') + " - " + (s.get('customer','') or ''),
+                'customer':    s.get('customer',''),
+                'svc':         s.get('service_type') or 'FLIGHT',
+                'debit':       float(s['sell'] or 0),
+                'credit':      0.0,
+                'type':        'sale',
+                'id':          s['id'],
+            })
+
+        # ── CREDIT: payment received from supplier ───────────────────────────
+        for p in _q(
+            "SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE "
+            "AND UPPER(TRIM(company))=UPPER(%s)" + dp + " ORDER BY pay_date,id",
+            [sup_upper] + pp
+        ):
+            ledger_entries.append({
+                'date':        p['pay_date'],
+                'ref':         "PAY-%04d" % p['id'],
+                'description': "Payment received" + (" - " + p['notes'] if p.get('notes') else ''),
+                'customer':    '',
+                'svc':         '',
+                'debit':       0.0,
+                'credit':      float(p['amount'] or 0),
+                'type':        'payment_in',
+                'id':          p['id'],
+            })
+
+        # ── DEBIT: we paid this supplier ─────────────────────────────────────
+        for sp in _q(
+            "SELECT * FROM supplier_payments WHERE deleted=FALSE "
+            "AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date,id",
+            [sup_upper]
+        ):
+            if date_from and str(sp['pay_date']) < date_from: continue
+            if date_to   and str(sp['pay_date']) > date_to:   continue
+            ledger_entries.append({
+                'date':        sp['pay_date'],
+                'ref':         "SPY-%04d" % sp['id'],
+                'description': "Payment made" + (" - " + sp['notes'] if sp.get('notes') else ''),
+                'customer':    '',
+                'svc':         sp.get('service_type',''),
+                'debit':       float(sp['amount'] or 0),
+                'credit':      0.0,
+                'type':        'payment_out',
+                'id':          sp['id'],
+            })
+
+        # ── Sort: date → type priority → ref ─────────────────────────────────
+        _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3}
+        ledger_entries.sort(key=lambda x:(x['date'], _ORD.get(x['type'],9), x['ref']))
+
+        # ── Running balance ───────────────────────────────────────────────────
+        # Positive = they owe us (net receivable)
+        # Negative = we owe them (net payable)
+        running = 0.0
+        for e in ledger_entries:
+            running      += e['debit'] - e['credit']
+            e['balance']  = round(running, 3)
+
+    # Summary
+    summary = {}
+    if ledger_entries:
+        purchased = sum(e['credit'] for e in ledger_entries if e['type']=='purchase')
+        sold_to   = sum(e['debit']  for e in ledger_entries if e['type']=='sale')
+        rcvd      = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
+        paid_out  = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
+        net_bal   = round(running, 3)
+        summary = {
+            'total_purchased': purchased,
+            'total_sold_to':   sold_to,
+            'total_received':  rcvd,
+            'total_paid_out':  paid_out,
+            'net_payable':     round(purchased  - paid_out, 3),
+            'net_receivable':  round(sold_to    - rcvd,     3),
+            'net_balance':     net_bal,
+            'status': 'RECEIVABLE' if net_bal >  0.005
+                 else ('PAYABLE'   if net_bal < -0.005 else 'SETTLED'),
+            'entry_count': len(ledger_entries),
+        }
+
     all_suppliers = _get_supplier_list()
 
     return render_template('supplier_statement.html',
-        purchases=purchases,
-        supplier_pays=supplier_pays,
+        ledger=ledger_entries,
+        summary=summary,
+        supplier=supplier,
         all_suppliers=all_suppliers,
-        total_net=total_net,
-        total_paid=total_paid,
-        balance=balance,
-        filters={'supplier':supplier,'svc_type':svc_type,'date_from':date_from,'date_to':date_to},
+        filters={'supplier':supplier,'svc_type':svc_type,
+                 'date_from':date_from,'date_to':date_to},
         today=date.today().strftime('%d %B %Y'),
     )
+
 
 
 @app.route('/supplier-payment/add', methods=['POST'])
