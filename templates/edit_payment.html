@@ -19,11 +19,12 @@
       <div class="form-grid" style="gap:16px;margin-bottom:16px">
         <div class="form-group">
           <label>Company <span style="color:var(--red)">*</span></label>
-          <input type="text" name="company" list="company-list" required
-                 value="{{ payment.company }}" style="text-transform:uppercase;font-weight:700">
-          <datalist id="company-list">
-            {% for co in companies %}<option value="{{ co }}">{% endfor %}
-          </datalist>
+          <select name="company" required style="font-weight:700">
+            <option value="">— Select Company —</option>
+            {% for co in companies %}
+            <option value="{{ co }}" {% if co == payment.company %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="form-group">
           <label>Amount (JOD) <span style="color:var(--red)">*</span></label>

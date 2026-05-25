@@ -12,8 +12,13 @@
     <div class="form-section-body">
       <div class="form-grid form-grid-4">
         <div class="form-group"><label>Company <span style="color:var(--red)">*</span></label>
-          <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700" value="{{ sale.company if sale else '' }}">
-          <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+          {% set _pkg_co = sale.company if sale else '' %}
+          <select name="company" required style="font-weight:700">
+            <option value="">— Select Company —</option>
+            {% for co in companies %}
+            <option value="{{ co }}" {% if co == _pkg_co %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="form-group"><label>Customer <span style="color:var(--red)">*</span></label>
           <input type="text" name="customer" required style="text-transform:uppercase" value="{{ sale.customer if sale else '' }}"></div>

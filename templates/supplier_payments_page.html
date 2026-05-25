@@ -34,16 +34,12 @@
         <!-- Supplier -->
         <div class="form-group" style="margin:0">
           <label>Supplier <span style="color:var(--red)">*</span></label>
-          <input list="supplier-list" name="supplier" id="supplierInput"
-                 value="{{ prefill_supplier }}"
-                 placeholder="Type supplier name…"
-                 style="text-transform:uppercase;font-weight:600"
-                 required autocomplete="off">
-          <datalist id="supplier-list">
+          <select name="supplier" id="supplierInput" required style="font-weight:700">
+            <option value="">— Select Supplier —</option>
             {% for s in suppliers %}
-            <option value="{{ s.name }}">
+            <option value="{{ s.name }}" {% if s.name == prefill_supplier %}selected{% endif %}>{{ s.name }}</option>
             {% endfor %}
-          </datalist>
+          </select>
         </div>
 
         <!-- Payment Date -->
@@ -211,11 +207,6 @@
 </div>
 
 <script>
-/* Auto-uppercase supplier input */
-document.getElementById('supplierInput').addEventListener('input', function(){
-  var pos = this.selectionStart;
-  this.value = this.value.toUpperCase();
-  this.setSelectionRange(pos, pos);
-});
+/* Supplier field is now a native <select> — no JS needed */
 </script>
 {% endblock %}

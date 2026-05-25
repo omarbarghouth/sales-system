@@ -13,6 +13,7 @@ from flask import (Flask, render_template, request, redirect,
 import bcrypt
 
 app = Flask(__name__)
+app.jinja_env.auto_reload = True   # always re-read templates from disk on change
 
 # ── Secret key — validated at startup ────────────────────────────────────────
 _SECRET_KEY      = os.environ.get('SECRET_KEY', '')
@@ -867,11 +868,15 @@ def add_sale():
         companies = get_companies_list()
     except Exception:
         companies = []
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
             for e in errors: flash(e, 'danger')
-            return render_template('add.html', companies=companies,
+            return render_template('add.html', companies=companies, suppliers=suppliers,
                                    today=str(date.today()), form=request.form)
         net  = float(request.form.get('net', 0))
         sell = float(request.form.get('sell', 0))
@@ -1025,7 +1030,7 @@ def add_sale():
                             request.form.get('tickets',1))
         flash('Transaction saved successfully.', 'success')
         return redirect(url_for('sales_report'))  # POST→REDIRECT→GET
-    return render_template('add.html', companies=companies, today=str(date.today()), form={})
+    return render_template('add.html', companies=companies, suppliers=suppliers, today=str(date.today()), form={})
 
 
 def safe_sale(sale):
@@ -1068,13 +1073,21 @@ def edit_sale(sale_id):
         companies = get_companies_list()
     except Exception:
         companies = []
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
 
     # ── POST — save changes ───────────────────────────────────────────────────
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
             for e in errors: flash(e, 'danger')
-            return render_template('add.html', sale=sale, companies=companies,
+            return render_template('add.html', sale=sale, companies=companies, suppliers=suppliers,
                                    edit=True, today=str(date.today()), form=request.form)
 
         net  = float(request.form.get('net',  0) or 0)
@@ -1252,7 +1265,7 @@ def edit_sale(sale_id):
             flash('Error saving changes. Please try again.', 'danger')
 
     # ── GET (or POST error) — render edit form ────────────────────────────────
-    return render_template('add.html', sale=sale, companies=companies,
+    return render_template('add.html', sale=sale, companies=companies, suppliers=suppliers,
                            edit=True, today=str(date.today()), form={})
 
 
@@ -3007,11 +3020,15 @@ def add_sale_v2():
         companies = get_companies_list()
     except Exception:
         companies = []
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
             for e in errors: flash(e, 'danger')
-            return render_template('add.html', companies=companies,
+            return render_template('add.html', companies=companies, suppliers=suppliers,
                                    today=str(date.today()), form=request.form)
         net  = float(request.form.get('net', 0))
         sell = float(request.form.get('sell', 0))
@@ -3147,7 +3164,7 @@ def add_sale_v2():
         if session.get('user_role') != 'admin':
             return redirect(url_for('my_sales'))
         return redirect(url_for('sales_report'))
-    return render_template('add.html', companies=companies, today=str(date.today()), form={})
+    return render_template('add.html', companies=companies, suppliers=suppliers, today=str(date.today()), form={})
 
 
 @app.route('/my/edit/<int:sale_id>', methods=['GET', 'POST'])
@@ -3160,11 +3177,19 @@ def my_edit_sale(sale_id):
         return redirect(url_for('my_sales'))
     sale = safe_sale(sale)
     companies = get_companies_list()
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
+    try:
+        suppliers = get_suppliers_list()
+    except Exception:
+        suppliers = []
     if request.method == 'POST':
         errors = validate_sale_form(request.form)
         if errors:
             for e in errors: flash(e, 'danger')
-            return render_template('add.html', sale=sale, companies=companies, edit=True)
+            return render_template('add.html', sale=sale, companies=companies, suppliers=suppliers, edit=True)
         net  = float(request.form.get('net', 0))
         sell = float(request.form.get('sell', 0))
         outbound_delivery = request.form.get('outbound_delivery','').strip()
@@ -3257,7 +3282,7 @@ def my_edit_sale(sale_id):
                    f"{_new2_customer} | {ev['service_type']} | OldSell:{_old2_sell} NewSell:{sell}")
         flash('Transaction updated.','success')
         return redirect(url_for('my_sales'))
-    return render_template('add.html', sale=sale, companies=companies, edit=True)
+    return render_template('add.html', sale=sale, companies=companies, suppliers=suppliers, edit=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
