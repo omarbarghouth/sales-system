@@ -50,13 +50,14 @@
     <div class="form-grid form-grid-4">
       <div class="form-group">
         <label>Company <span class="req">*</span></label>
-        {% set _cur_co = (sale.company|default('')) if sale else (form.company or '') %}
-        <select name="company" required style="font-weight:700">
-          <option value="">— Select Company —</option>
-          {% for co in companies %}
-          <option value="{{ co }}" {% if co == _cur_co %}selected{% endif %}>{{ co }}</option>
-          {% endfor %}
-        </select>
+        <input type="text" name="company" id="addCoInput" required list="coDatalist"
+               style="text-transform:uppercase;font-weight:700"
+               value="{{ (sale.company|default('')) if sale else (form.company or '') }}"
+               autocomplete="off" placeholder="Type to search…"
+               oninput="lsSearch(this,'addCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
+               onfocus="lsSearch(this,'addCoDrop','/api/companies?q=','companies')">
+        <datalist id="coDatalist">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+        <div id="addCoDrop" class="live-dropdown" style="display:none"></div>
       </div>
       <div class="form-group">
         <label>Customer <span class="req">*</span></label>
@@ -136,13 +137,12 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Supplier</label>
-            {% set _cur_bf = (sale.buy_from|default('')) if sale else '' %}
-            <select name="buy_from">
-              <option value="">— None / N/A —</option>
-              {% for s in suppliers if s.service_type == 'FLIGHT' %}
-              <option value="{{ s.name }}" {% if s.name == _cur_bf %}selected{% endif %}>{{ s.name }}</option>
-              {% endfor %}
-            </select>
+            <input type="text" name="buy_from" id="addBfInput" autocomplete="off"
+                   placeholder="Search flight supplier…"
+                   value="{{ (sale.buy_from|default('')) if sale else '' }}" style="text-transform:uppercase"
+                   oninput="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
+                   onfocus="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
+            <div id="addBfDrop" class="live-dropdown" style="display:none"></div>
           </div>
           <div class="form-group">
             <label>Departure Date</label>
@@ -163,13 +163,12 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Return Supplier</label>
-            {% set _cur_rs = (sale.return_supplier|default('')) if sale else '' %}
-            <select name="return_supplier">
-              <option value="">— Same as Outbound —</option>
-              {% for s in suppliers if s.service_type == 'FLIGHT' %}
-              <option value="{{ s.name }}" {% if s.name == _cur_rs %}selected{% endif %}>{{ s.name }}</option>
-              {% endfor %}
-            </select>
+            <input type="text" name="return_supplier" id="addRsInput" autocomplete="off"
+                 placeholder="Return supplier (if different)…"
+                 value="{{ (sale.return_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
+                 oninput="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
+                 onfocus="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
+          <div id="addRsDrop" class="live-dropdown" style="display:none"></div>
           </div>
           <div class="form-group">
             <label>Return Date</label>
@@ -202,13 +201,12 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Hotel Supplier</label>
-        {% set _cur_hs = (sale.hotel_supplier|default('')) if sale else '' %}
-        <select name="hotel_supplier">
-          <option value="">— None / N/A —</option>
-          {% for s in suppliers if s.service_type == 'HOTEL' %}
-          <option value="{{ s.name }}" {% if s.name == _cur_hs %}selected{% endif %}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
+        <input type="text" name="hotel_supplier" id="addHsInput" autocomplete="off"
+               placeholder="Search hotel supplier…"
+               value="{{ (sale.hotel_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
+               oninput="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q='+encodeURIComponent(this.value),'suppliers','name')"
+               onfocus="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q=','suppliers','name')">
+        <div id="addHsDrop" class="live-dropdown" style="display:none"></div>
       </div>
       <div class="form-group">
         <label>Hotel Name</label>
@@ -260,13 +258,12 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Transfer Supplier</label>
-        {% set _cur_ts = (sale.transfer_supplier|default('')) if sale else '' %}
-        <select name="transfer_supplier">
-          <option value="">— None / N/A —</option>
-          {% for s in suppliers if s.service_type == 'TRANSFER' %}
-          <option value="{{ s.name }}" {% if s.name == _cur_ts %}selected{% endif %}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
+        <input type="text" name="transfer_supplier" id="addTsInput" autocomplete="off"
+               placeholder="Search transfer company…"
+               value="{{ (sale.transfer_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
+               oninput="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q='+encodeURIComponent(this.value),'suppliers','name')"
+               onfocus="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q=','suppliers','name')">
+        <div id="addTsDrop" class="live-dropdown" style="display:none"></div>
       </div>
       <div class="form-group">
         <label>Transfer Type</label>
@@ -606,7 +603,28 @@ function addTourRow() {
 setType(currentType);
 calcProfit();
 
-// (live-search removed — using native select dropdowns)
+// ── Live search dropdown ─────────────────────────────────────
+var _lsT = {};
+function lsSearch(inp, dropId, url, key, nameKey) {
+  clearTimeout(_lsT[dropId]);
+  var drop = document.getElementById(dropId);
+  if (!drop) return;
+  _lsT[dropId] = setTimeout(function(){
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      var items = d[key]||[];
+      if(!items.length){drop.style.display='none';return;}
+      drop.innerHTML = items.slice(0,40).map(function(item){
+        var label = nameKey ? item[nameKey] : item;
+        var sub   = nameKey && item.service_type ? ' <small style="opacity:.6">'+item.service_type+'</small>' : '';
+        return '<div class="live-dropdown-item" onmousedown="(function(e){e.preventDefault();document.getElementById(\''+inp.id+'\').value=\''+label.replace(/'/g,"\'")+'\';document.getElementById(\''+dropId+'\').style.display=\'none\';})(event)">'+label+sub+'</div>';
+      }).join('');
+      drop.style.display='block';
+    }).catch(function(){drop.style.display='none';});
+  }, inp.value.trim().length>0 ? 200 : 40);
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.form-group'))
+    document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
 });
 
 </script>

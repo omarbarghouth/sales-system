@@ -27,14 +27,13 @@
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
             <div class="form-group">
               <label>Company / Client <span class="req">*</span></label>
-              {% set _inv_co = inv.company if inv else (sale.company if sale else company_filter) %}
-              <select name="company" id="companyInput" required style="font-weight:700"
-                      onchange="loadCompanyTxns(this.value);syncCoSearch(this.value)">
-                <option value="">— Select Company —</option>
-                {% for co in companies %}
-                <option value="{{ co }}" {% if co == _inv_co %}selected{% endif %}>{{ co }}</option>
-                {% endfor %}
-              </select>
+              <input type="text" name="company" id="companyInput" required
+                     style="text-transform:uppercase;font-weight:700"
+                     value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
+                     oninput="loadCompanyTxns(this.value);invLsSearch(this,'invCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
+                     onfocus="invLsSearch(this,'invCoDrop','/api/companies?q=','companies')"
+                     autocomplete="off" placeholder="Type company name…">
+              <div id="invCoDrop" class="live-dropdown" style="display:none"></div>
               <small>Select to auto-load related transactions</small>
             </div>
             <div class="form-group">
@@ -120,13 +119,13 @@
       <div style="padding:13px 16px;background:var(--navy-lt);border-bottom:1px solid var(--border-lt)">
         <div class="form-group" style="margin:0">
           <label>Search by Company</label>
-          <select id="companySearch" style="background:#fff"
-                  onchange="loadCompanyTxns(this.value);syncCoInput(this.value)">
-            <option value="">— Select Company —</option>
-            {% for co in companies %}
-            <option value="{{ co }}" {% if co == company_filter %}selected{% endif %}>{{ co }}</option>
-            {% endfor %}
-          </select>
+          <input type="text" id="companySearch" list="co-list-search"
+                 placeholder="Type company name to load transactions…"
+                 value="{{ company_filter }}"
+                 oninput="loadCompanyTxns(this.value)"
+                 autocomplete="off"
+                 style="background:#fff">
+          <datalist id="co-list-search">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         </div>
       </div>
 
@@ -342,16 +341,6 @@ function loadCompanyTxns(val) {
     .catch(function(){ loading.style.display='none'; });
   }, 380);
 }
-function syncCoSearch(val) {
-  var el = document.getElementById('companySearch');
-  if (el && el.value !== val) el.value = val;
-}
-function syncCoInput(val) {
-  var el = document.getElementById('companyInput');
-  if (el && el.value !== val) el.value = val;
-  loadCompanyTxns(val);
-}
-
 
 // Init
 calcTotal();
@@ -359,6 +348,35 @@ calcTotal();
 
 // Compact live-search for invoice form
 var _invLsT = {};
+function invLsSearch(inp, dropId, url, key) {
+  clearTimeout(_invLsT[dropId]);
+  var drop = document.getElementById(dropId);
+  if (!drop) return;
+  _invLsT[dropId] = setTimeout(function(){
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      var items = d[key]||[];
+      if(!items.length){drop.style.display='none';return;}
+      drop.innerHTML = items.slice(0,30).map(function(item){
+        return '<div class="live-dropdown-item" data-val="'+item.replace(/"/g,'&quot;')+'">'+item+'</div>';
+      }).join('');
+      drop.querySelectorAll('.live-dropdown-item').forEach(function(el){
+        el.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          inp.value = el.dataset.val;
+          drop.style.display = 'none';
+          loadCompanyTxns(inp.value);
+          // Sync both company inputs
+          var other = inp.id==='companyInput' ? document.getElementById('companySearch') : document.getElementById('companyInput');
+          if(other) other.value = inp.value;
+        });
+      });
+      drop.style.display='block';
+    }).catch(function(){drop.style.display='none';});
+  }, 180);
+}
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.form-group'))
+    document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
 });
 </script>
 {% endblock %}
