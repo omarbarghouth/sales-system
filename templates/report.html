@@ -157,29 +157,63 @@
 
 {# ── Transactions Table ────────────────────────────────────────── #}
 <style>
-.report-table td { vertical-align: middle !important; padding: 10px 12px !important; }
-.report-table th { vertical-align: middle; white-space: nowrap; }
-.report-table td .supp-line { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:108px; font-size:11.5px; line-height:1.5; }
+/* ── Report table: professional fixed-layout ──────────────────── */
+.report-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+.report-table th {
+  vertical-align: middle;
+  white-space: nowrap;
+  padding: 9px 7px;
+  text-align: left;
+}
+.report-table td {
+  vertical-align: middle;
+  padding: 8px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Numeric columns — right-align with tabular digits */
+.report-table th.col-num,
+.report-table td.col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+  padding-right: 10px;
+}
+/* Supplier lines inside the Suppliers cell */
+.report-table .supp-line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.5;
+}
 </style>
 <div class="table-wrap" style="overflow-x:auto">
-  <table class="report-table" style="table-layout:fixed;width:100%;min-width:960px">
+  {# Column totals — non-admin: 994px  admin: 1148px — fits typical ERP sidebar layout #}
+  <table class="report-table" style="min-width:{% if is_admin %}1000px{% else %}860px{% endif %}">
     <colgroup>
-      <col style="width:36px">   {# ID #}
-      <col style="width:80px">   {# Type #}
-      <col style="width:92px">   {# Date #}
-      <col style="width:110px">  {# Company #}
-      <col style="width:120px">  {# Customer #}
-      <col style="width:100px">  {# Route #}
-      <col style="width:110px">  {# Suppliers #}
-      <col style="width:36px">   {# Tix #}
-      <col style="width:90px">   {# Travel Date #}
-      <col style="width:88px">   {# Net #}
-      <col style="width:88px">   {# Sell #}
-      <col style="width:80px">   {# Profit #}
-      <col style="width:60px">   {# Status #}
+      <col style="width:30px">   {# ID #}
+      <col style="width:68px">   {# Type #}
+      <col style="width:84px">   {# Date #}
+      <col style="width:104px">  {# Company #}
+      <col style="width:110px">  {# Customer #}
+      <col style="width:92px">   {# Route #}
+      <col style="width:96px">   {# Suppliers #}
+      <col style="width:30px">   {# Tix #}
+      <col style="width:84px">   {# Travel Date #}
+      <col style="width:84px">   {# Net #}
+      <col style="width:84px">   {# Sell #}
+      <col style="width:76px">   {# Profit #}
+      <col style="width:58px">   {# Status #}
       {% if is_admin %}
-      <col style="width:80px">   {# Agent #}
-      <col style="width:90px">   {# Actions #}
+      <col style="width:74px">   {# Agent #}
+      <col style="width:80px">   {# Actions #}
       {% endif %}
     </colgroup>
     <thead>
@@ -193,9 +227,9 @@
         <th>Suppliers</th>
         <th class="text-center">Tix</th>
         <th>Travel Date</th>
-        <th class="text-right">Net (JOD)</th>
-        <th class="text-right">Sell (JOD)</th>
-        <th class="text-right">Profit (JOD)</th>
+        <th class="col-num">Net (JOD)</th>
+        <th class="col-num">Sell (JOD)</th>
+        <th class="col-num">Profit (JOD)</th>
         <th>Status</th>
         {% if is_admin %}
         <th>
@@ -250,9 +284,9 @@
           {% if not s.travel_date and not s.return_date %}<span style="color:var(--muted-lt)">—</span>{% endif %}
         </td>
 
-        <td class="text-right" style="color:var(--muted);font-size:12.5px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
-        <td class="text-right" style="font-weight:700;color:var(--navy-dk);font-size:13px">{{ "%.3f"|format((s.sell or 0)|float) }}</td>
-        <td class="text-right text-green" style="font-size:13px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
+        <td class="col-num" style="color:var(--muted);font-size:12px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
+        <td class="col-num" style="font-weight:700;color:var(--navy-dk);font-size:12.5px">{{ "%.3f"|format((s.sell or 0)|float) }}</td>
+        <td class="col-num text-green" style="font-size:12.5px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
 
         <td>
           <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
@@ -319,16 +353,16 @@
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="{{ 8 if is_admin else 7 }}">
+        <td colspan="9">
           TOTALS — {{ totals.count }} records
           {% if filters.agent_id %}
           &nbsp;·&nbsp;
           {% for a in agents %}{% if a.id|string == filters.agent_id %}Agent: {{ a.display }}{% endif %}{% endfor %}
           {% endif %}
         </td>
-        <td class="text-right" style="color:rgba(255,255,255,.55);font-size:12.5px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
-        <td class="text-right" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
-        <td class="text-right" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
+        <td class="col-num" style="color:rgba(255,255,255,.65);font-size:12px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
+        <td class="col-num" style="color:var(--gold);font-size:13.5px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
+        <td class="col-num" style="color:#86efac;font-size:13.5px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
         <td colspan="{{ 3 if is_admin else 1 }}"></td>
       </tr>
     </tfoot>
