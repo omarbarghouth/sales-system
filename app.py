@@ -3821,17 +3821,22 @@ def supplier_statement():
         ):
             cost = float(s.get('outbound_cost') or s.get('net') or 0)
             if cost > 0:
-                fl = s.get('from_loc',''); tl = s.get('to_loc','')
+                fl = s.get('from_loc','') or ''; tl = s.get('to_loc','') or ''
                 ledger_entries.append({
-                    'date':        s['sale_date'],
-                    'ref':         "PUR-%04d" % s['id'],
-                    'description': "Flight " + fl + ("→"+tl if tl else ''),
-                    'customer':    s.get('customer',''),
-                    'svc':         'FLIGHT',
-                    'debit':       0.0,
-                    'credit':      cost,
-                    'type':        'purchase',
-                    'id':          s['id'],
+                    'date':          s['sale_date'],
+                    'ref':           "PUR-%04d" % s['id'],
+                    'description':   "Flight " + fl + ("→"+tl if tl else ''),
+                    'customer':      s.get('customer','') or '',
+                    'svc':           'FLIGHT',
+                    'debit':         0.0,
+                    'credit':        cost,
+                    'type':          'purchase',
+                    'id':            s['id'],
+                    'from_loc':      fl,
+                    'to_loc':        tl,
+                    'travel_date':   s.get('travel_date','') or '',
+                    'pnr':           s.get('pnr','') or '',
+                    'ticket_number': s.get('ticket_number','') or '',
                 })
 
         # ── CREDIT: we bought return ticket from this supplier ───────────────
@@ -3844,22 +3849,28 @@ def supplier_statement():
             " AND return_cost > 0" + ds + " ORDER BY sale_date,id",
             [sup_upper] + ps
         ):
-            cost = float(s.get('return_cost') or 0)
-            tl   = s.get('to_loc',''); fl = s.get('from_loc','')
-            _rpnr = s.get('return_pnr','') or ''
-            _rtn  = s.get('return_ticket_number','') or ''
-            _desc = "Return Flight " + tl + ("→"+fl if fl else '')
+            cost  = float(s.get('return_cost') or 0)
+            # Return route is reversed: destination→origin
+            _fl_orig = s.get('from_loc','') or ''; _tl_orig = s.get('to_loc','') or ''
+            _rpnr    = s.get('return_pnr','') or ''
+            _rtn     = s.get('return_ticket_number','') or ''
+            _desc    = "Return Flight " + _tl_orig + ("→"+_fl_orig if _fl_orig else '')
             if _rpnr: _desc += " [" + _rpnr + "]"
             ledger_entries.append({
                 'date':                 s['sale_date'],
                 'ref':                  "RTN-%04d" % s['id'],
                 'description':          _desc,
-                'customer':             s.get('customer',''),
+                'customer':             s.get('customer','') or '',
                 'svc':                  'FLIGHT',
                 'debit':                0.0,
                 'credit':               cost,
                 'type':                 'purchase',
                 'id':                   s['id'],
+                'from_loc':             _tl_orig,   # return: depart from destination
+                'to_loc':               _fl_orig,   # return: arrive at origin
+                'travel_date':          s.get('return_date','') or '',
+                'pnr':                  _rpnr,
+                'ticket_number':        _rtn,
                 'return_ticket_number': _rtn,
                 'return_pnr':           _rpnr,
             })
@@ -3885,12 +3896,17 @@ def supplier_statement():
                         'date':        s['sale_date'],
                         'ref':         label[:3].upper() + "-%04d" % s['id'],
                         'description': label + detail,
-                        'customer':    s.get('customer',''),
+                        'customer':    s.get('customer','') or '',
                         'svc':         svctag,
                         'debit':       0.0,
                         'credit':      cost,
                         'type':        'purchase',
                         'id':          s['id'],
+                        'from_loc':    '',
+                        'to_loc':      s.get('hotel_name','') or '' if label == 'Hotel' else '',
+                        'travel_date': s.get('hotel_checkin','') or s.get('travel_date','') or '',
+                        'pnr':         '',
+                        'ticket_number': '',
                     })
 
         # ── DEBIT: supplier bought from us (they owe us) ─────────────────────
@@ -3900,15 +3916,20 @@ def supplier_statement():
             [sup_upper] + ps
         ):
             ledger_entries.append({
-                'date':        s['sale_date'],
-                'ref':         "TXN-%04d" % s['id'],
-                'description': (s.get('service_type') or 'FLIGHT') + " - " + (s.get('customer','') or ''),
-                'customer':    s.get('customer',''),
-                'svc':         s.get('service_type') or 'FLIGHT',
-                'debit':       float(s['sell'] or 0),
-                'credit':      0.0,
-                'type':        'sale',
-                'id':          s['id'],
+                'date':          s['sale_date'],
+                'ref':           "TXN-%04d" % s['id'],
+                'description':   (s.get('service_type') or 'FLIGHT') + " - " + (s.get('customer','') or ''),
+                'customer':      s.get('customer','') or '',
+                'svc':           s.get('service_type') or 'FLIGHT',
+                'debit':         float(s['sell'] or 0),
+                'credit':        0.0,
+                'type':          'sale',
+                'id':            s['id'],
+                'from_loc':      s.get('from_loc','') or '',
+                'to_loc':        s.get('to_loc','') or '',
+                'travel_date':   s.get('travel_date','') or '',
+                'pnr':           s.get('pnr','') or '',
+                'ticket_number': s.get('ticket_number','') or '',
             })
 
         # ── CREDIT: payment received from supplier ───────────────────────────
@@ -3948,9 +3969,17 @@ def supplier_statement():
                 'id':          sp['id'],
             })
 
+        # ── Normalize: ensure every entry has all display fields ─────────────
+        for _e in ledger_entries:
+            _e.setdefault('from_loc',      '')
+            _e.setdefault('to_loc',        '')
+            _e.setdefault('travel_date',   '')
+            _e.setdefault('pnr',           '')
+            _e.setdefault('ticket_number', '')
+
         # ── Sort: date → type priority → ref ─────────────────────────────────
         _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3}
-        ledger_entries.sort(key=lambda x:(x['date'], _ORD.get(x['type'],9), x['ref']))
+        ledger_entries.sort(key=lambda x:(str(x['date']), _ORD.get(x['type'],9), x['ref']))
 
         # ── Running balance ───────────────────────────────────────────────────
         # Positive = they owe us (net receivable)
