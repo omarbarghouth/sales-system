@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Supplier Payments — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-money-bill-wave" style="color:var(--gold)"></i> Supplier Payments</h1>
+    <p>Record payments made to suppliers and view recent payment history</p>
+  </div>
+  <div class="page-header-actions no-print">
+    <a href="{{ url_for('supplier_statement') }}" class="btn btn-print">
+      <i class="fas fa-chart-line"></i> Supplier Statement
+    </a>
+  </div>
+</div>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in msgs %}
+  <div class="alert alert-{{ cat }}" style="margin-bottom:14px">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- ── Payment Form ────────────────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header" style="background:var(--navy)">
+    <i class="fas fa-plus-circle"></i> Record New Payment
+  </div>
+  <div style="padding:24px">
+    <form method="POST" action="{{ url_for('add_supplier_payment') }}" id="payForm">
+      <input type="hidden" name="redirect_to" value="supplier_payments_page">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <!-- Supplier -->
+        <div class="form-group" style="margin:0">
+          <label>Supplier <span style="color:var(--red)">*</span></label>
+          <input list="supplier-list" name="supplier" id="supplierInput"
+                 value="{{ prefill_supplier }}"
+                 placeholder="Type supplier name…"
+                 style="text-transform:uppercase;font-weight:600"
+                 required autocomplete="off">
+          <datalist id="supplier-list">
+            {% for s in suppliers %}
+            <option value="{{ s }}">
+            {% endfor %}
+          </datalist>
+        </div>
+
+        <!-- Payment Date -->
+        <div class="form-group" style="margin:0">
+          <label>Payment Date <span style="color:var(--red)">*</span></label>
+          <input type="date" name="pay_date" value="{{ today }}" required>
+        </div>
+
+        <!-- Amount -->
+        <div class="form-group" style="margin:0">
+          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
+          <input type="number" name="amount" step="0.01" min="0.01"
+                 placeholder="0.00" required>
+        </div>
+
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <!-- Payment Method -->
+        <div class="form-group" style="margin:0">
+          <label>Payment Method</label>
+          <select name="payment_method">
+            <option value="">— Select —</option>
+            <option value="CASH">Cash</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+            <option value="CLIQ">CliQ</option>
+            <option value="CREDIT_CARD">Credit Card</option>
+            <option value="CHEQUE">Cheque</option>
+          </select>
+        </div>
+
+        <!-- Reference Number -->
+        <div class="form-group" style="margin:0">
+          <label>Reference / Cheque No.</label>
+          <input type="text" name="reference_number"
+                 placeholder="e.g. TXN-001, CHQ-1234…"
+                 style="text-transform:uppercase;font-family:monospace">
+        </div>
+
+        <!-- Service Type -->
+        <div class="form-group" style="margin:0">
+          <label>Service Type</label>
+          <select name="svc_type">
+            <option value="FLIGHT">Flight</option>
+            <option value="HOTEL">Hotel</option>
+            <option value="VISA">Visa</option>
+            <option value="TRANSFER">Transfer</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group" style="margin-bottom:20px">
+        <label>Notes</label>
+        <input type="text" name="notes" placeholder="Optional note about this payment…">
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Payment
+        </button>
+        <button type="reset" class="btn btn-print">
+          <i class="fas fa-undo"></i> Reset
+        </button>
+        {% if prefill_supplier %}
+        <a href="{{ url_for('supplier_statement', supplier=prefill_supplier) }}"
+           class="btn btn-print" style="margin-left:auto">
+          <i class="fas fa-arrow-left"></i> Back to {{ prefill_supplier }} Statement
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Recent Payments Table ───────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header" style="background:var(--navy-dk)">
+    <i class="fas fa-history"></i> Recent Payments
+    <span style="font-size:12px;font-weight:400;opacity:.75;margin-left:8px">(last 200)</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Supplier</th>
+          <th>Method</th>
+          <th>Reference</th>
+          <th>Service</th>
+          <th style="text-align:right">Amount (JOD)</th>
+          <th>Notes</th>
+          <th class="no-print">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr style="background:{% if loop.index is odd %}#fff{% else %}#f9fafb{% endif %}">
+          <td style="color:var(--muted);font-size:11px">{{ p.id }}</td>
+          <td style="white-space:nowrap;font-weight:600">{{ p.pay_date }}</td>
+          <td>
+            <a href="{{ url_for('supplier_statement', supplier=p.supplier) }}"
+               style="color:var(--navy);font-weight:700;text-decoration:none">
+              {{ p.supplier }}
+            </a>
+          </td>
+          <td>
+            {% if p.payment_method %}
+            <span class="badge badge-navy" style="font-size:10px">
+              {{ p.payment_method.replace('_',' ') }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-family:monospace;font-size:12px;color:var(--navy-dk)">
+            {{ p.reference_number or '—' }}
+          </td>
+          <td>
+            <span class="badge badge-still" style="font-size:10px">{{ p.service_type or 'FLIGHT' }}</span>
+          </td>
+          <td style="text-align:right;font-weight:700;color:var(--gold-dk)">
+            {{ '%.3f'|format(p.amount|float) }}
+          </td>
+          <td style="font-size:12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ p.notes }}">
+            {{ p.notes or '—' }}
+          </td>
+          <td class="no-print">
+            <form method="POST"
+                  action="{{ url_for('delete_supplier_payment', pay_id=p.id) }}"
+                  onsubmit="return confirm('Delete this payment?')"
+                  style="display:inline">
+              <input type="hidden" name="supplier" value="{{ p.supplier }}">
+              <button class="btn-icon" title="Delete"
+                      style="background:none;border:none;cursor:pointer;color:var(--red)">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted" style="padding:40px">
+            No payments recorded yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if payments %}
+      <tfoot>
+        <tr style="background:var(--navy);color:#fff;font-weight:700">
+          <td colspan="6" style="text-align:right;padding:10px 16px">Total Paid:</td>
+          <td style="text-align:right;padding:10px 16px">
+            {{ '%.3f'|format(payments|sum(attribute='amount')|float) }} JOD
+          </td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<script>
+/* Auto-uppercase supplier input */
+document.getElementById('supplierInput').addEventListener('input', function(){
+  var pos = this.selectionStart;
+  this.value = this.value.toUpperCase();
+  this.setSelectionRange(pos, pos);
+});
+</script>
+{% endblock %}

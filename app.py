@@ -2720,7 +2720,9 @@ def init_extension_db():
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS company_id  INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES master_suppliers(id)  ON DELETE SET NULL",
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
-        "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES master_suppliers(id) ON DELETE SET NULL",
+        "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS supplier_id       INTEGER REFERENCES master_suppliers(id) ON DELETE SET NULL",
+        "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS payment_method   TEXT DEFAULT ''",
+        "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS reference_number TEXT DEFAULT ''",
     ]:
         try: cur.execute(_col_sql)
         except Exception: pass
@@ -3957,10 +3959,16 @@ def supplier_statement():
             "AND UPPER(TRIM(supplier))=UPPER(%s)" + dp + " ORDER BY pay_date,id",
             [sup_upper] + pp
         ):
+            _pm  = sp.get('payment_method','') or ''
+            _ref = sp.get('reference_number','') or ''
+            _spy_desc = "Payment made"
+            if _pm:  _spy_desc += " via " + _pm.replace('_',' ').title()
+            if _ref: _spy_desc += " [" + _ref + "]"
+            if sp.get('notes'): _spy_desc += " — " + sp['notes']
             ledger_entries.append({
                 'date':        sp['pay_date'],
                 'ref':         "SPY-%04d" % sp['id'],
-                'description': "Payment made" + (" - " + sp['notes'] if sp.get('notes') else ''),
+                'description': _spy_desc,
                 'customer':    '',
                 'svc':         sp.get('service_type',''),
                 'debit':       float(sp['amount'] or 0),
@@ -4027,38 +4035,50 @@ def supplier_statement():
 @app.route('/supplier-payment/add', methods=['POST'])
 @admin_required
 def add_supplier_payment():
-    supplier   = request.form.get('supplier','').strip()
-    amount_raw = request.form.get('amount','').strip()
-    pay_date   = request.form.get('pay_date', str(date.today())).strip()
-    svc_type   = request.form.get('svc_type','FLIGHT').strip()
-    notes      = request.form.get('notes','').strip()
+    supplier       = request.form.get('supplier','').strip().upper()
+    amount_raw     = request.form.get('amount','').strip()
+    pay_date       = request.form.get('pay_date', str(date.today())).strip()
+    svc_type       = request.form.get('svc_type','FLIGHT').strip().upper()
+    notes          = request.form.get('notes','').strip()
+    payment_method = request.form.get('payment_method','').strip()
+    reference_num  = request.form.get('reference_number','').strip().upper()
+    redirect_to    = request.form.get('redirect_to', 'supplier_statement').strip()
+
     if not supplier or not amount_raw:
         flash('Supplier and amount are required.', 'danger')
-        return redirect(url_for('supplier_statement'))
+        return redirect(url_for('supplier_payments_page'))
     try:
         amount = float(amount_raw)
         if amount <= 0:
             raise ValueError
     except ValueError:
-        flash('Invalid payment amount.', 'danger')
-        return redirect(url_for('supplier_statement'))
-    # ACC-07: use RETURNING id — eliminates race condition from separate SELECT
+        flash('Invalid payment amount — must be a positive number.', 'danger')
+        return redirect(url_for('supplier_payments_page'))
+
+    # ACC-07: RETURNING id eliminates the separate SELECT MAX race condition
     sp_new_id = execute_db("""
-        INSERT INTO supplier_payments (supplier, amount, pay_date, service_type, notes)
-        VALUES (%s,%s,%s,%s,%s) RETURNING id
-    """, (supplier.upper(), amount, pay_date, svc_type.upper(), notes))
+        INSERT INTO supplier_payments
+               (supplier, amount, pay_date, service_type, notes, payment_method, reference_number)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    """, (supplier, amount, pay_date, svc_type, notes, payment_method, reference_num))
+
     try:
+        _ldesc = f"Payment to {supplier} — {svc_type}"
+        if payment_method: _ldesc += f" via {payment_method}"
+        if reference_num:  _ldesc += f" [Ref:{reference_num}]"
         post_ledger('SUPPLIER_PAYMENT', sp_new_id or 0, 'supplier_payments',
-                    supplier.upper(),
-                    f"Payment made to {supplier.upper()} — {svc_type}",
-                    debit=amount, credit=0, entry_date=pay_date)
+                    supplier, _ldesc, debit=amount, credit=0, entry_date=pay_date)
     except Exception: pass
+
     log_action('CREATE', 'supplier_payments', sp_new_id or 0,
-               f"Supplier payment: {supplier.upper()} JOD {amount}")
-    flash(f'Payment of JOD {amount:.3f} recorded for {supplier.upper()}.', 'success')
-    # Return to same supplier filter
-    return redirect(url_for('supplier_statement', supplier=supplier.upper(),
-                            svc_type=svc_type))
+               f"Supplier payment: {supplier} JOD {amount} via {payment_method or 'N/A'} ref:{reference_num or '-'}")
+    flash(f'Payment of JOD {amount:.3f} recorded for {supplier}.', 'success')
+
+    # Redirect back to the page that submitted the form
+    if redirect_to == 'supplier_payments_page':
+        return redirect(url_for('supplier_payments_page'))
+    return redirect(url_for('supplier_statement', supplier=supplier, svc_type=svc_type))
 
 
 @app.route('/supplier-payment/<int:pay_id>/delete', methods=['POST'])
@@ -4069,6 +4089,36 @@ def delete_supplier_payment(pay_id):
     flash('Payment deleted.', 'success')
     supplier = request.form.get('supplier','')
     return redirect(url_for('supplier_statement', supplier=supplier))
+
+
+@app.route('/supplier-payments')
+@login_required
+def supplier_payments_page():
+    """Dedicated Supplier Payment form + recent payments list."""
+    prefill_supplier = request.args.get('supplier', '').strip().upper()
+
+    # Recent payments (last 200, not deleted)
+    payments = query_db("""
+        SELECT sp.id, sp.supplier, sp.amount, sp.pay_date,
+               sp.service_type, sp.notes,
+               COALESCE(sp.payment_method,'')   AS payment_method,
+               COALESCE(sp.reference_number,'') AS reference_number,
+               sp.created_at
+        FROM supplier_payments sp
+        WHERE sp.deleted = FALSE
+        ORDER BY sp.pay_date DESC, sp.id DESC
+        LIMIT 200
+    """) or []
+
+    suppliers = get_suppliers_list()
+
+    return render_template(
+        'supplier_payments_page.html',
+        payments=payments,
+        suppliers=suppliers,
+        prefill_supplier=prefill_supplier,
+        today=str(date.today()),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

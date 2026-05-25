@@ -26,6 +26,11 @@
     <p>Mutual ledger — payables, receivables &amp; running balance</p>
   </div>
   <div class="page-header-actions">
+    {% if supplier %}
+    <a href="{{ url_for('supplier_payments_page', supplier=supplier) }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Add Payment
+    </a>
+    {% endif %}
     {% if supplier and ledger %}
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
     {% endif %}
