@@ -41,7 +41,7 @@
                  required autocomplete="off">
           <datalist id="supplier-list">
             {% for s in suppliers %}
-            <option value="{{ s }}">
+            <option value="{{ s.name }}">
             {% endfor %}
           </datalist>
         </div>
