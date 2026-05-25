@@ -399,20 +399,33 @@ def validate_ledger_balance(company):
         rcvd_row = query_db(
             "SELECT COALESCE(SUM(amount),0) AS v FROM payments WHERE UPPER(company)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE",
             [company], one=True)
+        # Outbound cost — what we paid this supplier for the outbound leg
         purch_row = query_db(
             """SELECT COALESCE(SUM(
                    CASE WHEN outbound_cost > 0 THEN outbound_cost ELSE COALESCE(net,0) END
                ),0) AS v
                FROM sales WHERE UPPER(buy_from)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE""",
             [company], one=True)
+        # Return cost — what we paid this supplier for the return leg when they differ from outbound supplier
+        # Include same-supplier round trips too (return_cost on same buy_from) — no exclusion needed since
+        # outbound_cost and return_cost are separate fields with no double-counting risk.
+        ret_purch_row = query_db(
+            """SELECT COALESCE(SUM(return_cost), 0) AS v
+               FROM sales
+               WHERE UPPER(return_supplier)=UPPER(%s)
+                 AND UPPER(COALESCE(buy_from,'')) <> UPPER(%s)
+                 AND return_cost > 0
+                 AND deleted=FALSE AND is_archived=FALSE""",
+            [company, company], one=True)
         paid_row = query_db(
             "SELECT COALESCE(SUM(amount),0) AS v FROM supplier_payments WHERE UPPER(supplier)=UPPER(%s) AND deleted=FALSE AND is_archived=FALSE",
             [company], one=True)
 
-        total_sold     = float(sold_row['v']  if sold_row  else 0)
-        total_received = float(rcvd_row['v']  if rcvd_row  else 0)
-        total_purchased= float(purch_row['v'] if purch_row else 0)
-        total_paid_out = float(paid_row['v']  if paid_row  else 0)
+        total_sold     = float(sold_row['v']      if sold_row      else 0)
+        total_received = float(rcvd_row['v']      if rcvd_row      else 0)
+        total_purchased= float(purch_row['v']     if purch_row     else 0)
+        total_purchased+= float(ret_purch_row['v'] if ret_purch_row else 0)
+        total_paid_out = float(paid_row['v']      if paid_row      else 0)
 
         dynamic_bal = total_sold - total_received + total_purchased - total_paid_out
         dynamic_bal = round(dynamic_bal, 3)
@@ -1034,8 +1047,8 @@ def safe_sale(sale):
         'travel_date':'','return_date':'','via':'','remarks':'',
         'from_loc':'','to_loc':'','outbound_delivery':'',
         'return_delivery':'','outbound_status':'','return_status':'',
-        # Phase 3 — ticket numbers
-        'ticket_number':'','return_ticket_number':'',
+        # Phase 3 — ticket numbers and return PNR
+        'ticket_number':'','return_ticket_number':'','return_pnr':'',
     }
     for k,v in defaults.items():
         if k not in d or d[k] is None: d[k] = v
@@ -1141,6 +1154,8 @@ def edit_sale(sale_id):
             # Phase 3 — ticket numbers
             ticket_number=request.form.get('ticket_number','').strip(),
             return_ticket_number=request.form.get('return_ticket_number','').strip(),
+            # Return PNR — separate PNR for return leg
+            return_pnr=request.form.get('return_pnr','').upper().strip(),
         )
 
         try:
@@ -1167,7 +1182,7 @@ def edit_sale(sale_id):
                     tours_json=%s, visa_supplier=%s, visa_type=%s, passport_number=%s, visa_status=%s,
                     insurance_supplier=%s, insurance_type=%s, airline=%s, pnr=%s, baggage=%s,
                     passengers_json=%s, outbound_cost=%s, return_cost=%s,
-                    ticket_number=%s, return_ticket_number=%s
+                    ticket_number=%s, return_ticket_number=%s, return_pnr=%s
                 WHERE id=%s
             """, (
                 (request.form.get('from_loc', '').upper().strip() or '-'),
@@ -1191,7 +1206,7 @@ def edit_sale(sale_id):
                 ev['tours_json'], ev['visa_supplier'], ev['visa_type'], ev['passport_number'], ev['visa_status'],
                 ev['insurance_supplier'], ev['insurance_type'], ev['airline'], ev['pnr'], ev['baggage'],
                 ev['passengers_json'], ev['outbound_cost'], ev['return_cost'],
-                ev['ticket_number'], ev['return_ticket_number'],
+                ev['ticket_number'], ev['return_ticket_number'], ev['return_pnr'],
                 sale_id,
             ))
 
@@ -1404,27 +1419,33 @@ def statement():
                     'id':          s['id'],
                 })
 
-        # CREDIT: return supplier
+        # CREDIT: return supplier (return leg purchase)
+        # NOTE: No buy_from exclusion — outbound_cost and return_cost are separate fields.
+        # Even when buy_from == return_supplier, both costs must appear independently.
         for s in _q(
             "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(return_supplier))=UPPER(%s) "
-            "AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s)" + fs + " ORDER BY sale_date,id",
-            [company, company] + (ps[1:] if len(ps)>1 else [])
+            "AND UPPER(TRIM(return_supplier))=UPPER(%s)"
+            " AND return_cost > 0" + fs + " ORDER BY sale_date,id",
+            ps
         ):
             cost = float(s.get('return_cost') or 0)
-            if cost > 0:
-                tl = s.get('to_loc',''); fl = s.get('from_loc','')
-                ledger_entries.append({
-                    'date':        s['sale_date'],
-                    'ref':         "RTN-%04d" % s['id'],
-                    'description': "Purchase Return " + tl + chr(8594) + fl,
-                    'passenger':   s.get('customer',''),
-                    'svc':         'FLIGHT',
-                    'debit':       0.0,
-                    'credit':      cost,
-                    'type':        'purchase',
-                    'id':          s['id'],
-                })
+            tl = s.get('to_loc',''); fl = s.get('from_loc','')
+            _rpnr = s.get('return_pnr','') or ''
+            _rtn  = s.get('return_ticket_number','') or ''
+            _desc = "Purchase Return " + tl + chr(8594) + fl
+            if _rpnr: _desc += " [" + _rpnr + "]"
+            ledger_entries.append({
+                'date':                 s['sale_date'],
+                'ref':                  "RTN-%04d" % s['id'],
+                'description':          _desc,
+                'passenger':            s.get('customer',''),
+                'svc':                  'FLIGHT',
+                'debit':                0.0,
+                'credit':               cost,
+                'type':                 'purchase',
+                'id':                   s['id'],
+                'return_ticket_number': _rtn,
+            })
 
         # CREDIT: hotel/transfer/visa/insurance supplier
         for supp_field, cost_field, label, svctag in [
@@ -2310,6 +2331,13 @@ def init_extension_db():
     ]:
         cur.execute(f"DO $$ BEGIN {_tn_col}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
 
+    # ── Return PNR — separate PNR for return leg when supplier differs ────────
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE sales ADD COLUMN IF NOT EXISTS return_pnr TEXT DEFAULT '';
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    """)
+
     # ── Extend users table ────────────────────────────────────────────────────
     extra_user_cols = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT ''",
@@ -3007,10 +3035,11 @@ def add_sale_v2():
                 tours_list.append({'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''})
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
         ev = dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
-        _oc  = float(request.form.get('outbound_cost',0) or 0)
-        _rc  = float(request.form.get('return_cost',0) or 0)
-        _tkn = request.form.get('ticket_number','').strip()         # Phase 3
-        _rtn = request.form.get('return_ticket_number','').strip()  # Phase 3
+        _oc   = float(request.form.get('outbound_cost',0) or 0)
+        _rc   = float(request.form.get('return_cost',0) or 0)
+        _tkn  = request.form.get('ticket_number','').strip()
+        _rtn  = request.form.get('return_ticket_number','').strip()
+        _rpnr = request.form.get('return_pnr','').upper().strip()
         new_id = execute_db("""
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
@@ -3022,7 +3051,7 @@ def add_sale_v2():
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
              insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
-             outbound_cost,return_cost,ticket_number,return_ticket_number)
+             outbound_cost,return_cost,ticket_number,return_ticket_number,return_pnr)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
@@ -3033,7 +3062,7 @@ def add_sale_v2():
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,
-                %s,%s,%s,%s
+                %s,%s,%s,%s,%s
             ) RETURNING id
         """, (
             (request.form.get('from_loc','').upper().strip() or '-'),  # 1  from_loc
@@ -3088,6 +3117,7 @@ def add_sale_v2():
             _rc,                                                           # 50 return_cost
             _tkn,                                                          # 51 ticket_number
             _rtn,                                                          # 52 return_ticket_number
+            _rpnr,                                                         # 53 return_pnr
         ))
         try:
             log_action('CREATE','sales',new_id,
@@ -3147,7 +3177,7 @@ def my_edit_sale(sale_id):
         _json = json
         tours_list=[{'name':tour_names[i].strip(),'date':tour_dates[i].strip() if i<len(tour_dates) else '','pickup':tour_pickups[i].strip() if i<len(tour_pickups) else '','status':tour_statuses[i].strip() if i<len(tour_statuses) else 'INCLUDED','supplier':tour_suppliers[i].strip() if i<len(tour_suppliers) else '','cost':float(tour_costs[i]) if i<len(tour_costs) and tour_costs[i] else 0,'notes':tour_notes[i].strip() if i<len(tour_notes) else ''} for i in range(len(tour_names)) if tour_names[i].strip()]
         _pax_n2=request.form.getlist('pax_name[]'); _pax_p2=request.form.getlist('pax_passport[]'); _pax_nat2=request.form.getlist('pax_nationality[]'); _pax_d2=request.form.getlist('pax_dob[]')
-        ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]))
+        ev=dict(service_type=service_type,hotel_supplier=request.form.get('hotel_supplier','').strip(),hotel_name=request.form.get('hotel_name','').strip(),hotel_room=request.form.get('hotel_room','').strip(),hotel_meal=request.form.get('hotel_meal','').strip(),hotel_checkin=request.form.get('hotel_checkin','').strip(),hotel_checkout=request.form.get('hotel_checkout','').strip(),hotel_nights=int(request.form.get('hotel_nights',0) or 0),hotel_net=float(request.form.get('hotel_net',0) or 0),transfer_supplier=request.form.get('transfer_supplier','').strip(),transfer_type=request.form.get('transfer_type','').strip(),transfer_pickup=request.form.get('transfer_pickup','').strip(),transfer_vehicle=request.form.get('transfer_vehicle','').strip(),transfer_net=float(request.form.get('transfer_net',0) or 0),tours_json=_json.dumps(tours_list),visa_supplier=request.form.get('visa_supplier','').strip(),visa_type=request.form.get('visa_type','').strip(),passport_number=request.form.get('passport_number','').upper().strip(),visa_status=request.form.get('visa_status','').strip(),insurance_supplier=request.form.get('insurance_supplier','').strip(),insurance_type=request.form.get('insurance_type','').strip(),airline=request.form.get('airline','').upper().strip(),pnr=request.form.get('pnr','').upper().strip(),baggage=request.form.get('baggage','').strip(),passengers_json=_json.dumps([{'name':_pax_n2[i].strip(),'passport':_pax_p2[i].strip() if i<len(_pax_p2) else '','nationality':_pax_nat2[i].strip() if i<len(_pax_nat2) else '','dob':_pax_d2[i].strip() if i<len(_pax_d2) else ''} for i in range(len(_pax_n2)) if _pax_n2[i].strip()]),return_pnr=request.form.get('return_pnr','').upper().strip())
         # ACC-01 / ACC-04 — Snapshot old values BEFORE update for ledger reversal
         _old2 = query_db(
             'SELECT sell, company, sale_date FROM sales WHERE id=%s AND deleted=FALSE',
@@ -3170,7 +3200,7 @@ def my_edit_sale(sale_id):
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
                 insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,passengers_json=%s,
-                ticket_number=%s,return_ticket_number=%s
+                ticket_number=%s,return_ticket_number=%s,return_pnr=%s
             WHERE id=%s
         ''', (
             request.form.get('from_loc','').upper().strip(),request.form.get('to_loc','').upper().strip(),
@@ -3188,6 +3218,7 @@ def my_edit_sale(sale_id):
             ev['insurance_supplier'],ev['insurance_type'],ev['airline'],ev['pnr'],ev['baggage'],ev['passengers_json'],
             request.form.get('ticket_number','').strip(),
             request.form.get('return_ticket_number','').strip(),
+            ev['return_pnr'],
             sale_id
         ))
 
@@ -3804,26 +3835,34 @@ def supplier_statement():
                 })
 
         # ── CREDIT: we bought return ticket from this supplier ───────────────
+        # NOTE: No buy_from exclusion — outbound_cost and return_cost are separate fields.
+        # A round-trip where buy_from == return_supplier correctly generates two distinct
+        # ledger lines: PUR-XXXX (outbound) and RTN-XXXX (return).
         for s in _q(
             "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(return_supplier))=UPPER(%s) "
-            "AND UPPER(TRIM(COALESCE(buy_from,'')))<>UPPER(%s)" + ds + " ORDER BY sale_date,id",
-            [sup_upper, sup_upper] + ps
+            "AND UPPER(TRIM(return_supplier))=UPPER(%s)"
+            " AND return_cost > 0" + ds + " ORDER BY sale_date,id",
+            [sup_upper] + ps
         ):
             cost = float(s.get('return_cost') or 0)
-            if cost > 0:
-                tl = s.get('to_loc',''); fl = s.get('from_loc','')
-                ledger_entries.append({
-                    'date':        s['sale_date'],
-                    'ref':         "RTN-%04d" % s['id'],
-                    'description': "Return Flight " + tl + ("→"+fl if fl else ''),
-                    'customer':    s.get('customer',''),
-                    'svc':         'FLIGHT',
-                    'debit':       0.0,
-                    'credit':      cost,
-                    'type':        'purchase',
-                    'id':          s['id'],
-                })
+            tl   = s.get('to_loc',''); fl = s.get('from_loc','')
+            _rpnr = s.get('return_pnr','') or ''
+            _rtn  = s.get('return_ticket_number','') or ''
+            _desc = "Return Flight " + tl + ("→"+fl if fl else '')
+            if _rpnr: _desc += " [" + _rpnr + "]"
+            ledger_entries.append({
+                'date':                 s['sale_date'],
+                'ref':                  "RTN-%04d" % s['id'],
+                'description':          _desc,
+                'customer':             s.get('customer',''),
+                'svc':                  'FLIGHT',
+                'debit':                0.0,
+                'credit':               cost,
+                'type':                 'purchase',
+                'id':                   s['id'],
+                'return_ticket_number': _rtn,
+                'return_pnr':           _rpnr,
+            })
 
         # ── CREDIT: hotel/transfer/visa/insurance from this supplier ─────────
         for supp_field, cost_field, label, svctag in [
@@ -4037,6 +4076,10 @@ def get_suppliers_list(svc_type=None):
             SELECT supplier, svc FROM (
                 SELECT UPPER(TRIM(buy_from)) AS supplier, 'FLIGHT' AS svc
                   FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(buy_from,''))<>''
+                UNION
+                -- Return ticket supplier — distinct supplier for the return leg
+                SELECT UPPER(TRIM(return_supplier)), 'FLIGHT'
+                  FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(return_supplier,''))<>''
                 UNION
                 SELECT UPPER(TRIM(hotel_supplier)), 'HOTEL'
                   FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(hotel_supplier,''))<>''

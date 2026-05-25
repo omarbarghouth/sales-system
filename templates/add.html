@@ -179,6 +179,12 @@
             <input type="number" name="return_cost" step="0.001" min="0" placeholder="0.000" id="return_cost" oninput="splitCostCalc()" value="{{ (sale.return_cost|default('')) if sale else '' }}">
           </div>
           <div class="form-group">
+            <label>Return PNR</label>
+            <input type="text" name="return_pnr" placeholder="Return PNR (if different)…"
+                   value="{{ (sale.return_pnr|default('')) if sale else '' }}"
+                   style="text-transform:uppercase;font-family:monospace;letter-spacing:.5px">
+          </div>
+          <div class="form-group">
             <label>Delivery Date</label>
             <input type="date" name="return_delivery" value="{{ sale.return_delivery if sale else '' }}">
           </div>

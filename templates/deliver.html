@@ -73,7 +73,10 @@
           <td style="font-size:12px">
             {% if t.airline %}<strong>{{ t.airline }}</strong>{% endif %}
             {% if t.pnr %}<br><span style="font-family:monospace;font-size:11px;color:var(--navy-dk)">{{ t.pnr }}</span>{% endif %}
-            {% if not t.airline and not t.pnr %}—{% endif %}
+            {% if t.return_pnr|default('') and t.return_pnr != t.pnr %}
+            <br><span style="font-family:monospace;font-size:10.5px;color:var(--gold-dk)" title="Return PNR">↩ {{ t.return_pnr }}</span>
+            {% endif %}
+            {% if not t.airline and not t.pnr and not t.return_pnr|default('') %}—{% endif %}
           </td>
           <td style="font-family:monospace;font-size:11px">
             {% if t.ticket_number|default('') %}<span style="color:var(--navy-dk)">{{ t.ticket_number }}</span>{% endif %}
