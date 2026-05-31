@@ -1,107 +1,336 @@
 {% extends "base.html" %}
-{% block title %}Delivery List — {{ tomorrow }} — ALSONDOS{% endblock %}
+{% block title %}Operations Dashboard — {{ tomorrow }} — ALSONDOS{% endblock %}
 
 {% block content %}
+
+{% set total_out  = outbound_tickets|length %}
+{% set total_ret  = return_tickets|length %}
+{% set total_old  = travel_date_tickets|length %}
+{% set grand      = total_out + total_ret + total_old %}
+{% set all_tickets = outbound_tickets + return_tickets + travel_date_tickets %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-truck" style="color:var(--red)"></i> Ticket Delivery — {{ tomorrow }}</h1>
-    <p>All tickets to be delivered for {{ tomorrow }}</p>
+    <h1><i class="fas fa-satellite-dish" style="color:var(--red)"></i> Operations Control</h1>
+    <p>Delivery dashboard for <strong>{{ tomorrow }}</strong> &mdash; {{ grand }} ticket{{ 's' if grand != 1 else '' }} total</p>
   </div>
   <div class="page-header-actions no-print">
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print List</button>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
     <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
       <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
     </form>
   </div>
 </div>
 
-{% set total_out = outbound_tickets|length %}
-{% set total_ret = return_tickets|length %}
-{% set total_old = travel_date_tickets|length %}
-{% set grand = total_out + total_ret + total_old %}
-
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
-  <div class="kpi-box blue">
-    <div class="kpi-label">Outbound Tickets</div>
-    <div class="kpi-value">{{ total_out }}</div>
+{# ── KPI Row ──────────────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div class="kpi-box" style="border-left:4px solid var(--navy)">
+    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-plane-departure"></i></div>
+    <div class="kpi-label">Outbound</div>
+    <div class="kpi-value" style="color:var(--navy)">{{ total_out }}</div>
+    <div class="kpi-sub">tickets departing</div>
   </div>
-  <div class="kpi-box gold">
-    <div class="kpi-label">Return Tickets</div>
+  <div class="kpi-box" style="border-left:4px solid var(--gold)">
+    <div class="kpi-icon" style="color:var(--gold)"><i class="fas fa-plane-arrival"></i></div>
+    <div class="kpi-label">Return</div>
     <div class="kpi-value gold">{{ total_ret }}</div>
+    <div class="kpi-sub">tickets returning</div>
   </div>
-  <div class="kpi-box">
+  <div class="kpi-box" style="border-left:4px solid #6c757d">
+    <div class="kpi-icon" style="color:#6c757d"><i class="fas fa-calendar-check"></i></div>
     <div class="kpi-label">Travel Date</div>
-    <div class="kpi-value">{{ total_old }}</div>
+    <div class="kpi-value" style="color:#6c757d">{{ total_old }}</div>
+    <div class="kpi-sub">legacy entries</div>
+  </div>
+  <div class="kpi-box" style="border-left:4px solid var(--red)">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-ticket-alt"></i></div>
+    <div class="kpi-label">Total</div>
+    <div class="kpi-value" style="color:var(--red)">{{ grand }}</div>
+    <div class="kpi-sub">all deliveries</div>
   </div>
 </div>
 
+{# ── Filter Bar ──────────────────────────────────────────────────────────── #}
+<div class="card mb-4 no-print">
+  <div class="card-header" style="background:var(--navy-dk);color:#fff;font-size:12.5px;letter-spacing:.5px">
+    <i class="fas fa-filter" style="color:var(--gold)"></i> FILTER DASHBOARD
+  </div>
+  <div class="card-body" style="padding:14px 18px">
+    <form method="GET" id="filter-form">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;align-items:end">
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Travel Date</label>
+          <input type="date" name="travel_date" value="{{ filters.travel_date }}"
+                 style="font-size:13px;padding:7px 10px" onchange="this.form.submit()">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Company</label>
+          <input type="text" name="company" value="{{ filters.company }}"
+                 placeholder="Any company…" list="f-company-list"
+                 style="font-size:13px;padding:7px 10px;text-transform:uppercase">
+          <datalist id="f-company-list">
+            {% for co in companies %}<option value="{{ co }}">{% endfor %}
+          </datalist>
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Supplier</label>
+          <input type="text" name="supplier" value="{{ filters.supplier }}"
+                 placeholder="Any supplier…"
+                 style="font-size:13px;padding:7px 10px;text-transform:uppercase">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Passenger</label>
+          <input type="text" name="passenger" value="{{ filters.passenger }}"
+                 placeholder="Name search…"
+                 style="font-size:13px;padding:7px 10px;text-transform:uppercase">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Status</label>
+          <select name="status" style="font-size:13px;padding:7px 10px" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="PENDING" {% if filters.status=='PENDING' %}selected{% endif %}>⏳ Pending</option>
+            <option value="DONE"    {% if filters.status=='DONE'    %}selected{% endif %}>✅ Done</option>
+            <option value="CANCEL"  {% if filters.status=='CANCEL'  %}selected{% endif %}>❌ Cancelled</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Agent</label>
+          <select name="agent_id" style="font-size:13px;padding:7px 10px" onchange="this.form.submit()">
+            <option value="">All Agents</option>
+            {% for ag in agents %}
+            <option value="{{ ag.id }}" {% if filters.agent_id==ag.id|string %}selected{% endif %}>{{ ag.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;align-items:center">
+        <button type="submit" class="btn btn-red" style="padding:7px 18px;font-size:13px">
+          <i class="fas fa-search"></i> Apply Filters
+        </button>
+        <a href="{{ url_for('deliver_tomorrow') }}" class="btn btn-outline" style="padding:7px 16px;font-size:13px">
+          <i class="fas fa-times"></i> Clear
+        </a>
+        {% if filters.travel_date or filters.company or filters.supplier or filters.passenger or filters.status or filters.agent_id %}
+        <span style="font-size:12px;color:var(--gold);font-weight:700">
+          <i class="fas fa-filter"></i> Filters active — showing {{ grand }} result{{ 's' if grand != 1 else '' }}
+        </span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Empty State ─────────────────────────────────────────────────────────── #}
 {% if grand == 0 %}
-<div style="background:var(--green-lt);border:2px solid var(--green);border-radius:var(--radius);padding:28px;text-align:center;color:var(--green)">
-  <i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px"></i>
-  <div style="font-size:17px;font-weight:700">No tickets to deliver tomorrow</div>
-  <div style="opacity:.7;margin-top:4px">Your team is clear for {{ tomorrow }}</div>
+<div style="background:var(--green-lt);border:2px solid var(--green);border-radius:var(--radius);padding:32px;text-align:center;color:var(--green)">
+  <i class="fas fa-check-circle" style="font-size:36px;display:block;margin-bottom:12px"></i>
+  <div style="font-size:17px;font-weight:700">No tickets match your criteria</div>
+  <div style="opacity:.7;margin-top:6px">
+    {% if filters.travel_date or filters.company or filters.supplier or filters.passenger or filters.status or filters.agent_id %}
+    Try clearing the filters above.
+    {% else %}
+    Your team is clear for {{ tomorrow }}.
+    {% endif %}
+  </div>
 </div>
 {% endif %}
 
-{% macro ticket_table(tickets, title, icon, color) %}
-{% if tickets %}
-<div class="card mb-4">
-  <div class="card-header" style="background:{{ color }}">
-    <i class="fas fa-{{ icon }}"></i> {{ title }} ({{ tickets|length }})
+{# ── Unified Operations Table ─────────────────────────────────────────────── #}
+{% if grand > 0 %}
+<div class="card">
+  <div class="card-header" style="background:var(--navy-dk);color:#fff;display:flex;justify-content:space-between;align-items:center">
+    <span><i class="fas fa-table" style="color:var(--gold)"></i> All Deliveries — {{ grand }} ticket{{ 's' if grand != 1 else '' }}</span>
+    <span style="font-size:11.5px;opacity:.65;font-weight:400">
+      <i class="fas fa-circle" style="color:#F59E0B"></i> Pending &nbsp;
+      <i class="fas fa-circle" style="color:#22C55E"></i> Done &nbsp;
+      <i class="fas fa-circle" style="color:#EF4444"></i> Cancelled
+    </span>
   </div>
   <div style="overflow-x:auto">
-    <table>
+    <table style="table-layout:fixed;min-width:1080px;width:100%">
+      <colgroup>
+        <col style="width:34px">      {# # #}
+        <col style="width:68px">      {# Type #}
+        <col style="width:82px">      {# Entry Date #}
+        <col style="width:130px">     {# Passenger #}
+        <col style="width:105px">     {# Company #}
+        <col style="width:105px">     {# Supplier #}
+        <col style="width:96px">      {# Route #}
+        <col style="width:82px">      {# Travel Date #}
+        <col style="width:108px">     {# Ticket / PNR #}
+        <col style="width:74px">      {# Service #}
+        <col style="width:92px">      {# Agent #}
+        <col style="width:74px">      {# Status #}
+      </colgroup>
       <thead>
         <tr>
-          <th>#</th><th>Company</th><th>Customer</th><th>Route</th>
-          <th>Airline / PNR</th><th>Ticket No.</th>
-          <th>Buy From</th><th>Tix</th><th>Travel Date</th><th>Status</th>
+          <th style="text-align:center">#</th>
+          <th>Type</th>
+          <th>Entry Date</th>
+          <th>Passenger</th>
+          <th>Company</th>
+          <th>Supplier</th>
+          <th>Route</th>
+          <th style="text-align:center">Travel Date</th>
+          <th>Ticket / PNR</th>
+          <th>Service</th>
+          <th>Agent</th>
+          <th style="text-align:center">Status</th>
         </tr>
       </thead>
       <tbody>
-        {% for t in tickets %}
+        {% for t in all_tickets %}
+        {% set dtype = t.delivery_type|default('OUTBOUND') %}
+        {% set raw_status = (t.return_status if dtype=='RETURN' else t.outbound_status) or t.status or 'PENDING' %}
+        {% set st = raw_status|upper %}
         <tr>
-          <td style="color:var(--muted);font-size:11.5px">{{ loop.index }}</td>
-          <td><strong>{{ t.company }}</strong></td>
-          <td>{{ t.customer }}</td>
-          <td style="white-space:nowrap">
-            <strong style="color:var(--navy)">{{ t.from_loc }}</strong>
-            <span style="color:var(--gold);margin:0 2px">→</span>
-            <strong style="color:var(--navy)">{{ t.to_loc }}</strong>
-            {% if t.via %}<br><span style="font-size:10.5px;color:var(--muted)">via {{ t.via }}</span>{% endif %}
-          </td>
-          <td style="font-size:12px">
-            {% if t.airline %}<strong>{{ t.airline }}</strong>{% endif %}
-            {% if t.pnr %}<br><span style="font-family:monospace;font-size:11px;color:var(--navy-dk)">{{ t.pnr }}</span>{% endif %}
-            {% if t.return_pnr|default('') and t.return_pnr != t.pnr %}
-            <br><span style="font-family:monospace;font-size:10.5px;color:var(--gold-dk)" title="Return PNR">↩ {{ t.return_pnr }}</span>
-            {% endif %}
-            {% if not t.airline and not t.pnr and not t.return_pnr|default('') %}—{% endif %}
-          </td>
-          <td style="font-family:monospace;font-size:11px">
-            {% if t.ticket_number|default('') %}<span style="color:var(--navy-dk)">{{ t.ticket_number }}</span>{% endif %}
-            {% if t.return_ticket_number|default('') %}<br><span style="color:var(--gold-dk)">↩ {{ t.return_ticket_number }}</span>{% endif %}
-            {% if not t.ticket_number|default('') and not t.return_ticket_number|default('') %}—{% endif %}
-          </td>
-          <td style="font-size:12.5px">{{ t.buy_from or t.return_supplier or '—' }}</td>
-          <td class="text-center"><strong>{{ t.tickets }}</strong></td>
-          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or t.return_date or '—' }}</td>
+
+          {# # #}
+          <td style="text-align:center;color:var(--muted);font-size:11px">{{ loop.index }}</td>
+
+          {# Type badge #}
           <td>
-            <span class="badge badge-{% if (t.outbound_status or t.status)=='DONE' %}done{% else %}still{% endif %}">
-              {{ t.outbound_status or t.status or 'PENDING' }}
+            {% if dtype == 'OUTBOUND' %}
+            <span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+                          background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;
+                          border-radius:4px;padding:2px 6px;white-space:nowrap">
+              <i class="fas fa-plane-departure" style="font-size:9px"></i> OUT
             </span>
+            {% elif dtype == 'RETURN' %}
+            <span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+                          background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;
+                          border-radius:4px;padding:2px 6px;white-space:nowrap">
+              <i class="fas fa-plane-arrival" style="font-size:9px"></i> RET
+            </span>
+            {% else %}
+            <span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+                          background:#F3F4F6;color:#4B5563;border:1px solid #D1D5DB;
+                          border-radius:4px;padding:2px 6px;white-space:nowrap">
+              <i class="fas fa-calendar" style="font-size:9px"></i> TRV
+            </span>
+            {% endif %}
           </td>
+
+          {# Entry Date #}
+          <td style="font-size:11.5px;color:var(--muted);white-space:nowrap">
+            {{ (t.created_at|string)[:10] if t.created_at else (t.sale_date or '—') }}
+          </td>
+
+          {# Passenger #}
+          <td style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ t.customer }}">
+            {{ t.customer or '—' }}
+          </td>
+
+          {# Company #}
+          <td style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ t.company }}">
+            <a href="{{ url_for('statement', company=t.company) }}"
+               style="color:var(--navy);text-decoration:none">{{ t.company or '—' }}</a>
+          </td>
+
+          {# Supplier #}
+          <td style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ (t.return_supplier if dtype=='RETURN' else t.buy_from) or '—' }}">
+            {{ (t.return_supplier if dtype=='RETURN' else t.buy_from) or t.buy_from or '—' }}
+          </td>
+
+          {# Route #}
+          <td style="font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+              title="{{ t.from_loc }} → {{ t.to_loc }}{% if t.via %} via {{ t.via }}{% endif %}">
+            <strong style="color:var(--navy)">{{ t.from_loc or '?' }}</strong>
+            <span style="color:var(--gold);margin:0 2px">→</span>
+            <strong style="color:var(--navy)">{{ t.to_loc or '?' }}</strong>
+          </td>
+
+          {# Travel Date #}
+          <td style="text-align:center;font-size:11.5px;font-weight:600;white-space:nowrap;
+                     color:{% if dtype=='RETURN' %}var(--gold-dk){% else %}var(--red){% endif %}">
+            {% if dtype == 'RETURN' %}
+              {{ t.return_date or t.travel_date or '—' }}
+            {% else %}
+              {{ t.travel_date or '—' }}
+            {% endif %}
+          </td>
+
+          {# Ticket / PNR #}
+          <td style="font-family:monospace;font-size:10.5px;overflow:hidden;text-overflow:ellipsis">
+            {% set tno = (t.return_ticket_number if dtype=='RETURN' else t.ticket_number)|default('') %}
+            {% set pno = (t.return_pnr if dtype=='RETURN' else t.pnr)|default('') %}
+            {% if tno %}<span style="color:var(--navy-dk);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ tno }}">{{ tno }}</span>{% endif %}
+            {% if pno %}<span style="color:var(--muted);font-size:10px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ pno }}">{{ pno }}</span>{% endif %}
+            {% if not tno and not pno %}—{% endif %}
+          </td>
+
+          {# Service Type #}
+          <td style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ t.service_type or '—' }}
+          </td>
+
+          {# Agent #}
+          <td style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ t.agent_display|default('—') }}">
+            {{ t.agent_display|default('—') }}
+          </td>
+
+          {# Status #}
+          <td style="text-align:center">
+            {% if st == 'DONE' or st == 'DELIVERED' %}
+            <span style="display:inline-block;font-size:10.5px;font-weight:700;
+                          background:#DCFCE7;color:#166534;border:1px solid #86EFAC;
+                          border-radius:4px;padding:3px 7px;white-space:nowrap">
+              ✓ {{ st }}
+            </span>
+            {% elif st == 'CANCEL' or st == 'CANCELLED' %}
+            <span style="display:inline-block;font-size:10.5px;font-weight:700;
+                          background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;
+                          border-radius:4px;padding:3px 7px;white-space:nowrap">
+              ✕ {{ st }}
+            </span>
+            {% else %}
+            <span style="display:inline-block;font-size:10.5px;font-weight:700;
+                          background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;
+                          border-radius:4px;padding:3px 7px;white-space:nowrap">
+              ⏳ {{ st }}
+            </span>
+            {% endif %}
+          </td>
+
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" style="font-weight:700;font-size:12px;color:var(--muted)">TOTAL</td>
+          <td colspan="9" style="font-weight:700;font-size:13px;color:var(--navy)">
+            {{ grand }} ticket{{ 's' if grand != 1 else '' }}
+            &nbsp;&mdash;&nbsp;
+            {{ outbound_tickets|length }} outbound,
+            {{ return_tickets|length }} return,
+            {{ travel_date_tickets|length }} travel-date
+          </td>
+        </tr>
+      </tfoot>
     </table>
   </div>
 </div>
 {% endif %}
-{% endmacro %}
 
-{{ ticket_table(outbound_tickets, 'Outbound Tickets', 'plane-departure', '#1B3A6B') }}
-{{ ticket_table(return_tickets, 'Return Tickets', 'plane-arrival', '#8B6914') }}
-{{ ticket_table(travel_date_tickets, 'Travel Date Tickets (legacy)', 'calendar-check', '#2C3E50') }}
+<style>
+@media print {
+  .no-print { display: none !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  table { font-size: 10px !important; }
+  .page-header p { display: none; }
+}
+</style>
 
 {% endblock %}

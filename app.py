@@ -1734,35 +1734,92 @@ def deliver_tomorrow():
           AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
     ''')
 
-    # Outbound tickets due tomorrow — show regardless of archive status
-    outbound_tickets = query_db('''
-        SELECT * FROM sales
-        WHERE outbound_delivery=%s AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
+    # ── Filters ──
+    f_travel_date = request.args.get('travel_date', '').strip()
+    f_company     = request.args.get('company', '').strip().upper()
+    f_supplier    = request.args.get('supplier', '').strip().upper()
+    f_passenger   = request.args.get('passenger', '').strip().upper()
+    f_status      = request.args.get('status', '').strip().upper()
+    f_agent       = request.args.get('agent_id', '').strip()
 
-    # Return tickets due tomorrow — show regardless of archive status
-    return_tickets = query_db('''
-        SELECT * FROM sales
-        WHERE return_delivery=%s AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
+    # Build shared extra filter fragments (appended to each query's WHERE)
+    extra_where  = []
+    extra_params = []
+    if f_company:
+        extra_where.append("AND UPPER(s.company) LIKE %s")
+        extra_params.append('%' + f_company + '%')
+    if f_supplier:
+        extra_where.append("AND (UPPER(COALESCE(s.buy_from,'')) LIKE %s OR UPPER(COALESCE(s.return_supplier,'')) LIKE %s)")
+        extra_params.extend(['%' + f_supplier + '%', '%' + f_supplier + '%'])
+    if f_passenger:
+        extra_where.append("AND UPPER(s.customer) LIKE %s")
+        extra_params.append('%' + f_passenger + '%')
+    if f_status:
+        extra_where.append("AND (COALESCE(s.outbound_status,s.status,'PENDING')=%s OR COALESCE(s.return_status,s.status,'PENDING')=%s)")
+        extra_params.extend([f_status, f_status])
+    if f_agent:
+        extra_where.append("AND s.created_by_user_id=%s")
+        extra_params.append(f_agent)
+    if f_travel_date:
+        extra_where.append("AND s.travel_date=%s")
+        extra_params.append(f_travel_date)
+    extra_str = ' '.join(extra_where)
 
-    # Old-style tickets by travel_date — show regardless of archive status
-    travel_date_tickets = query_db('''
-        SELECT * FROM sales
-        WHERE travel_date=%s
-          AND (outbound_delivery IS NULL OR outbound_delivery='')
-          AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
+    agent_select = "COALESCE(u.full_name, s.created_by_username, '—') AS agent_display"
+    agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
+
+    # Outbound tickets due tomorrow
+    outbound_tickets = query_db(f'''
+        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.outbound_delivery=%s AND s.deleted=FALSE
+        {extra_str}
+        ORDER BY s.company, s.customer
+    ''', [tomorrow_date] + extra_params) or []
+
+    # Return tickets due tomorrow
+    return_tickets = query_db(f'''
+        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.return_delivery=%s AND s.deleted=FALSE
+        {extra_str}
+        ORDER BY s.company, s.customer
+    ''', [tomorrow_date] + extra_params) or []
+
+    # Old-style tickets by travel_date
+    travel_date_tickets = query_db(f'''
+        SELECT s.*, {agent_select}, 'TRAVEL' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.travel_date=%s
+          AND (s.outbound_delivery IS NULL OR s.outbound_delivery='')
+          AND s.deleted=FALSE
+        {extra_str}
+        ORDER BY s.company, s.customer
+    ''', [tomorrow_date] + extra_params) or []
+
+    # Lists for filter dropdowns
+    agents    = query_db(
+        "SELECT id, COALESCE(full_name, username) AS name FROM users WHERE deleted=FALSE ORDER BY full_name, username"
+    ) or []
+    companies = get_companies_list()
 
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
     return render_template('deliver.html',
         outbound_tickets=outbound_tickets,
         return_tickets=return_tickets,
         travel_date_tickets=travel_date_tickets,
-        tomorrow=tomorrow_str
+        tomorrow=tomorrow_str,
+        tomorrow_date=tomorrow_date,
+        agents=agents,
+        companies=companies,
+        filters=dict(
+            travel_date=f_travel_date,
+            company=f_company,
+            supplier=f_supplier,
+            passenger=f_passenger,
+            status=f_status,
+            agent_id=f_agent,
+        )
     )
 
 @app.route('/deliver-tomorrow/send-email', methods=['POST'])
