@@ -50,14 +50,20 @@
     <div class="form-grid form-grid-4">
       <div class="form-group">
         <label>Company <span class="req">*</span></label>
-        <input type="text" name="company" id="addCoInput" required list="coDatalist"
-               style="text-transform:uppercase;font-weight:700"
-               value="{{ (sale.company|default('')) if sale else (form.company or '') }}"
-               autocomplete="off" placeholder="Type to search…"
-               oninput="lsSearch(this,'addCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
-               onfocus="lsSearch(this,'addCoDrop','/api/companies?q=','companies')">
-        <datalist id="coDatalist">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
-        <div id="addCoDrop" class="live-dropdown" style="display:none"></div>
+<div class="erp-select" id="ss-company">
+          <input type="text" name="company" class="erp-select-actual" tabindex="-1" aria-hidden="true"
+                 value="{{ ((sale.company or '')|upper) if sale else ((form.company or '')|upper) }}">
+          <button type="button" class="erp-select-btn">
+            <span class="es-label{{ '' if ((sale.company if sale else form.company)) else ' es-ph' }}">
+              {{ (sale.company|upper) if (sale and sale.company) else (((form.company or '')|upper) if form.company else 'Select company...') }}
+            </span>
+            <i class="fas fa-chevron-down es-caret"></i>
+          </button>
+          <div class="erp-select-drop">
+            <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Type to search..." autocomplete="off"></div>
+            <div class="erp-sd-list"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Customer <span class="req">*</span></label>
@@ -137,12 +143,20 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Supplier</label>
-            <input type="text" name="buy_from" id="addBfInput" autocomplete="off"
-                   placeholder="Search flight supplier…"
-                   value="{{ (sale.buy_from|default('')) if sale else '' }}" style="text-transform:uppercase"
-                   oninput="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
-                   onfocus="lsSearch(this,'addBfDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
-            <div id="addBfDrop" class="live-dropdown" style="display:none"></div>
+            <div class="erp-select" id="ss-buyfrom">
+              <input type="text" name="buy_from" class="erp-select-actual" tabindex="-1" aria-hidden="true"
+                     value="{{ ((sale.buy_from or '')|upper) if sale else '' }}">
+              <button type="button" class="erp-select-btn">
+                <span class="es-label{{ '' if (sale and sale.buy_from) else ' es-ph' }}">
+                  {{ (sale.buy_from|upper) if (sale and sale.buy_from) else 'Search flight supplier...' }}
+                </span>
+                <i class="fas fa-chevron-down es-caret"></i>
+              </button>
+              <div class="erp-select-drop">
+                <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Search suppliers..." autocomplete="off"></div>
+                <div class="erp-sd-list"></div>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label>Departure Date</label>
@@ -163,12 +177,20 @@
         <div class="form-grid form-grid-2">
           <div class="form-group">
             <label>Return Supplier</label>
-            <input type="text" name="return_supplier" id="addRsInput" autocomplete="off"
-                 placeholder="Return supplier (if different)…"
-                 value="{{ (sale.return_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
-                 oninput="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q='+encodeURIComponent(this.value),'suppliers','name')"
-                 onfocus="lsSearch(this,'addRsDrop','/api/suppliers?svc=FLIGHT&q=','suppliers','name')">
-          <div id="addRsDrop" class="live-dropdown" style="display:none"></div>
+            <div class="erp-select" id="ss-retsup">
+              <input type="text" name="return_supplier" class="erp-select-actual" tabindex="-1" aria-hidden="true"
+                     value="{{ ((sale.return_supplier or '')|upper) if sale else '' }}">
+              <button type="button" class="erp-select-btn">
+                <span class="es-label{{ '' if (sale and sale.return_supplier) else ' es-ph' }}">
+                  {{ (sale.return_supplier|upper) if (sale and sale.return_supplier) else 'Return supplier (if different)...' }}
+                </span>
+                <i class="fas fa-chevron-down es-caret"></i>
+              </button>
+              <div class="erp-select-drop">
+                <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Search suppliers..." autocomplete="off"></div>
+                <div class="erp-sd-list"></div>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label>Return Date</label>
@@ -201,12 +223,20 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Hotel Supplier</label>
-        <input type="text" name="hotel_supplier" id="addHsInput" autocomplete="off"
-               placeholder="Search hotel supplier…"
-               value="{{ (sale.hotel_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
-               oninput="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q='+encodeURIComponent(this.value),'suppliers','name')"
-               onfocus="lsSearch(this,'addHsDrop','/api/suppliers?svc=HOTEL&q=','suppliers','name')">
-        <div id="addHsDrop" class="live-dropdown" style="display:none"></div>
+        <div class="erp-select" id="ss-hotelsup">
+          <input type="text" name="hotel_supplier" class="erp-select-actual" tabindex="-1" aria-hidden="true"
+                 value="{{ ((sale.hotel_supplier or '')|upper) if sale else '' }}">
+          <button type="button" class="erp-select-btn">
+            <span class="es-label{{ '' if (sale and sale.hotel_supplier) else ' es-ph' }}">
+              {{ (sale.hotel_supplier|upper) if (sale and sale.hotel_supplier) else 'Search hotel supplier...' }}
+            </span>
+            <i class="fas fa-chevron-down es-caret"></i>
+          </button>
+          <div class="erp-select-drop">
+            <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Search suppliers..." autocomplete="off"></div>
+            <div class="erp-sd-list"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Hotel Name</label>
@@ -258,12 +288,20 @@
     <div class="form-grid form-grid-3">
       <div class="form-group">
         <label>Transfer Supplier</label>
-        <input type="text" name="transfer_supplier" id="addTsInput" autocomplete="off"
-               placeholder="Search transfer company…"
-               value="{{ (sale.transfer_supplier|default('')) if sale else '' }}" style="text-transform:uppercase"
-               oninput="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q='+encodeURIComponent(this.value),'suppliers','name')"
-               onfocus="lsSearch(this,'addTsDrop','/api/suppliers?svc=TRANSFER&q=','suppliers','name')">
-        <div id="addTsDrop" class="live-dropdown" style="display:none"></div>
+        <div class="erp-select" id="ss-transfersup">
+          <input type="text" name="transfer_supplier" class="erp-select-actual" tabindex="-1" aria-hidden="true"
+                 value="{{ ((sale.transfer_supplier or '')|upper) if sale else '' }}">
+          <button type="button" class="erp-select-btn">
+            <span class="es-label{{ '' if (sale and sale.transfer_supplier) else ' es-ph' }}">
+              {{ (sale.transfer_supplier|upper) if (sale and sale.transfer_supplier) else 'Search transfer company...' }}
+            </span>
+            <i class="fas fa-chevron-down es-caret"></i>
+          </button>
+          <div class="erp-select-drop">
+            <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Search suppliers..." autocomplete="off"></div>
+            <div class="erp-sd-list"></div>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Transfer Type</label>
@@ -603,29 +641,60 @@ function addTourRow() {
 setType(currentType);
 calcProfit();
 
-// ── Live search dropdown ─────────────────────────────────────
-var _lsT = {};
-function lsSearch(inp, dropId, url, key, nameKey) {
-  clearTimeout(_lsT[dropId]);
-  var drop = document.getElementById(dropId);
-  if (!drop) return;
-  _lsT[dropId] = setTimeout(function(){
-    fetch(url).then(function(r){return r.json();}).then(function(d){
-      var items = d[key]||[];
-      if(!items.length){drop.style.display='none';return;}
-      drop.innerHTML = items.slice(0,40).map(function(item){
-        var label = nameKey ? item[nameKey] : item;
-        var sub   = nameKey && item.service_type ? ' <small style="opacity:.6">'+item.service_type+'</small>' : '';
-        return '<div class="live-dropdown-item" onmousedown="(function(e){e.preventDefault();document.getElementById(\''+inp.id+'\').value=\''+label.replace(/'/g,"\'")+'\';document.getElementById(\''+dropId+'\').style.display=\'none\';})(event)">'+label+sub+'</div>';
-      }).join('');
-      drop.style.display='block';
-    }).catch(function(){drop.style.display='none';});
-  }, inp.value.trim().length>0 ? 200 : 40);
+// ── ERP Searchable Select (combobox) ─────────────────────────
+function erpSelect(cfg) {
+  var wrap = document.getElementById(cfg.id);
+  if (!wrap) return;
+  var actual = wrap.querySelector('.erp-select-actual');
+  var btn    = wrap.querySelector('.erp-select-btn');
+  var lbl    = btn.querySelector('.es-label');
+  var drop   = wrap.querySelector('.erp-select-drop');
+  var srch   = drop.querySelector('.erp-sd-search input');
+  var list   = drop.querySelector('.erp-sd-list');
+  var timer;
+  function close() { btn.classList.remove('es-open'); drop.classList.remove('es-open'); }
+  function open() {
+    document.querySelectorAll('.erp-select-btn.es-open').forEach(function(b){ b.classList.remove('es-open'); });
+    document.querySelectorAll('.erp-select-drop.es-open').forEach(function(d){ d.classList.remove('es-open'); });
+    btn.classList.add('es-open'); drop.classList.add('es-open');
+    srch.value = ''; srch.focus(); load('');
+  }
+  function pick(val) {
+    var disp = cfg.uppercase ? val.toUpperCase() : val;
+    actual.value = disp; lbl.textContent = disp; lbl.classList.remove('es-ph');
+    close(); if (cfg.onSelect) cfg.onSelect(disp);
+  }
+  function load(q) {
+    clearTimeout(timer);
+    timer = setTimeout(function() {
+      fetch(cfg.url + encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var items = (d[cfg.key] || []).slice(0, 40);
+          if (!items.length) { list.innerHTML = '<div class="erp-sd-empty">No results</div>'; return; }
+          list.innerHTML = items.map(function(item){
+            var label = cfg.nameKey ? item[cfg.nameKey] : item;
+            var sub   = (cfg.nameKey && item.service_type)
+              ? ' <small style="opacity:.55;font-size:10.5px"> — '+item.service_type+'</small>' : '';
+            var disp = cfg.uppercase ? label.toUpperCase() : label;
+            return '<div class="erp-sd-opt" data-val="'+label.replace(/"/g,'&quot;')+'">'+disp+sub+'</div>';
+          }).join('');
+          list.querySelectorAll('.erp-sd-opt').forEach(function(el){
+            el.addEventListener('mousedown', function(e){ e.preventDefault(); pick(el.dataset.val); });
+          });
+        })
+        .catch(function(){ list.innerHTML = '<div class="erp-sd-empty">Error loading</div>'; });
+    }, q.length ? 150 : 30);
+  }
+  btn.addEventListener('click', function(){ drop.classList.contains('es-open') ? close() : open(); });
+  srch.addEventListener('input', function(){ load(this.value.trim()); });
+  document.addEventListener('click', function(e){ if (!wrap.contains(e.target)) close(); }, true);
 }
-document.addEventListener('click',function(e){
-  if(!e.target.closest('.form-group'))
-    document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
-});
+erpSelect({ id:'ss-company',     url:'/api/companies?q=',              key:'companies', uppercase:true });
+erpSelect({ id:'ss-buyfrom',     url:'/api/suppliers?svc=FLIGHT&q=',   key:'suppliers', nameKey:'name', uppercase:true });
+erpSelect({ id:'ss-retsup',      url:'/api/suppliers?svc=FLIGHT&q=',   key:'suppliers', nameKey:'name', uppercase:true });
+erpSelect({ id:'ss-hotelsup',    url:'/api/suppliers?svc=HOTEL&q=',    key:'suppliers', nameKey:'name', uppercase:true });
+erpSelect({ id:'ss-transfersup', url:'/api/suppliers?svc=TRANSFER&q=', key:'suppliers', nameKey:'name', uppercase:true });
 
 </script>
 {% endblock %}
