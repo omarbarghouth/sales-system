@@ -1799,7 +1799,7 @@ def deliver_tomorrow():
 
     # Lists for filter dropdowns
     agents    = query_db(
-        "SELECT id, COALESCE(full_name, username) AS name FROM users WHERE deleted=FALSE ORDER BY full_name, username"
+        "SELECT id, COALESCE(full_name, username) AS name FROM users ORDER BY full_name, username"
     ) or []
     companies = get_companies_list()
 
