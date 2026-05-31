@@ -1822,6 +1822,26 @@ def deliver_tomorrow():
         )
     )
 
+@app.route('/deliver-tomorrow/mark/<int:sale_id>', methods=['POST'])
+@login_required
+def mark_delivered(sale_id):
+    dtype       = request.form.get('dtype', 'OUTBOUND')
+    redirect_q  = request.form.get('redirect_args', '')
+    if dtype == 'RETURN':
+        execute_db("UPDATE sales SET return_status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
+        log_action('UPDATE', 'sales', sale_id, 'Return ticket marked DONE via delivery dashboard')
+    elif dtype == 'TRAVEL':
+        execute_db("UPDATE sales SET status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
+        log_action('UPDATE', 'sales', sale_id, 'Travel ticket marked DONE via delivery dashboard')
+    else:
+        execute_db("UPDATE sales SET outbound_status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
+        log_action('UPDATE', 'sales', sale_id, 'Outbound ticket marked DONE via delivery dashboard')
+    flash('Ticket marked as delivered.', 'success')
+    dest = url_for('deliver_tomorrow')
+    if redirect_q:
+        dest += '?' + redirect_q
+    return redirect(dest)
+
 @app.route('/deliver-tomorrow/send-email', methods=['POST'])
 @login_required
 def send_deliver_email():
