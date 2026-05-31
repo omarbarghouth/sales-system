@@ -353,16 +353,16 @@
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="9">
+        <td colspan="{{ 8 if is_admin else 7 }}">
           TOTALS — {{ totals.count }} records
           {% if filters.agent_id %}
           &nbsp;·&nbsp;
           {% for a in agents %}{% if a.id|string == filters.agent_id %}Agent: {{ a.display }}{% endif %}{% endfor %}
           {% endif %}
         </td>
-        <td class="col-num" style="color:rgba(255,255,255,.65);font-size:12px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
-        <td class="col-num" style="color:var(--gold);font-size:13.5px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
-        <td class="col-num" style="color:#86efac;font-size:13.5px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
+        <td class="text-right" style="color:rgba(255,255,255,.55);font-size:12.5px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
+        <td class="text-right" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
+        <td class="text-right" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
         <td colspan="{{ 3 if is_admin else 1 }}"></td>
       </tr>
     </tfoot>

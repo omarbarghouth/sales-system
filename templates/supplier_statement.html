@@ -322,40 +322,39 @@
     </table>
   </div>
 
-  {# ── Signature lines ───────────────────────────────────────── #}
+  {# ── Signature lines ──────────────── #}�
+  {# ── Signature lines ─────────────────────────────────────── #}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 28px;border-top:1px solid #e2e8f0">
-    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
-    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel &amp; Tourism</div></div>
-    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
-    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Acknowledged — {{ supplier }} · Date: ___________</div></div>
+    <div style="text-align:center">
+      <div style="border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px;color:#94a3b8;margin-top:40px">Authorized Signature — Alsondos Travel</div>
+    </div>
+    <div style="text-align:center">
+      <div style="border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px;color:#94a3b8;margin-top:40px">Supplier Representative Signature</div>
+    </div>
   </div>
-  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 22px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8">
-    <span>Alsondos Travel &amp; Tourism · Amman, Jordan</span>
-    <span id="supFooter">{{ today }}</span>
-  </div>
-</div>
 
-{# ── Legend ────────────────────────────────────────────────── #}
-<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;align-items:center">
-  <span style="padding:3px 11px;border-radius:20px;background:#fee2e2;color:#7f1d1d;font-weight:700">PUR / RTN / HOT = Purchase (Cost ↑ — we owe them more)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#fef9c3;color:#78350f;font-weight:700">SPY = We paid them (Paid ↑ — reduces our debt)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#dcfce7;color:#14532d;font-weight:700">TXN = They bought from us (Paid ↑ — they owe us)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#e8eef8;color:#1B3A6B;font-weight:700">PAY = They paid us (Cost ↑ — clears receivable)</span>
+</div>{# end #supDoc #}
+
+{% elif supplier %}
+<div class="card" style="text-align:center;padding:60px;color:var(--muted)">
+  <i class="fas fa-search" style="font-size:48px;margin-bottom:16px;opacity:.3"></i>
+  <p>No transactions found for <strong>{{ supplier }}</strong>.</p>
 </div>
 
 {% else %}
-<div class="card" style="text-align:center;padding:52px">
-  <i class="fas fa-handshake" style="font-size:42px;color:var(--border);display:block;margin-bottom:14px;opacity:.35"></i>
-  <div style="font-size:17px;font-weight:700;color:var(--navy-dk);margin-bottom:7px">Select a Supplier</div>
-  <div style="font-size:13px;color:var(--muted)">Full mutual ledger — what we owe them and what they owe us.</div>
+<div class="card" style="text-align:center;padding:60px;color:var(--muted)">
+  <i class="fas fa-handshake" style="font-size:48px;margin-bottom:16px;opacity:.3"></i>
+  <p>Select a supplier above to view their statement.</p>
 </div>
 {% endif %}
-{% endblock %}
 
-{% block extra_js %}<script>
+<script>
 (function(){
-  var d=new Date(),mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var ts=String(d.getDate()).padStart(2,'0')+' '+mo[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  ['supDate','supFooter'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=ts;});
+  var d = new Date();
+  var stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+            + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  var el = document.getElementById('supDate');
+  if(el) el.textContent = stamp;
 })();
-</script>{% endblock %}
+</script>
+{% endblock %}
