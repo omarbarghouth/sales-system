@@ -535,7 +535,6 @@ def inject_user():
         'logged_in': 'user_id' in session
     }
 
-
 @app.template_filter('from_json')
 def from_json_filter(value):
     import json

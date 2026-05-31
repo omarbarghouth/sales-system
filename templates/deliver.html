@@ -1,90 +1,332 @@
 {% extends "base.html" %}
-{% block title %}Delivery List — {{ tomorrow }} — ALSONDOS{% endblock %}
+{% block title %}Operations Dashboard — {{ tomorrow }} — ALSONDOS{% endblock %}
 
 {% block content %}
+
+{% set total_out  = outbound_tickets|length %}
+{% set total_ret  = return_tickets|length %}
+{% set total_old  = travel_date_tickets|length %}
+{% set grand      = total_out + total_ret + total_old %}
+{% set all_tickets = outbound_tickets + return_tickets + travel_date_tickets %}
+
+{# Build query string from current filters so Mark Done preserves filters #}
+{% set qparts = [] %}
+{% if filters.travel_date %}{% set _ = qparts.append('travel_date=' ~ filters.travel_date) %}{% endif %}
+{% if filters.company     %}{% set _ = qparts.append('company='     ~ filters.company)     %}{% endif %}
+{% if filters.supplier    %}{% set _ = qparts.append('supplier='    ~ filters.supplier)    %}{% endif %}
+{% if filters.passenger   %}{% set _ = qparts.append('passenger='   ~ filters.passenger)   %}{% endif %}
+{% if filters.status      %}{% set _ = qparts.append('status='      ~ filters.status)      %}{% endif %}
+{% if filters.agent_id    %}{% set _ = qparts.append('agent_id='    ~ filters.agent_id)    %}{% endif %}
+{% set filter_qs = qparts | join('&') %}
+
+{# ── Page Header ─────────────────────────────────────────────────────────── #}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-truck" style="color:var(--red)"></i> Ticket Delivery — {{ tomorrow }}</h1>
-    <p>All tickets to be delivered for {{ tomorrow }}</p>
+    <h1><i class="fas fa-satellite-dish" style="color:var(--red)"></i> Operations Control</h1>
+    <p>Delivery dashboard for <strong>{{ tomorrow }}</strong> &mdash; {{ grand }} ticket{{ 's' if grand != 1 else '' }}</p>
   </div>
   <div class="page-header-actions no-print">
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print List</button>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
     <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
       <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
     </form>
   </div>
 </div>
 
-{% set total_out = outbound_tickets|length %}
-{% set total_ret = return_tickets|length %}
-{% set total_old = travel_date_tickets|length %}
-{% set grand = total_out + total_ret + total_old %}
+{# Flash messages #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }}" style="margin-bottom:14px">{{ msg }}</div>
+  {% endfor %}
+{% endif %}
+{% endwith %}
 
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
-  <div class="kpi-box blue">
-    <div class="kpi-label">Outbound Tickets</div>
-    <div class="kpi-value">{{ total_out }}</div>
+{# ── KPI Row ──────────────────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+  <div class="kpi-box" style="border-left:4px solid var(--navy)">
+    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-plane-departure"></i></div>
+    <div class="kpi-label">Outbound</div>
+    <div class="kpi-value" style="color:var(--navy)">{{ total_out }}</div>
   </div>
-  <div class="kpi-box gold">
-    <div class="kpi-label">Return Tickets</div>
+  <div class="kpi-box" style="border-left:4px solid var(--gold)">
+    <div class="kpi-icon" style="color:var(--gold)"><i class="fas fa-plane-arrival"></i></div>
+    <div class="kpi-label">Return</div>
     <div class="kpi-value gold">{{ total_ret }}</div>
   </div>
-  <div class="kpi-box">
+  <div class="kpi-box" style="border-left:4px solid #6c757d">
+    <div class="kpi-icon" style="color:#6c757d"><i class="fas fa-calendar-check"></i></div>
     <div class="kpi-label">Travel Date</div>
-    <div class="kpi-value">{{ total_old }}</div>
+    <div class="kpi-value" style="color:#6c757d">{{ total_old }}</div>
+  </div>
+  <div class="kpi-box" style="border-left:4px solid var(--red)">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-ticket-alt"></i></div>
+    <div class="kpi-label">Total</div>
+    <div class="kpi-value" style="color:var(--red)">{{ grand }}</div>
   </div>
 </div>
 
+{# ── Filter Bar ──────────────────────────────────────────────────────────── #}
+<div class="card mb-4 no-print">
+  <div class="card-header" style="background:var(--navy-dk);color:#fff;font-size:12.5px">
+    <i class="fas fa-filter" style="color:var(--gold)"></i> FILTER DASHBOARD
+    {% if filters.travel_date or filters.company or filters.supplier or filters.passenger or filters.status or filters.agent_id %}
+    <span style="margin-left:12px;background:var(--gold);color:var(--navy-dk);border-radius:10px;padding:1px 9px;font-size:11px;font-weight:700">
+      ACTIVE
+    </span>
+    {% endif %}
+  </div>
+  <div class="card-body" style="padding:12px 16px">
+    <form method="GET" id="filter-form">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end">
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Travel Date</label>
+          <input type="date" name="travel_date" value="{{ filters.travel_date }}"
+                 style="font-size:12.5px;padding:6px 8px" onchange="this.form.submit()">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Company</label>
+          <input type="text" name="company" value="{{ filters.company }}"
+                 placeholder="Any…" list="f-co-list"
+                 style="font-size:12.5px;padding:6px 8px;text-transform:uppercase">
+          <datalist id="f-co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Supplier</label>
+          <input type="text" name="supplier" value="{{ filters.supplier }}"
+                 placeholder="Any…"
+                 style="font-size:12.5px;padding:6px 8px;text-transform:uppercase">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Passenger</label>
+          <input type="text" name="passenger" value="{{ filters.passenger }}"
+                 placeholder="Name…"
+                 style="font-size:12.5px;padding:6px 8px;text-transform:uppercase">
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Status</label>
+          <select name="status" style="font-size:12.5px;padding:6px 8px" onchange="this.form.submit()">
+            <option value="">All</option>
+            <option value="PENDING" {% if filters.status=='PENDING' %}selected{% endif %}>⏳ Pending</option>
+            <option value="DONE"    {% if filters.status=='DONE'    %}selected{% endif %}>✅ Done</option>
+            <option value="CANCEL"  {% if filters.status=='CANCEL'  %}selected{% endif %}>❌ Cancelled</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700">Agent</label>
+          <select name="agent_id" style="font-size:12.5px;padding:6px 8px" onchange="this.form.submit()">
+            <option value="">All</option>
+            {% for ag in agents %}
+            <option value="{{ ag.id }}" {% if filters.agent_id==ag.id|string %}selected{% endif %}>{{ ag.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button type="submit" class="btn btn-red" style="padding:6px 16px;font-size:12.5px">
+          <i class="fas fa-search"></i> Apply
+        </button>
+        <a href="{{ url_for('deliver_tomorrow') }}" class="btn btn-outline" style="padding:6px 14px;font-size:12.5px">
+          <i class="fas fa-times"></i> Clear
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Empty State ─────────────────────────────────────────────────────────── #}
 {% if grand == 0 %}
-<div style="background:var(--green-lt);border:2px solid var(--green);border-radius:var(--radius);padding:28px;text-align:center;color:var(--green)">
-  <i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px"></i>
-  <div style="font-size:17px;font-weight:700">No tickets to deliver tomorrow</div>
-  <div style="opacity:.7;margin-top:4px">Your team is clear for {{ tomorrow }}</div>
-</div>
-{% endif %}
-
-{% macro ticket_table(tickets, title, icon, color) %}
-{% if tickets %}
-<div class="card mb-4">
-  <div class="card-header" style="background:{{ color }}">
-    <i class="fas fa-{{ icon }}"></i> {{ title }} ({{ tickets|length }})
-  </div>
-  <div style="overflow-x:auto">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th>
-          <th>Via</th><th>Buy From</th><th>Tickets</th><th>Travel Date</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in tickets %}
-        <tr>
-          <td>{{ loop.index }}</td>
-          <td><strong>{{ t.company }}</strong></td>
-          <td>{{ t.customer }}</td>
-          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-          <td class="text-muted">{{ t.via or '—' }}</td>
-          <td style="font-size:12.5px">{{ t.buy_from or t.return_supplier or '—' }}</td>
-          <td class="text-center"><strong>{{ t.tickets }}</strong></td>
-          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or t.return_date or '—' }}</td>
-          <td>
-            <span class="badge badge-{% if (t.outbound_status or t.status)=='DONE' %}done{% else %}still{% endif %}">
-              {{ t.outbound_status or t.status or 'PENDING' }}
-            </span>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<div style="background:var(--green-lt);border:2px solid var(--green);border-radius:var(--radius);padding:32px;text-align:center;color:var(--green)">
+  <i class="fas fa-check-circle" style="font-size:36px;display:block;margin-bottom:12px"></i>
+  <div style="font-size:17px;font-weight:700">No tickets match your criteria</div>
+  <div style="opacity:.7;margin-top:6px">
+    {% if filter_qs %}Try clearing the filters above.{% else %}Your team is clear for {{ tomorrow }}.{% endif %}
   </div>
 </div>
 {% endif %}
-{% endmacro %}
 
-{{ ticket_table(outbound_tickets, 'Outbound Tickets', 'plane-departure', '#1B3A6B') }}
-{{ ticket_table(return_tickets, 'Return Tickets', 'plane-arrival', '#8B6914') }}
-{{ ticket_table(travel_date_tickets, 'Travel Date Tickets (legacy)', 'calendar-check', '#2C3E50') }}
+{# ── Unified Operations Table ─────────────────────────────────────────────── #}
+{% if grand > 0 %}
+<div class="card">
+  <div class="card-header" style="background:var(--navy-dk);color:#fff;display:flex;justify-content:space-between;align-items:center">
+    <span><i class="fas fa-table" style="color:var(--gold)"></i> All Deliveries — {{ grand }} ticket{{ 's' if grand != 1 else '' }}</span>
+    <span style="font-size:11px;opacity:.7">
+      <i class="fas fa-circle" style="color:#F59E0B"></i> Pending &nbsp;
+      <i class="fas fa-circle" style="color:#22C55E"></i> Done &nbsp;
+      <i class="fas fa-circle" style="color:#EF4444"></i> Cancelled
+    </span>
+  </div>
+
+  <table style="table-layout:fixed;width:100%;border-collapse:collapse">
+    <colgroup>
+      <col style="width:3%">    {# # #}
+      <col style="width:5%">    {# Type #}
+      <col style="width:12%">   {# Passenger #}
+      <col style="width:10%">   {# Company #}
+      <col style="width:9%">    {# Supplier #}
+      <col style="width:9%">    {# Route #}
+      <col style="width:8%">    {# Travel Date #}
+      <col style="width:9%">    {# Ticket/PNR #}
+      <col style="width:8%">    {# Service #}
+      <col style="width:9%">    {# Agent #}
+      <col style="width:9%">    {# Status #}
+      <col style="width:9%">    {# Action #}
+    </colgroup>
+    <thead>
+      <tr>
+        <th style="text-align:center;padding:10px 6px">#</th>
+        <th style="padding:10px 6px">Type</th>
+        <th style="padding:10px 6px">Passenger</th>
+        <th style="padding:10px 6px">Company</th>
+        <th style="padding:10px 6px">Supplier</th>
+        <th style="padding:10px 6px">Route</th>
+        <th style="padding:10px 6px;text-align:center">Travel Date</th>
+        <th style="padding:10px 6px">Ticket / PNR</th>
+        <th style="padding:10px 6px">Service</th>
+        <th style="padding:10px 6px">Agent</th>
+        <th style="padding:10px 6px;text-align:center">Status</th>
+        <th style="padding:10px 6px;text-align:center">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in all_tickets %}
+      {% set dtype = t.delivery_type|default('OUTBOUND') %}
+      {% set raw_status = (t.return_status if dtype=='RETURN' else t.outbound_status) or t.status or 'PENDING' %}
+      {% set st = raw_status|upper %}
+      <tr style="border-bottom:1px solid var(--border)">
+
+        {# # #}
+        <td style="text-align:center;color:var(--muted);font-size:11px;padding:8px 4px">{{ loop.index }}</td>
+
+        {# Type #}
+        <td style="padding:8px 4px">
+          {% if dtype == 'OUTBOUND' %}
+          <span style="font-size:10px;font-weight:700;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:4px;padding:2px 5px;white-space:nowrap">
+            <i class="fas fa-plane-departure" style="font-size:8px"></i> OUT
+          </span>
+          {% elif dtype == 'RETURN' %}
+          <span style="font-size:10px;font-weight:700;background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;border-radius:4px;padding:2px 5px;white-space:nowrap">
+            <i class="fas fa-plane-arrival" style="font-size:8px"></i> RET
+          </span>
+          {% else %}
+          <span style="font-size:10px;font-weight:700;background:#F3F4F6;color:#4B5563;border:1px solid #D1D5DB;border-radius:4px;padding:2px 5px;white-space:nowrap">
+            <i class="fas fa-calendar" style="font-size:8px"></i> TRV
+          </span>
+          {% endif %}
+        </td>
+
+        {# Passenger #}
+        <td style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 4px"
+            title="{{ t.customer }}">{{ t.customer or '—' }}</td>
+
+        {# Company #}
+        <td style="font-size:11.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 4px"
+            title="{{ t.company }}">
+          <a href="{{ url_for('statement', company=t.company) }}"
+             style="color:var(--navy);text-decoration:none">{{ t.company or '—' }}</a>
+        </td>
+
+        {# Supplier #}
+        <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 4px"
+            title="{{ (t.return_supplier if dtype=='RETURN' else t.buy_from) or '—' }}">
+          {{ (t.return_supplier if dtype=='RETURN' else t.buy_from) or t.buy_from or '—' }}
+        </td>
+
+        {# Route #}
+        <td style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 4px"
+            title="{{ t.from_loc }} → {{ t.to_loc }}">
+          <strong style="color:var(--navy)">{{ t.from_loc or '?' }}</strong>
+          <span style="color:var(--gold)">→</span>
+          <strong style="color:var(--navy)">{{ t.to_loc or '?' }}</strong>
+        </td>
+
+        {# Travel Date #}
+        <td style="text-align:center;font-size:11.5px;font-weight:700;white-space:nowrap;padding:8px 4px;
+                   color:{% if dtype=='RETURN' %}var(--gold-dk){% else %}var(--red){% endif %}">
+          {% if dtype == 'RETURN' %}{{ t.return_date or t.travel_date or '—' }}
+          {% else %}{{ t.travel_date or '—' }}{% endif %}
+        </td>
+
+        {# Ticket / PNR #}
+        <td style="font-family:monospace;font-size:10px;padding:8px 4px;overflow:hidden">
+          {% set tno = (t.return_ticket_number if dtype=='RETURN' else t.ticket_number)|default('') %}
+          {% set pno = (t.return_pnr if dtype=='RETURN' else t.pnr)|default('') %}
+          {% if tno %}<span style="color:var(--navy-dk);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ tno }}">{{ tno }}</span>{% endif %}
+          {% if pno %}<span style="color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ pno }}">{{ pno }}</span>{% endif %}
+          {% if not tno and not pno %}—{% endif %}
+        </td>
+
+        {# Service #}
+        <td style="font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 4px">
+          {{ t.service_type or '—' }}
+        </td>
+
+        {# Agent #}
+        <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 4px"
+            title="{{ t.agent_display|default('—') }}">
+          {{ t.agent_display|default('—') }}
+        </td>
+
+        {# Status #}
+        <td style="text-align:center;padding:8px 4px">
+          {% if st in ('DONE','DELIVERED') %}
+          <span style="display:inline-block;font-size:10px;font-weight:700;background:#DCFCE7;color:#166534;border:1px solid #86EFAC;border-radius:4px;padding:3px 6px;white-space:nowrap">✓ DONE</span>
+          {% elif st in ('CANCEL','CANCELLED') %}
+          <span style="display:inline-block;font-size:10px;font-weight:700;background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;border-radius:4px;padding:3px 6px;white-space:nowrap">✕ CANCEL</span>
+          {% else %}
+          <span style="display:inline-block;font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:4px;padding:3px 6px;white-space:nowrap">⏳ PENDING</span>
+          {% endif %}
+        </td>
+
+        {# Action — Mark Done button #}
+        <td style="text-align:center;padding:6px 4px">
+          {% if st not in ('DONE','DELIVERED','CANCEL','CANCELLED') %}
+          <form method="POST" action="{{ url_for('mark_delivered', sale_id=t.id) }}"
+                onsubmit="return confirm('Mark this ticket as delivered?')">
+            <input type="hidden" name="dtype" value="{{ dtype }}">
+            <input type="hidden" name="redirect_args" value="{{ filter_qs }}">
+            <button type="submit"
+                    style="background:#22C55E;color:#fff;border:none;border-radius:5px;
+                           padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;
+                           white-space:nowrap;display:inline-flex;align-items:center;gap:4px">
+              <i class="fas fa-check"></i> Done
+            </button>
+          </form>
+          {% else %}
+          <span style="color:var(--muted);font-size:11px">—</span>
+          {% endif %}
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:var(--navy-dk);color:#fff">
+        <td colspan="3" style="padding:10px 8px;font-weight:700;font-size:12px">TOTAL</td>
+        <td colspan="9" style="padding:10px 8px;font-size:12px;opacity:.8">
+          {{ grand }} ticket{{ 's' if grand != 1 else '' }} —
+          {{ total_out }} outbound, {{ total_ret }} return, {{ total_old }} travel-date
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endif %}
+
+<style>
+@media print {
+  .no-print { display:none !important; }
+  .card { box-shadow:none !important; border:1px solid #ddd !important; }
+  table { font-size:9px !important; }
+  form[action*="mark"] { display:none !important; }
+}
+</style>
 
 {% endblock %}

@@ -1,297 +1,361 @@
 {% extends "base.html" %}
-{% block title %}Supplier Statement — ALSONDOS{% endblock %}
+{% block title %}Supplier Statement — {{ supplier or 'Select Supplier' }}{% endblock %}
+
+{% block extra_css %}<style>
+@media print{
+  @page{size:A4 portrait;margin:10mm 10mm 12mm 10mm}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body>*{display:none!important}
+  .sidebar,.topbar,.page-header,.filter-bar,.no-print{display:none!important}
+  body{margin:0!important;background:#fff!important}
+  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important}
+  #supDoc{display:block!important;box-shadow:none!important;border-radius:0!important;width:100%!important}
+  table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
+  th,td{padding:3pt 5pt!important;font-size:7.5pt!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  tfoot{display:table-footer-group}
+}
+</style>{% endblock %}
 
 {% block content %}
-<div class="page-header">
+{# ── Header ────────────────────────────────────────────────── #}
+<div class="page-header no-print">
   <div class="page-header-left">
-    <h1><i class="fas fa-truck" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Supplier Statements</h1>
-    <p>Track purchases, balances and payments to all suppliers</p>
+    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Supplier Statement</h1>
+    <p>Mutual ledger — payables, receivables &amp; running balance</p>
   </div>
-  <div class="page-header-actions no-print">
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
+  <div class="page-header-actions">
+    {% if supplier %}
+    <a href="{{ url_for('supplier_payments_page', supplier=supplier) }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Add Payment
+    </a>
+    {% endif %}
+    {% if supplier and ledger %}
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
+    {% endif %}
   </div>
 </div>
 
-{# ── Filters ─────────────────────────────────────────────────── #}
+{# ── Filters ───────────────────────────────────────────────── #}
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%">
-
     <div class="form-group" style="flex:2;min-width:200px">
-      <label>Supplier</label>
-      <select name="supplier" onchange="this.form.submit()">
-        <option value="">— All Suppliers —</option>
+      <label>Supplier / Company</label>
+      <select name="supplier" onchange="this.form.submit()" style="font-weight:700">
+        <option value="">— Select —</option>
         {% for s in all_suppliers %}
-        {% if s.supplier %}
-        <option value="{{ s.supplier }}" {% if filters.supplier|upper == s.supplier|upper %}selected{% endif %}>
-          {{ s.supplier }} ({{ s.svc }})
-        </option>
-        {% endif %}
+        <option value="{{ s }}" {% if s==supplier %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
       </select>
     </div>
-
-    <div class="form-group" style="min-width:140px">
-      <label>Service Type</label>
-      <select name="svc_type" onchange="this.form.submit()">
-        <option value="">All Types</option>
-        {% for t in ['FLIGHT','HOTEL','TRANSFER','VISA','INSURANCE','TOUR'] %}
-        <option value="{{ t }}" {% if filters.svc_type==t %}selected{% endif %}>{{ t }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group" style="min-width:130px">
-      <label>Date From</label>
+    <div class="form-group" style="min-width:120px">
+      <label>From</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
-
-    <div class="form-group" style="min-width:130px">
-      <label>Date To</label>
+    <div class="form-group" style="min-width:120px">
+      <label>To</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
-
-    {% if filters.supplier or filters.svc_type or filters.date_from or filters.date_to %}
-    <a href="{{ url_for('supplier_statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end" title="Clear">
-      <i class="fas fa-times"></i>
-    </a>
-    {% endif %}
+    <div class="form-group" style="min-width:110px">
+      <label>Service</label>
+      <select name="svc_type" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for s in ['FLIGHT','HOTEL','VISA','INSURANCE','TRANSFER','TOUR'] %}
+        <option value="{{ s }}" {% if filters.svc_type==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if supplier %}<a href="{{ url_for('supplier_statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end" title="Clear"><i class="fas fa-times"></i></a>{% endif %}
   </form>
 </div>
 
-{# ── Print Header ─────────────────────────────────────────────── #}
-<div class="print-only" style="margin-bottom:18px">
-  <div id="suppPrintDate" style="font-size:10px;color:#94a3b8;text-align:right;font-style:italic;margin-bottom:5px"></div>
-  <div style="background:#122850;padding:18px 26px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-    <div style="display:flex;align-items:center;gap:14px">
-      <img src="{{ url_for('static', filename='logo.png') }}" style="height:46px;width:auto;filter:brightness(10)">
-      <div>
-        <div style="font-size:15px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">Alsondos Travel & Tourism</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.55)">Amman, Jordan · Supplier Statement</div>
-      </div>
+{% if supplier and summary %}
+{# ── KPI Cards ──────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px" class="no-print">
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-arrow-circle-up"></i></div>
+    <div class="kpi-label">Bought from Them</div>
+    <div class="kpi-value red">{{ "%.3f"|format(summary.total_purchased) }}</div>
+    <div class="kpi-sub">Payable · CR</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-arrow-circle-down"></i></div>
+    <div class="kpi-label">Sold to Them</div>
+    <div class="kpi-value green">{{ "%.3f"|format(summary.total_sold_to) }}</div>
+    <div class="kpi-sub">Receivable · DR</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-exchange-alt"></i></div>
+    <div class="kpi-label">Payments</div>
+    <div class="kpi-value navy" style="font-size:13px">
+      ↑ {{ "%.3f"|format(summary.total_paid_out) }}<br>
+      <span style="font-size:11px;color:var(--muted)">↓ {{ "%.3f"|format(summary.total_received) }}</span>
+    </div>
+    <div class="kpi-sub">Paid ↑ · Received ↓</div>
+  </div>
+  <div class="kpi-box" style="border:2px solid {% if summary.status=='RECEIVABLE' %}var(--green){% elif summary.status=='PAYABLE' %}var(--red){% else %}var(--gold){% endif %}">
+    <div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
+    <div class="kpi-label">Net Balance</div>
+    <div class="kpi-value {% if summary.status=='RECEIVABLE' %}green{% elif summary.status=='PAYABLE' %}red{% else %}gold{% endif %}" style="font-size:18px">
+      {{ "%.3f"|format(summary.net_balance|abs) }}
+    </div>
+    <div class="kpi-sub" style="font-weight:700">
+      {% if summary.status=='RECEIVABLE' %}They owe us ▲
+      {% elif summary.status=='PAYABLE' %}We owe them ▼
+      {% else %}✓ Settled{% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Balance bar ────────────────────────────────────────────── #}
+<div class="no-print card" style="padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;gap:20px;font-size:13px;flex-wrap:wrap">
+    <span>Net Payable: <strong style="color:var(--red)">JOD {{ "%.3f"|format(summary.net_payable) }}</strong></span>
+    <span>Net Receivable: <strong style="color:var(--green)">JOD {{ "%.3f"|format(summary.net_receivable) }}</strong></span>
+    <span style="color:var(--muted)">{{ summary.entry_count }} entries</span>
+  </div>
+  <strong style="font-size:15px;color:{% if summary.status=='RECEIVABLE' %}var(--green){% elif summary.status=='PAYABLE' %}var(--red){% else %}var(--gold-dk){% endif %}">
+    {% if summary.status=='RECEIVABLE' %}{{ supplier }} owes us JOD {{ "%.3f"|format(summary.net_balance) }}
+    {% elif summary.status=='PAYABLE' %}We owe {{ supplier }} JOD {{ "%.3f"|format(summary.net_balance|abs) }}
+    {% else %}✓ Fully settled{% endif %}
+  </strong>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   PRINT DOCUMENT
+═══════════════════════════════════════════════════════════════ #}
+<div id="supDoc" style="background:#fff;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.08);overflow:hidden;margin-bottom:20px">
+
+  {# ── Branded header ────────────────────────────────────────── #}
+  <div style="background:linear-gradient(135deg,#07111f 0%,#0f1d35 55%,#1a2f52 100%);padding:26px 30px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:4px solid #C8A84B">
+    <div>
+      <img src="{{ url_for('static',filename='logo_white.png') }}" style="height:60px;width:auto;display:block;margin-bottom:8px;filter:drop-shadow(0 2px 10px rgba(0,0,0,.4))">
+      <div style="color:rgba(255,255,255,.5);font-size:11px;line-height:1.9">Alsondos Travel &amp; Tourism<br>Amman, Jordan · Travel Agency</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:22px;font-weight:800;color:#fff;font-family:'Playfair Display',serif">SUPPLIER STATEMENT</div>
-      {% if filters.supplier %}<div style="font-size:13px;color:#C8A84B;margin-top:4px">{{ filters.supplier }}</div>{% endif %}
-      <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px">{{ today }}</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:900;color:#fff;letter-spacing:-.5px">SUPPLIER STATEMENT</div>
+      <div style="font-size:14px;font-weight:800;color:#C8A84B;margin-top:8px;text-transform:uppercase;letter-spacing:.5px">{{ supplier }}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:5px" id="supDate">{{ today }}</div>
+      {% if filters.date_from or filters.date_to %}
+      <div style="font-size:10.5px;color:rgba(200,168,75,.6);margin-top:3px">{{ filters.date_from or '—' }} → {{ filters.date_to or 'present' }}</div>
+      {% endif %}
     </div>
   </div>
-</div>
 
-{# ── KPI Summary ──────────────────────────────────────────────── #}
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
-  <div class="kpi-box red">
-    <div class="kpi-icon"><i class="fas fa-shopping-cart"></i></div>
-    <div class="kpi-label">Total Purchased</div>
-    <div class="kpi-value red" style="font-size:18px">JOD {{ "%.3f"|format(total_net|float) }}</div>
-    <div class="kpi-sub">Net cost to suppliers</div>
+  {# ── 4-col summary ─────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid #e2e8f0">
+    {% for lbl,val,color,sub in [
+      ('Bought from Them (CR)', summary.total_purchased, '#7f1d1d','We owe them'),
+      ('Paid to Them (DR)',     summary.total_paid_out,  '#78350f','Payments out'),
+      ('Sold to Them (DR)',     summary.total_sold_to,   '#14532d','They owe us'),
+      ('Received from Them (CR)',summary.total_received, '#1e3a5f','Payments in'),
+    ] %}
+    <div style="padding:14px 16px;text-align:center;border-right:1px solid #e2e8f0{% if loop.last %};border-right:none{% endif %}">
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:#94a3b8;margin-bottom:5px">{{ lbl }}</div>
+      <div style="font-size:17px;font-weight:800;color:{{ color }};font-family:'Playfair Display',Georgia,serif">{{ "%.3f"|format(val) }}</div>
+      <div style="font-size:9.5px;color:#94a3b8;margin-top:3px">{{ sub }}</div>
+    </div>
+    {% endfor %}
   </div>
-  <div class="kpi-box green">
-    <div class="kpi-icon"><i class="fas fa-check-circle"></i></div>
-    <div class="kpi-label">Total Paid</div>
-    <div class="kpi-value green" style="font-size:18px">JOD {{ "%.3f"|format(total_paid|float) }}</div>
-    <div class="kpi-sub">Payments made</div>
-  </div>
-  <div class="kpi-box {% if balance > 0 %}red{% else %}green{% endif %}">
-    <div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
-    <div class="kpi-label">Outstanding Balance</div>
-    <div class="kpi-value {% if balance > 0 %}red{% else %}green{% endif %}" style="font-size:18px">JOD {{ "%.3f"|format(balance|float) }}</div>
-    <div class="kpi-sub">{% if balance <= 0 %}Fully settled ✓{% else %}Amount owed to suppliers{% endif %}</div>
-  </div>
-</div>
 
-{# ── Purchases Table ───────────────────────────────────────────── #}
-<div class="card" style="margin-bottom:20px">
-  <div class="card-header">
-    <i class="fas fa-list-alt"></i> Purchase Records
-    <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ purchases|length }} records</span>
+  {# ── Balance banner ────────────────────────────────────────── #}
+  <div style="padding:12px 22px;display:flex;justify-content:space-between;align-items:center;
+    background:{% if summary.status=='RECEIVABLE' %}linear-gradient(90deg,#052e16,#14532d)
+    {% elif summary.status=='PAYABLE' %}linear-gradient(90deg,#450a0a,#7f1d1d)
+    {% else %}linear-gradient(90deg,#0f172a,#1e293b){% endif %}">
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.4px">Net Balance · {{ today }}</div>
+    <div style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:900;
+      color:{% if summary.status=='RECEIVABLE' %}#86efac{% elif summary.status=='PAYABLE' %}#fca5a5{% else %}#C8A84B{% endif %}">
+      JOD {{ "%.3f"|format(summary.net_balance|abs) }}
+      <span style="font-size:12px;font-weight:600;margin-left:8px;opacity:.85">
+        {% if summary.status=='RECEIVABLE' %}— {{ supplier }} owes us ▲
+        {% elif summary.status=='PAYABLE' %}— We owe {{ supplier }} ▼
+        {% else %}— Settled ✓{% endif %}
+      </span>
+    </div>
   </div>
+
+  {# ── Ledger table ──────────────────────────────────────────── #}
   <div style="overflow-x:auto">
-    <table>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
-        <tr>
-          <th>Date</th>
-          <th>Type</th>
-          <th>Supplier</th>
-          <th>Company / Customer</th>
-          <th>Description</th>
-          <th class="text-right">Net Cost (JOD)</th>
+        <tr style="background:#0f1d35">
+          {% set TH = 'padding:8px 9px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.7);white-space:nowrap' %}
+          <th style="{{ TH }};width:88px">Purchase Date</th>
+          <th style="{{ TH }};width:80px">Ref</th>
+          <th style="{{ TH }};min-width:110px">Passenger</th>
+          <th style="{{ TH }};width:110px">From → To</th>
+          <th style="{{ TH }};width:88px;color:#93c5fd">Travel Date</th>
+          <th style="{{ TH }};width:58px">Svc</th>
+          <th style="{{ TH }};width:90px;text-align:right;color:#fca5a5">Cost (JOD)<br><span style="font-size:7px;opacity:.55;font-weight:400">We owe ↑</span></th>
+          <th style="{{ TH }};width:90px;text-align:right;color:#86efac">Paid (JOD)<br><span style="font-size:7px;opacity:.55;font-weight:400">Reduces debt ↓</span></th>
+          <th style="{{ TH }};width:98px;text-align:right;color:#C8A84B">Balance (JOD)</th>
         </tr>
       </thead>
       <tbody>
-        {% for p in purchases %}
-        <tr>
-          <td style="white-space:nowrap;font-size:12.5px">{{ p.sale_date }}</td>
-          <td>
-            <span class="svc-badge svc-{{ p.purchase_type }}">
-              <i class="fas {{ p.purchase_type|svc_icon }}"></i>{{ p.purchase_type }}
+        {% for e in ledger %}
+        {# Row background by type #}
+        {% if e.type == 'payment_out' %}
+          {% set _bg = '#fffbeb' %}
+        {% elif e.type == 'payment_in' %}
+          {% set _bg = '#f0fdf4' %}
+        {% elif e.type == 'sale' %}
+          {% set _bg = '#f0fdf4' %}
+        {% else %}
+          {% set _bg = '#fff' %}
+        {% endif %}
+        <tr style="border-bottom:1px solid #f1f5f9;background:{{ _bg }}">
+
+          {# — Date — #}
+          <td style="padding:7px 9px;color:#64748b;font-size:10.5px;white-space:nowrap;font-family:monospace">
+            {{ e.date }}
+          </td>
+
+          {# — Ref badge — #}
+          <td style="padding:7px 9px">
+            <span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
+              {% if e.type=='sale' %}background:#dcfce7;color:#14532d
+              {% elif e.type=='purchase' %}background:#fee2e2;color:#7f1d1d
+              {% elif e.type=='payment_in' %}background:#dcfce7;color:#14532d
+              {% elif e.type=='payment_out' %}background:#fef3c7;color:#78350f
+              {% else %}background:#e8eef8;color:#1B3A6B{% endif %}">
+              {{ e.ref }}
             </span>
           </td>
-          <td style="font-weight:700;color:var(--navy-dk)">{{ p.supplier_name }}</td>
-          <td>
-            <div style="font-weight:600;font-size:13px">{{ p.company }}</div>
-            <div style="font-size:11.5px;color:var(--muted)">{{ p.customer }}</div>
+
+          {# — Passenger / description — #}
+          <td style="padding:7px 9px;line-height:1.35;max-width:150px">
+            {% if e.customer %}
+            <div style="font-size:12px;font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                 title="{{ e.customer }}">{{ e.customer }}</div>
+            {% endif %}
+            {% if e.type in ('payment_out','payment_in') %}
+            <div style="font-size:10.5px;color:#64748b">{{ e.description }}</div>
+            {% elif e.pnr|default('') %}
+            <div style="font-size:10px;color:#94a3b8;font-family:monospace">{{ e.pnr }}</div>
+            {% endif %}
+            {% if e.ticket_number|default('') %}
+            <div style="font-size:9.5px;color:#94a3b8;font-family:monospace">🎫 {{ e.ticket_number }}</div>
+            {% endif %}
           </td>
-          <td style="font-size:12px;color:var(--muted)">
-            Txn #{{ p.id }}
-            {% if p.service_type == 'PACKAGE' %}<span class="badge badge-pending" style="font-size:9px;margin-left:4px">PKG</span>{% endif %}
+
+          {# — Route From → To — #}
+          <td style="padding:7px 9px;white-space:nowrap">
+            {% if e.from_loc|default('') or e.to_loc|default('') %}
+            <span style="font-weight:700;color:#1B3A6B;font-size:12px">{{ e.from_loc|default('') }}</span>
+            {% if e.from_loc|default('') and e.to_loc|default('') %}
+            <span style="color:#C8A84B;margin:0 2px;font-size:10px">→</span>
+            {% endif %}
+            <span style="font-weight:700;color:#1B3A6B;font-size:12px">{{ e.to_loc|default('') }}</span>
+            {% else %}
+            <span style="color:#cbd5e1;font-size:11px">—</span>
+            {% endif %}
           </td>
-          <td class="text-right" style="font-weight:700;color:var(--red);font-size:13.5px">
-            {{ "%.3f"|format((p.net_cost or 0)|float) }}
+
+          {# — Travel Date — #}
+          <td style="padding:7px 9px;white-space:nowrap">
+            {% if e.travel_date|default('') %}
+            <span style="font-size:11px;font-weight:700;color:#1d4ed8;background:#eff6ff;padding:2px 7px;border-radius:12px;white-space:nowrap">
+              {{ e.travel_date }}
+            </span>
+            {% else %}
+            <span style="color:#cbd5e1;font-size:11px">—</span>
+            {% endif %}
           </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="text-center" style="padding:32px;color:var(--muted)">
-            <i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;opacity:.3"></i>
-            No purchase records found.
-            {% if filters.supplier or filters.svc_type %}
-            <a href="{{ url_for('supplier_statement') }}" style="color:var(--navy)">Clear filters →</a>
+
+          {# — Service type — #}
+          <td style="padding:7px 9px;text-align:center">
+            {% if e.svc %}
+            <span style="font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:10px;background:#e8eef8;color:#1B3A6B;white-space:nowrap">{{ e.svc[:4] }}</span>
+            {% endif %}
+          </td>
+
+          {# — Cost column (credit — we owe them for purchases) — #}
+          <td style="padding:7px 9px;text-align:right;font-size:12.5px;
+            font-weight:{% if e.credit>0 %}700{% else %}400{% endif %};
+            color:{% if e.credit>0 %}#7f1d1d{% else %}#cbd5e1{% endif %}">
+            {% if e.credit > 0 %}{{ "%.3f"|format(e.credit) }}{% else %}—{% endif %}
+          </td>
+
+          {# — Paid column (debit — payments we made / sales they owe) — #}
+          <td style="padding:7px 9px;text-align:right;font-size:12.5px;
+            font-weight:{% if e.debit>0 %}700{% else %}400{% endif %};
+            color:{% if e.type=='payment_out' %}#78350f{% elif e.debit>0 %}#14532d{% else %}#cbd5e1{% endif %}">
+            {% if e.debit > 0 %}{{ "%.3f"|format(e.debit) }}{% else %}—{% endif %}
+          </td>
+
+          {# — Running balance — #}
+          <td style="padding:7px 9px;text-align:right;font-weight:700;font-size:12.5px;
+            color:{% if e.balance > 0.005 %}#14532d{% elif e.balance < -0.005 %}#991b1b{% else %}#64748b{% endif %}">
+            {{ "%.3f"|format(e.balance) }}
+            {% if e.balance > 0.005 %}<span style="font-size:7.5px;opacity:.6;font-weight:400"> DR</span>
+            {% elif e.balance < -0.005 %}<span style="font-size:7.5px;opacity:.6;font-weight:400"> CR</span>
             {% endif %}
           </td>
         </tr>
+        {% else %}
+        <tr><td colspan="9" style="padding:32px;text-align:center;color:#94a3b8;font-size:13px">
+          No transactions found for <strong>{{ supplier }}</strong>{% if filters.date_from or filters.date_to %} in this period{% endif %}.
+        </td></tr>
         {% endfor %}
       </tbody>
-      {% if purchases %}
+      {% if ledger %}
       <tfoot>
-        <tr>
-          <td colspan="5">TOTAL PURCHASED — {{ purchases|length }} transactions</td>
-          <td class="text-right" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format(total_net|float) }}</td>
+        <tr style="background:#0f1d35;border-top:2px solid #1e3a5f">
+          <td colspan="6" style="padding:10px 9px;font-size:10px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px">
+            Totals · {{ summary.entry_count }} entries
+          </td>
+          <td style="padding:10px 9px;text-align:right;font-size:13px;font-weight:800;color:#fca5a5">
+            {{ "%.3f"|format(ledger|sum(attribute='credit')) }}
+          </td>
+          <td style="padding:10px 9px;text-align:right;font-size:13px;font-weight:800;color:#86efac">
+            {{ "%.3f"|format(ledger|sum(attribute='debit')) }}
+          </td>
+          <td style="padding:10px 9px;text-align:right;font-size:14px;font-weight:900;
+            color:{% if summary.status=='RECEIVABLE' %}#86efac{% elif summary.status=='PAYABLE' %}#fca5a5{% else %}#C8A84B{% endif %}">
+            {{ "%.3f"|format(summary.net_balance) }}
+          </td>
         </tr>
       </tfoot>
       {% endif %}
     </table>
   </div>
+
+  {# ── Signature lines ───────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 28px;border-top:1px solid #e2e8f0">
+    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
+    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel &amp; Tourism</div></div>
+    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
+    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Acknowledged — {{ supplier }} · Date: ___________</div></div>
+  </div>
+  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 22px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8">
+    <span>Alsondos Travel &amp; Tourism · Amman, Jordan</span>
+    <span id="supFooter">{{ today }}</span>
+  </div>
 </div>
 
-{# ── Supplier Payments Section ─────────────────────────────────── #}
-<div class="grid-2">
-
-  {# Payments list #}
-  <div class="card">
-    <div class="card-header">
-      <i class="fas fa-money-bill-wave" style="color:#86efac"></i> Payments Made to Supplier
-      <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ supplier_pays|length }} payments</span>
-    </div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th>Date</th><th>Supplier</th><th>Type</th>
-          <th class="text-right">Amount (JOD)</th>
-          <th>Notes</th>
-          {% if is_admin %}<th>Del</th>{% endif %}
-        </tr></thead>
-        <tbody>
-          {% for sp in supplier_pays %}
-          <tr>
-            <td style="font-size:12.5px;white-space:nowrap">{{ sp.pay_date }}</td>
-            <td style="font-weight:700;color:var(--navy-dk)">{{ sp.supplier }}</td>
-            <td><span class="svc-badge svc-{{ sp.service_type or 'FLIGHT' }}">{{ sp.service_type or 'FLIGHT' }}</span></td>
-            <td class="text-right text-green" style="font-size:13.5px">{{ "%.3f"|format(sp.amount|float) }}</td>
-            <td style="font-size:12px;color:var(--muted)">{{ sp.notes or '—' }}</td>
-            {% if is_admin %}
-            <td>
-              <form method="POST" action="{{ url_for('delete_supplier_payment', pay_id=sp.id) }}"
-                    onsubmit="return confirm('Delete this payment?')">
-                <input type="hidden" name="supplier" value="{{ filters.supplier }}">
-                <button type="submit" class="btn btn-danger btn-xs"><i class="fas fa-trash"></i></button>
-              </form>
-            </td>
-            {% endif %}
-          </tr>
-          {% else %}
-          <tr><td colspan="{{ 6 if is_admin else 5 }}" class="text-center text-muted" style="padding:20px">No payments recorded yet</td></tr>
-          {% endfor %}
-        </tbody>
-        {% if supplier_pays %}
-        <tfoot>
-          <tr>
-            <td colspan="3">TOTAL PAID</td>
-            <td class="text-right" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format(total_paid|float) }}</td>
-            <td colspan="{{ 2 if is_admin else 1 }}"></td>
-          </tr>
-        </tfoot>
-        {% endif %}
-      </table>
-    </div>
-  </div>
-
-  {# Add payment form #}
-  {% if is_admin %}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-plus-circle"></i> Record Supplier Payment</div>
-    <div class="card-body">
-      <form method="POST" action="{{ url_for('add_supplier_payment') }}">
-        <div class="form-grid form-grid-2" style="margin-bottom:14px">
-          <div class="form-group">
-            <label>Supplier <span class="req">*</span></label>
-            <input type="text" name="supplier" list="supp-list" required
-                   value="{{ filters.supplier }}"
-                   style="text-transform:uppercase;font-weight:700"
-                   autocomplete="off">
-            <datalist id="supp-list">
-              {% for s in all_suppliers %}{% if s.supplier %}
-              <option value="{{ s.supplier }}">
-              {% endif %}{% endfor %}
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label>Amount (JOD) <span class="req">*</span></label>
-            <input type="number" name="amount" step="0.001" min="0.001" required
-                   placeholder="0.000" style="font-size:16px;font-weight:700">
-          </div>
-          <div class="form-group">
-            <label>Payment Date</label>
-            <input type="date" name="pay_date" value="{{ today|replace(' ','') }}"
-                   required>
-          </div>
-          <div class="form-group">
-            <label>Service Type</label>
-            <select name="svc_type">
-              {% for t in ['FLIGHT','HOTEL','TRANSFER','VISA','INSURANCE','TOUR','GENERAL'] %}
-              <option value="{{ t }}" {% if filters.svc_type==t %}selected{% endif %}>{{ t }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="form-group" style="margin-bottom:14px">
-          <label>Notes</label>
-          <input type="text" name="notes" placeholder="Payment reference, bank transfer ID…">
-        </div>
-        <button type="submit" class="btn btn-red" style="width:100%">
-          <i class="fas fa-save"></i> Record Payment
-        </button>
-      </form>
-    </div>
-  </div>
-  {% else %}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-info-circle"></i> Balance Summary</div>
-    <div class="card-body" style="text-align:center;padding:28px">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Outstanding balance to supplier</div>
-      <div style="font-family:'Playfair Display',serif;font-size:32px;font-weight:800;color:{% if balance > 0 %}var(--red){% else %}var(--green){% endif %}">
-        JOD {{ "%.3f"|format(balance|float) }}
-      </div>
-      {% if balance <= 0 %}<div style="margin-top:10px;color:var(--green);font-weight:700">✓ Fully settled</div>{% endif %}
-    </div>
-  </div>
-  {% endif %}
-
+{# ── Legend ────────────────────────────────────────────────── #}
+<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;align-items:center">
+  <span style="padding:3px 11px;border-radius:20px;background:#fee2e2;color:#7f1d1d;font-weight:700">PUR / RTN / HOT = Purchase (Cost ↑ — we owe them more)</span>
+  <span style="padding:3px 11px;border-radius:20px;background:#fef9c3;color:#78350f;font-weight:700">SPY = We paid them (Paid ↑ — reduces our debt)</span>
+  <span style="padding:3px 11px;border-radius:20px;background:#dcfce7;color:#14532d;font-weight:700">TXN = They bought from us (Paid ↑ — they owe us)</span>
+  <span style="padding:3px 11px;border-radius:20px;background:#e8eef8;color:#1B3A6B;font-weight:700">PAY = They paid us (Cost ↑ — clears receivable)</span>
 </div>
 
-{# Print footer #}
-<div class="print-only" style="margin-top:28px;padding-top:12px;border-top:1px solid #ddd;text-align:center;font-size:10px;color:#94a3b8">
-  Alsondos Travel & Tourism · Amman, Jordan · Supplier Statement
-  {% if filters.supplier %} · Supplier: {{ filters.supplier }}{% endif %}
-  · Generated: {{ today }}
+{% else %}
+<div class="card" style="text-align:center;padding:52px">
+  <i class="fas fa-handshake" style="font-size:42px;color:var(--border);display:block;margin-bottom:14px;opacity:.35"></i>
+  <div style="font-size:17px;font-weight:700;color:var(--navy-dk);margin-bottom:7px">Select a Supplier</div>
+  <div style="font-size:13px;color:var(--muted)">Full mutual ledger — what we owe them and what they owe us.</div>
 </div>
+{% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
+{% block extra_js %}<script>
 (function(){
-  var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  var el=document.getElementById('suppPrintDate'); if(el) el.textContent=stamp;
+  var d=new Date(),mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var ts=String(d.getDate()).padStart(2,'0')+' '+mo[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  ['supDate','supFooter'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=ts;});
 })();
-</script>
-{% endblock %}
+</script>{% endblock %}

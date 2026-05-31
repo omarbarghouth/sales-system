@@ -54,7 +54,7 @@
     <div class="form-group" style="flex:2;min-width:200px">
       <label>Company</label>
       <select name="company" onchange="this.form.submit()" style="font-weight:700">
-        <option value="">Select Company</option>
+        <option value="">— Select Company —</option>
         {% for co in companies %}
         <option value="{{ co }}" {% if co==company %}selected{% endif %}>{{ co }}</option>
         {% endfor %}
