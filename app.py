@@ -535,6 +535,22 @@ def inject_user():
         'logged_in': 'user_id' in session
     }
 
+# ── i18n — Bilingual Support (English / Arabic) ───────────────
+@app.context_processor
+def inject_i18n():
+    from translations import TRANSLATIONS
+    lang   = session.get('lang', 'en')
+    is_rtl = (lang == 'ar')
+    def t(key):
+        return TRANSLATIONS.get(lang, {}).get(key, TRANSLATIONS['en'].get(key, key))
+    return dict(t=t, lang=lang, is_rtl=is_rtl)
+
+@app.route('/set-language/<lang>')
+def set_language(lang):
+    if lang in ('en', 'ar'):
+        session['lang'] = lang
+    return redirect(request.referrer or url_for('index'))
+
 @app.template_filter('from_json')
 def from_json_filter(value):
     import json
