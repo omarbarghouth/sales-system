@@ -3,9 +3,9 @@
 
 {% block extra_css %}
 <style>
-/* Done-row styling */
-tr.row-done td { opacity:.5; text-decoration:line-through; }
-tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important; }
+/* Done-row styling — dimmed only, no strikethrough */
+tr.row-done td { opacity:.45; }
+tr.row-done td.no-strike { opacity:1 !important; }
 
 /* Mark Done button */
 .btn-mark-done {
@@ -199,11 +199,11 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
     fetch(url, {
       method: 'POST',
       body: fd,
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      redirect: 'follow'
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(function(res) {
-      if (res.ok || res.type === 'opaqueredirect' || res.redirected) {
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.ok) {
         var row = document.getElementById('row-' + dtype + '-' + saleId);
         if (row) row.classList.add('row-done');
 

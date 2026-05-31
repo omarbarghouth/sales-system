@@ -1836,6 +1836,9 @@ def mark_delivered(sale_id):
     else:
         execute_db("UPDATE sales SET outbound_status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
         log_action('UPDATE', 'sales', sale_id, 'Outbound ticket marked DONE via delivery dashboard')
+    # AJAX call → return JSON so the page doesn't reload
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True})
     flash('Ticket marked as delivered.', 'success')
     dest = url_for('deliver_tomorrow')
     if redirect_q:
