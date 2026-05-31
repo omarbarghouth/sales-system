@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-trash-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Reset Test Data</h1>
+    <h1><i class="fas fa-trash-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ t('Reset Test Data') }}</h1>
     <p>Development / Testing mode only — clears all transactional data and resets numbering</p>
   </div>
 </div>
@@ -13,22 +13,22 @@
 <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
-    <div class="kpi-label">Transactions</div>
+    <div class="kpi-label">{{ t('Transactions') }}</div>
     <div class="kpi-value navy">{{ stats.sales_count or 0 }}</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-file-invoice"></i></div>
-    <div class="kpi-label">Invoices</div>
+    <div class="kpi-label">{{ t('Invoices') }}</div>
     <div class="kpi-value navy">{{ stats.inv_count or 0 }}</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-hotel"></i></div>
-    <div class="kpi-label">Vouchers</div>
+    <div class="kpi-label">{{ t('Hotel Vouchers') }}</div>
     <div class="kpi-value navy">{{ stats.vch_count or 0 }}</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-money-bill-wave"></i></div>
-    <div class="kpi-label">Payments</div>
+    <div class="kpi-label">{{ t('Payments') }}</div>
     <div class="kpi-value navy">{{ stats.payments_count or 0 }}</div>
   </div>
 </div>
@@ -38,7 +38,7 @@
   {# ── What will be deleted ────────────────────────────────────────────────── #}
   <div class="card">
     <div class="card-header" style="background:linear-gradient(90deg,#7f1d1d,var(--red))">
-      <i class="fas fa-exclamation-triangle"></i> What Will Be Deleted
+      <i class="fas fa-exclamation-triangle"></i> {{ t('What Will Be Deleted') }}
     </div>
     <div class="card-body">
       <div style="font-size:13px;line-height:2.2;color:var(--text)">
@@ -64,7 +64,7 @@
 
   {# ── Confirmation form ───────────────────────────────────────────────────── #}
   <div class="card">
-    <div class="card-header"><i class="fas fa-shield-alt"></i> Confirm Reset</div>
+    <div class="card-header"><i class="fas fa-shield-alt"></i> {{ t('Confirm Reset') }}</div>
     <div class="card-body">
       <div style="padding:14px;background:var(--navy-lt);border-radius:var(--radius-sm);margin-bottom:18px;font-size:13px;color:var(--navy-dk);line-height:1.7">
         <strong>⚠ This action cannot be undone.</strong><br>
@@ -85,7 +85,7 @@
           </a>
           <button type="submit" class="btn btn-red" style="flex:1"
                   onclick="return confirm('FINAL WARNING: Delete all test data and reset sequences?')">
-            <i class="fas fa-trash-alt"></i> Reset All Data
+            <i class="fas fa-trash-alt"></i> {{ t('Reset All Data') }}
           </button>
         </div>
       </form>

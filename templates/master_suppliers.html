@@ -4,24 +4,24 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Suppliers</h1>
+    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ t('Suppliers') }}</h1>
     <p>Centralized supplier master data — flights, hotels, transfers, visas, insurance</p>
   </div>
 </div>
 
 <div class="grid-2 mb-6">
   <div class="card">
-    <div class="card-header"><i class="fas fa-plus-circle"></i> Add Supplier</div>
+    <div class="card-header"><i class="fas fa-plus-circle"></i> {{ t('Add Supplier') }}</div>
     <div class="card-body">
       <form method="POST">
         <input type="hidden" name="action" value="add">
         <div class="form-grid form-grid-2" style="margin-bottom:14px">
           <div class="form-group" style="grid-column:span 2">
-            <label>Supplier Name <span class="req">*</span></label>
+            <label>{{ t('Supplier Name') }} <span class="req">*</span></label>
             <input type="text" name="name" required placeholder="e.g. ROYAL JORDANIAN" style="text-transform:uppercase;font-weight:700;font-size:15px" autocomplete="off">
           </div>
           <div class="form-group">
-            <label>Service Type</label>
+            <label>{{ t('Service Type') }}</label>
             <select name="service_type">
               {% for t in ['FLIGHT','HOTEL','TRANSFER','VISA','INSURANCE','TOUR','GENERAL'] %}
               <option value="{{ t }}">{{ t }}</option>
@@ -29,27 +29,27 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Phone</label>
+            <label>{{ t('Phone') }}</label>
             <input type="text" name="phone" placeholder="+962 x xxxx xxxx">
           </div>
           <div class="form-group">
-            <label>Email</label>
+            <label>{{ t('Email') }}</label>
             <input type="email" name="email">
           </div>
           <div class="form-group">
-            <label>Notes</label>
+            <label>{{ t('Notes') }}</label>
             <input type="text" name="notes" placeholder="Account number, terms…">
           </div>
         </div>
         <button type="submit" class="btn btn-red" style="width:100%">
-          <i class="fas fa-plus"></i> Add Supplier
+          <i class="fas fa-plus"></i> {{ t('Add Supplier') }}
         </button>
       </form>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-header"><i class="fas fa-chart-pie"></i> By Service Type</div>
+    <div class="card-header"><i class="fas fa-chart-pie"></i> {{ t('By Service Type') }}</div>
     <div class="card-body">
       {% set svc_counts = {} %}
       {% for s in suppliers %}
@@ -70,12 +70,12 @@
 </div>
 
 <div class="card">
-  <div class="card-header"><i class="fas fa-table"></i> All Suppliers</div>
+  <div class="card-header"><i class="fas fa-table"></i> {{ t('All Suppliers') }}</div>
   <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>#</th><th>Supplier</th><th>Service Type</th>
-        <th>Phone</th><th>Notes</th><th>Status</th><th>Actions</th>
+        <th>{{ t('#') }}</th><th>{{ t('Supplier') }}</th><th>{{ t('Service Type') }}</th>
+        <th>{{ t('Phone') }}</th><th>{{ t('Notes') }}</th><th>{{ t('Status') }}</th><th>{{ t('Actions') }}</th>
       </tr></thead>
       <tbody>
         {% for s in suppliers %}

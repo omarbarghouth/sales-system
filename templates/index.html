@@ -34,19 +34,19 @@
 <div class="kpi-grid">
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
-    <div class="kpi-label">Total Transactions</div>
+    <div class="kpi-label">{{ t('Total Transactions') }}</div>
     <div class="kpi-value">{{ stats.total_transactions or 0 }}</div>
     <div class="kpi-sub">All time active</div>
   </div>
   <div class="kpi-box gold">
     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
-    <div class="kpi-label">Total Revenue</div>
+    <div class="kpi-label">{{ t('Total Revenue') }}</div>
     <div class="kpi-value gold">JOD {{ "%.2f"|format((stats.total_sell or 0)|float) }}</div>
     <div class="kpi-sub">Total invoiced</div>
   </div>
   <div class="kpi-box green">
     <div class="kpi-icon"><i class="fas fa-coins"></i></div>
-    <div class="kpi-label">Net Profit</div>
+    <div class="kpi-label">{{ t('Net Profit') }}</div>
     <div class="kpi-value green">JOD {{ "%.2f"|format((stats.total_profit or 0)|float) }}</div>
     <div class="kpi-sub">
       {% set sell = (stats.total_sell or 0)|float %}
@@ -56,19 +56,19 @@
   </div>
   <div class="kpi-box blue">
     <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
-    <div class="kpi-label">Collected</div>
+    <div class="kpi-label">{{ t('Collected') }}</div>
     <div class="kpi-value">JOD {{ "%.2f"|format(total_paid|float) }}</div>
     <div class="kpi-sub">Payments received</div>
   </div>
   <div class="kpi-box red">
     <div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-    <div class="kpi-label">Outstanding</div>
+    <div class="kpi-label">{{ t('Outstanding') }}</div>
     <div class="kpi-value red">JOD {{ "%.2f"|format(balance|float) }}</div>
     <div class="kpi-sub">Still owed</div>
   </div>
   <div class="kpi-box orange">
     <div class="kpi-icon"><i class="fas fa-truck"></i></div>
-    <div class="kpi-label">Deliver Tomorrow</div>
+    <div class="kpi-label">{{ t('Deliver Tomorrow') }}</div>
     <div class="kpi-value orange">{{ tomorrow|length }}</div>
     <div class="kpi-sub">
       <a href="{{ url_for('deliver_tomorrow') }}" style="color:var(--orange);font-weight:700">View List →</a>
@@ -162,10 +162,10 @@
       <table>
         <thead>
           <tr>
-            <th>Month</th>
-            <th class="text-right">Transactions</th>
-            <th class="text-right">Revenue (JOD)</th>
-            <th class="text-right">Profit (JOD)</th>
+            <th>{{ t('Month') }}</th>
+            <th class="text-right">{{ t('Transactions') }}</th>
+            <th class="text-right">{{ t('Revenue (JOD)') }}</th>
+            <th class="text-right">{{ t('Profit (JOD)') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -196,7 +196,7 @@
     </div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>#</th><th>Company</th><th class="text-right">Txns</th><th class="text-right">Revenue (JOD)</th></tr></thead>
+        <thead><tr><th>{{ t('#') }}</th><th>{{ t('Company') }}</th><th class="text-right">{{ t('Txns') }}</th><th class="text-right">{{ t('Revenue (JOD)') }}</th></tr></thead>
         <tbody>
           {% for co in top_companies %}
           <tr>
@@ -230,14 +230,14 @@
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Date</th>
-          <th>Company</th>
-          <th>Customer</th>
-          <th>Route</th>
-          <th class="text-right">Sell (JOD)</th>
-          <th class="text-right">Profit (JOD)</th>
-          <th>Status</th>
+          <th>{{ t('ID') }}</th>
+          <th>{{ t('Date') }}</th>
+          <th>{{ t('Company') }}</th>
+          <th>{{ t('Customer') }}</th>
+          <th>{{ t('Route') }}</th>
+          <th class="text-right">{{ t('Sell (JOD)') }}</th>
+          <th class="text-right">{{ t('Profit (JOD)') }}</th>
+          <th>{{ t('Status') }}</th>
           <th>
             <span style="display:flex;align-items:center;gap:4px;color:var(--gold)">
               <i class="fas fa-user-tie"></i> Agent
@@ -360,7 +360,7 @@
 </div>
 <div class="table-wrap mb-6">
   <table>
-    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Travel Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
+    <thead><tr><th>{{ t('#') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th><th>{{ t('From') }}</th><th>{{ t('To') }}</th><th>{{ t('Travel Date') }}</th><th class="text-center">{{ t('Tickets') }}</th><th>{{ t('Status') }}</th></tr></thead>
     <tbody>
       {% for t in tomorrow %}
       <tr>
@@ -388,7 +388,7 @@
   </div>
   <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Detail</th></tr></thead>
+      <thead><tr><th>{{ t('Time') }}</th><th>{{ t('User') }}</th><th>{{ t('Action') }}</th><th>{{ t('Table') }}</th><th>{{ t('Detail') }}</th></tr></thead>
       <tbody>
         {% for log in recent_logs %}
         <tr>

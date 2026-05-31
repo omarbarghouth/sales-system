@@ -8,17 +8,17 @@
     <p>Update payment details</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a>
   </div>
 </div>
 
 <div class="card" style="max-width:600px">
-  <div class="card-header"><i class="fas fa-edit"></i> Edit Payment Details</div>
+  <div class="card-header"><i class="fas fa-edit"></i> {{ t('Edit Payment Details') }}</div>
   <div class="card-body">
     <form method="POST">
       <div class="form-grid" style="gap:16px;margin-bottom:16px">
         <div class="form-group">
-          <label>Company <span style="color:var(--red)">*</span></label>
+          <label>{{ t('Company') }} <span style="color:var(--red)">*</span></label>
           <input type="text" name="company" list="company-list" required
                  value="{{ payment.company }}" style="text-transform:uppercase;font-weight:700">
           <datalist id="company-list">
@@ -26,23 +26,23 @@
           </datalist>
         </div>
         <div class="form-group">
-          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
+          <label>{{ t('Amount (JOD)') }} <span style="color:var(--red)">*</span></label>
           <input type="number" name="amount" step="0.001" min="0.001" required
                  value="{{ payment.amount }}" style="font-size:16px;font-weight:700">
         </div>
         <div class="form-group">
-          <label>Payment Date <span style="color:var(--red)">*</span></label>
+          <label>{{ t('Payment Date') }} <span style="color:var(--red)">*</span></label>
           <input type="date" name="pay_date" required value="{{ payment.pay_date }}">
         </div>
         <div class="form-group">
-          <label>Notes</label>
+          <label>{{ t('Notes') }}</label>
           <input type="text" name="notes" maxlength="200" value="{{ payment.notes or '' }}"
                  placeholder="Reference, method, remarks…">
         </div>
       </div>
       <div style="display:flex;gap:12px;justify-content:flex-end">
-        <a href="{{ url_for('payments') }}" class="btn btn-outline">Cancel</a>
-        <button type="submit" class="btn btn-red"><i class="fas fa-save"></i> Save Changes</button>
+        <a href="{{ url_for('payments') }}" class="btn btn-outline">{{ t('Cancel') }}</a>
+        <button type="submit" class="btn btn-red"><i class="fas fa-save"></i> {{ t('Save Changes') }}</button>
       </div>
     </form>
   </div>

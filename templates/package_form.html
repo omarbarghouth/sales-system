@@ -2,91 +2,91 @@
 {% block title %}New Package — ALSONDOS{% endblock %}
 {% block content %}
 <div class="page-header">
-  <div class="page-header-left"><h1><i class="fas fa-box-open"></i> New Travel Package</h1><p>Build a complete package: flight + hotel + transfer + tours</p></div>
-  <div class="page-header-actions"><a href="{{ url_for('package_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a></div>
+  <div class="page-header-left"><h1><i class="fas fa-box-open"></i> {{ t('New Travel Package') }}</h1><p>{{ t('Build a complete package') }}</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('package_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a></div>
 </div>
 <form method="POST">
   {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-info-circle" style="color:var(--gold)"></i> Package Info</div>
+    <div class="form-section-header"><i class="fas fa-info-circle" style="color:var(--gold)"></i> {{ t('Package Info') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-4">
-        <div class="form-group"><label>Company <span style="color:var(--red)">*</span></label>
+        <div class="form-group"><label>{{ t('Company') }} <span style="color:var(--red)">*</span></label>
           <input type="text" name="company" list="co-list" required style="text-transform:uppercase;font-weight:700" value="{{ sale.company if sale else '' }}">
           <datalist id="co-list">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         </div>
-        <div class="form-group"><label>Customer <span style="color:var(--red)">*</span></label>
+        <div class="form-group"><label>{{ t('Customer') }} <span style="color:var(--red)">*</span></label>
           <input type="text" name="customer" required style="text-transform:uppercase" value="{{ sale.customer if sale else '' }}"></div>
-        <div class="form-group"><label>Package Date</label><input type="date" name="package_date" value="{{ today }}"></div>
-        <div class="form-group"><label>Notes</label><input type="text" name="notes" placeholder="Package details, references…"></div>
+        <div class="form-group"><label>{{ t('Package Date') }}</label><input type="date" name="package_date" value="{{ today }}"></div>
+        <div class="form-group"><label>{{ t('Notes') }}</label><input type="text" name="notes" placeholder="Package details, references…"></div>
       </div>
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-plane" style="color:var(--gold)"></i> Flight Details</div>
+    <div class="form-section-header"><i class="fas fa-plane" style="color:var(--gold)"></i> {{ t('Flight Details') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>Airline</label><input type="text" name="airline" placeholder="e.g. Royal Jordanian"></div>
-        <div class="form-group"><label>Flight Route</label><input type="text" name="flight_route" placeholder="AMM → DXB → AMM" style="text-transform:uppercase"></div>
-        <div class="form-group"><label>PNR</label><input type="text" name="pnr" placeholder="Booking reference" style="text-transform:uppercase"></div>
-        <div class="form-group"><label>Departure Date</label><input type="date" name="departure_date" value="{{ sale.travel_date if sale else '' }}"></div>
-        <div class="form-group"><label>Return Date</label><input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}"></div>
-        <div class="form-group"><label>Baggage</label><input type="text" name="baggage" placeholder="e.g. 23kg + 7kg carry-on"></div>
+        <div class="form-group"><label>{{ t('Airline') }}</label><input type="text" name="airline" placeholder="e.g. Royal Jordanian"></div>
+        <div class="form-group"><label>{{ t('Flight Route') }}</label><input type="text" name="flight_route" placeholder="AMM → DXB → AMM" style="text-transform:uppercase"></div>
+        <div class="form-group"><label>{{ t('PNR') }}</label><input type="text" name="pnr" placeholder="Booking reference" style="text-transform:uppercase"></div>
+        <div class="form-group"><label>{{ t('Departure Date') }}</label><input type="date" name="departure_date" value="{{ sale.travel_date if sale else '' }}"></div>
+        <div class="form-group"><label>{{ t('Return Date') }}</label><input type="date" name="return_date" value="{{ sale.return_date if sale else '' }}"></div>
+        <div class="form-group"><label>{{ t('Baggage') }}</label><input type="text" name="baggage" placeholder="e.g. 23kg + 7kg carry-on"></div>
       </div>
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> Hotel Details</div>
+    <div class="form-section-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> {{ t('Hotel Details') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>Hotel Name</label><input type="text" name="hotel_name" placeholder="Hotel name"></div>
-        <div class="form-group"><label>Room Type</label>
+        <div class="form-group"><label>{{ t('Hotel Name') }}</label><input type="text" name="hotel_name" placeholder="Hotel name"></div>
+        <div class="form-group"><label>{{ t('Room Type') }}</label>
           <select name="room_type"><option value="">Select…</option><option>Standard</option><option>Deluxe</option><option>Superior</option><option>Suite</option></select></div>
-        <div class="form-group"><label>Meal Plan</label>
+        <div class="form-group"><label>{{ t('Meal Plan') }}</label>
           <select name="meal_plan"><option value="">Select…</option><option>Bed & Breakfast</option><option>Half Board</option><option>Full Board</option><option>All Inclusive</option></select></div>
-        <div class="form-group"><label>Check-In</label><input type="date" name="checkin_date" id="ci" onchange="calcNights()"></div>
-        <div class="form-group"><label>Check-Out</label><input type="date" name="checkout_date" id="co" onchange="calcNights()"></div>
-        <div class="form-group"><label>Nights</label><input type="number" name="nights" id="nights" min="0" value="0" readonly style="background:var(--light)"></div>
+        <div class="form-group"><label>{{ t('Check-In') }}</label><input type="date" name="checkin_date" id="ci" onchange="calcNights()"></div>
+        <div class="form-group"><label>{{ t('Check-Out') }}</label><input type="date" name="checkout_date" id="co" onchange="calcNights()"></div>
+        <div class="form-group"><label>{{ t('Nights') }}</label><input type="number" name="nights" id="nights" min="0" value="0" readonly style="background:var(--light)"></div>
       </div>
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-car" style="color:var(--gold)"></i> Transfer</div>
+    <div class="form-section-header"><i class="fas fa-car" style="color:var(--gold)"></i> {{ t('Transfer') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>Transfer Type</label>
+        <div class="form-group"><label>{{ t('Transfer Type') }}</label>
           <select name="transfer_type"><option value="">None</option><option>Airport Pickup</option><option>Airport Drop-off</option><option>Both Ways</option></select></div>
-        <div class="form-group"><label>Pickup Time</label><input type="time" name="pickup_time"></div>
-        <div class="form-group"><label>Vehicle</label>
+        <div class="form-group"><label>{{ t('Pickup Time') }}</label><input type="time" name="pickup_time"></div>
+        <div class="form-group"><label>{{ t('Vehicle Type') }}</label>
           <select name="vehicle_type"><option value="">Select…</option><option>Sedan</option><option>SUV</option><option>Van</option><option>Minibus</option></select></div>
       </div>
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-map-marked-alt" style="color:var(--gold)"></i> Tours</div>
+    <div class="form-section-header"><i class="fas fa-map-marked-alt" style="color:var(--gold)"></i> {{ t('Tours') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>Tour Name</label><input type="text" name="tour_name" placeholder="e.g. Petra Day Tour"></div>
-        <div class="form-group"><label>Tour Date</label><input type="date" name="tour_date"></div>
-        <div class="form-group"><label>Included</label>
+        <div class="form-group"><label>{{ t('Tour Name') }}</label><input type="text" name="tour_name" placeholder="e.g. Petra Day Tour"></div>
+        <div class="form-group"><label>{{ t('Tour Date') }}</label><input type="date" name="tour_date"></div>
+        <div class="form-group"><label>{{ t('Included') }}</label>
           <div style="padding-top:8px"><label style="text-transform:none;font-weight:400;display:flex;align-items:center;gap:8px"><input type="checkbox" name="tour_included"> Tour is included in package price</label></div>
         </div>
       </div>
     </div>
   </div>
   <div class="form-section">
-    <div class="form-section-header"><i class="fas fa-coins" style="color:var(--gold)"></i> Pricing (JOD)</div>
+    <div class="form-section-header"><i class="fas fa-coins" style="color:var(--gold)"></i> {{ t('Pricing (JOD)') }}</div>
     <div class="form-section-body">
       <div class="form-grid form-grid-3">
-        <div class="form-group"><label>Net Cost (JOD)</label><input type="number" name="net_cost" step="0.001" min="0" id="net-c" oninput="calcProfit()" value="{{ sale.net if sale else '' }}" style="font-size:16px;font-weight:700"></div>
-        <div class="form-group"><label>Sell Price (JOD)</label><input type="number" name="sell_price" step="0.001" min="0" id="sell-p" oninput="calcProfit()" value="{{ sale.sell if sale else '' }}" style="font-size:16px;font-weight:700"></div>
-        <div class="form-group"><label>Profit</label><div class="profit-display" id="pkg-profit">JOD 0.000</div></div>
+        <div class="form-group"><label>{{ t('Net Cost (JOD)') }}</label><input type="number" name="net_cost" step="0.001" min="0" id="net-c" oninput="calcProfit()" value="{{ sale.net if sale else '' }}" style="font-size:16px;font-weight:700"></div>
+        <div class="form-group"><label>{{ t('Sell Price (JOD)') }}</label><input type="number" name="sell_price" step="0.001" min="0" id="sell-p" oninput="calcProfit()" value="{{ sale.sell if sale else '' }}" style="font-size:16px;font-weight:700"></div>
+        <div class="form-group"><label>{{ t('Profit') }}</label><div class="profit-display" id="pkg-profit">JOD 0.000</div></div>
       </div>
     </div>
   </div>
   <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:4px">
-    <a href="{{ url_for('package_list') }}" class="btn btn-outline">Cancel</a>
-    <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> Create Package</button>
+    <a href="{{ url_for('package_list') }}" class="btn btn-outline">{{ t('Cancel') }}</a>
+    <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ t('Create Package') }}</button>
   </div>
 </form>
 {% endblock %}

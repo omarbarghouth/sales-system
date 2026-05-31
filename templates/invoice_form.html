@@ -4,11 +4,11 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
-    <p>{{ 'Update invoice details' if inv else 'Create and connect an invoice to a transaction' }}</p>
+    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ (t('Edit Invoice') + ' ' + inv.invoice_number) if inv else t('New Invoice') }}</h1>
+    <p>{{ t('Update invoice details') if inv else t('Create and connect an invoice') }}</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a>
   </div>
 </div>
 
@@ -17,7 +17,7 @@
   {# ── LEFT: Invoice Form ───────────────────────────────── #}
   <div>
     <div class="card">
-      <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
+      <div class="card-header"><i class="fas fa-edit"></i> {{ t('Invoice Details') }}</div>
       <div class="card-body">
         <form method="POST" id="invoiceForm">
           {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
@@ -26,7 +26,7 @@
 
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
             <div class="form-group">
-              <label>Company / Client <span class="req">*</span></label>
+              <label>{{ t('Company / Client') }} <span class="req">*</span></label>
               <input type="text" name="company" id="companyInput" required
                      style="text-transform:uppercase;font-weight:700"
                      value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
@@ -37,30 +37,30 @@
               <small>Select to auto-load related transactions</small>
             </div>
             <div class="form-group">
-              <label>Customer Name <span class="req">*</span></label>
+              <label>{{ t('Customer Name') }} <span class="req">*</span></label>
               <input type="text" name="customer" id="customerInput" required
                      style="text-transform:uppercase"
                      value="{{ inv.customer if inv else (sale.customer if sale else '') }}">
             </div>
             <div class="form-group">
-              <label>Invoice Date <span class="req">*</span></label>
+              <label>{{ t('Invoice Date') }} <span class="req">*</span></label>
               <input type="date" name="invoice_date" required
                      value="{{ inv.invoice_date if inv else today }}">
             </div>
             <div class="form-group">
-              <label>Due Date</label>
+              <label>{{ t('Due Date') }}</label>
               <input type="date" name="due_date"
                      value="{{ inv.due_date if inv else '' }}">
             </div>
             <div class="form-group">
-              <label>Amount (JOD) <span class="req">*</span></label>
+              <label>{{ t('Amount (JOD)') }} <span class="req">*</span></label>
               <input type="number" name="amount" step="0.001" min="0" required
                      id="inv-amount" oninput="calcTotal()"
                      style="font-size:16px;font-weight:700"
                      value="{{ inv.amount if inv else (sale.sell if sale else '') }}">
             </div>
             <div class="form-group">
-              <label>Discount (JOD)</label>
+              <label>{{ t('Discount (JOD)') }}</label>
               <input type="number" name="discount" step="0.001" min="0"
                      id="inv-discount" oninput="calcTotal()"
                      value="{{ inv.discount if inv else 0 }}">
@@ -76,7 +76,7 @@
           </div>
 
           <div class="form-group" style="margin-bottom:14px">
-            <label>Service Description <span class="req">*</span></label>
+            <label>{{ t('Service Description') }} <span class="req">*</span></label>
             <textarea name="service_desc" id="serviceDesc" rows="5" required
                       placeholder="Service details auto-filled from transaction…">{{ inv.service_desc if inv else (auto_desc if auto_desc else '') }}</textarea>
             <small>Auto-filled from transaction. Edit if needed.</small>
@@ -84,7 +84,7 @@
 
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
             <div class="form-group">
-              <label>Status</label>
+              <label>{{ t('Status') }}</label>
               <select name="status">
                 <option value="UNPAID"  {% if not inv or inv.status=='UNPAID'  %}selected{% endif %}>Unpaid</option>
                 <option value="PARTIAL" {% if inv and inv.status=='PARTIAL' %}selected{% endif %}>Partial</option>
@@ -92,16 +92,16 @@
               </select>
             </div>
             <div class="form-group">
-              <label>Notes</label>
+              <label>{{ t('Notes') }}</label>
               <input type="text" name="notes" placeholder="Additional notes or terms"
                      value="{{ inv.notes if inv else '' }}">
             </div>
           </div>
 
           <div style="display:flex;gap:10px;justify-content:flex-end">
-            <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
+            <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">{{ t('Cancel') }}</a>
             <button type="submit" class="btn btn-red">
-              <i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice
+              <i class="fas fa-save"></i> {{ t('Update') if inv else t('Create') }} {{ t('Invoice') }}
             </button>
           </div>
         </form>
@@ -113,12 +113,12 @@
   <div>
     <div class="card">
       <div class="card-header">
-        <i class="fas fa-search"></i> Transaction Lookup
+        <i class="fas fa-search"></i> {{ t('Transaction Lookup') }}
         <span style="font-size:11px;font-weight:400;opacity:.65;margin-left:4px">Select a transaction to auto-fill</span>
       </div>
       <div style="padding:13px 16px;background:var(--navy-lt);border-bottom:1px solid var(--border-lt)">
         <div class="form-group" style="margin:0">
-          <label>Search by Company</label>
+          <label>{{ t('Search by Company') }}</label>
           <input type="text" id="companySearch" list="co-list-search"
                  placeholder="Type company name to load transactions…"
                  value="{{ company_filter }}"
@@ -134,8 +134,8 @@
         {% if company_transactions %}
         <table id="txnTable">
           <thead><tr>
-            <th>Date</th><th>Customer</th><th>Route</th>
-            <th class="text-right">Sell (JOD)</th><th>Status</th><th>Use</th>
+            <th>{{ t('Date') }}</th><th>{{ t('Customer') }}</th><th>{{ t('Route') }}</th>
+            <th class="text-right">{{ t('Sell (JOD)') }}</th><th>{{ t('Status') }}</th><th>{{ t('Use') }}</th>
           </tr></thead>
           <tbody id="txnBody">
             {% for t in company_transactions %}

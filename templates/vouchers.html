@@ -7,7 +7,7 @@
 </div>
 <div class="table-wrap">
   <table>
-    <thead><tr><th>Voucher #</th><th>Guest</th><th>Hotel</th><th>Room</th><th>Check-In</th><th>Check-Out</th><th>Nights</th>{% if is_admin %}<th>Agent</th>{% endif %}<th>Actions</th></tr></thead>
+    <thead><tr><th>{{ t('Voucher #') }}</th><th>{{ t('Guest') }}</th><th>{{ t('Hotel') }}</th><th>{{ t('Room') }}</th><th>{{ t('Check-In') }}</th><th>{{ t('Check-Out') }}</th><th>{{ t('Nights') }}</th>{% if is_admin %}<th>{{ t('Agent') }}</th>{% endif %}<th>{{ t('Actions') }}</th></tr></thead>
     <tbody>
       {% for v in vouchers %}
       <tr>

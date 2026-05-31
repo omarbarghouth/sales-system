@@ -28,13 +28,13 @@
 <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
   <div class="kpi-box gold">
     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
-    <div class="kpi-label">My Revenue</div>
+    <div class="kpi-label">{{ t('My Revenue') }}</div>
     <div class="kpi-value gold">JOD {{ "%.2f"|format((my_stats.total_sell or 0)|float) }}</div>
     <div class="kpi-sub">Total invoiced</div>
   </div>
   <div class="kpi-box green">
     <div class="kpi-icon"><i class="fas fa-coins"></i></div>
-    <div class="kpi-label">My Profit</div>
+    <div class="kpi-label">{{ t('My Profit') }}</div>
     <div class="kpi-value green">JOD {{ "%.2f"|format((my_stats.total_profit or 0)|float) }}</div>
     <div class="kpi-sub">Net profit earned</div>
   </div>
@@ -46,13 +46,13 @@
   </div>
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
-    <div class="kpi-label">My Transactions</div>
+    <div class="kpi-label">{{ t('My Transactions') }}</div>
     <div class="kpi-value">{{ my_stats.total_txns or 0 }}</div>
     <div class="kpi-sub"><a href="{{ url_for('my_sales') }}" style="color:var(--navy);font-weight:700">View all →</a></div>
   </div>
   <div class="kpi-box blue">
     <div class="kpi-icon"><i class="fas fa-plane-departure"></i></div>
-    <div class="kpi-label">Upcoming</div>
+    <div class="kpi-label">{{ t('Upcoming') }}</div>
     <div class="kpi-value">{{ upcoming|length }}</div>
     <div class="kpi-sub">Departures ahead</div>
   </div>
@@ -127,7 +127,7 @@
     <div class="card-header"><i class="fas fa-exchange-alt"></i> My Recent Transactions <a href="{{ url_for('my_sales') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Date</th><th>Company</th><th>Customer</th><th>Route</th><th class="text-right">Sell (JOD)</th><th>Status</th></tr></thead>
+        <thead><tr><th>{{ t('Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th><th>{{ t('Route') }}</th><th class="text-right">{{ t('Sell (JOD)') }}</th><th>{{ t('Status') }}</th></tr></thead>
         <tbody>
           {% for s in recent %}
           <tr>
@@ -150,7 +150,7 @@
     {% if upcoming %}
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Date</th><th>Company</th><th>Customer</th><th>Route</th></tr></thead>
+        <thead><tr><th>{{ t('Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th><th>{{ t('Route') }}</th></tr></thead>
         <tbody>
           {% for s in upcoming %}
           <tr>
@@ -175,7 +175,7 @@
     <div class="card-header"><i class="fas fa-file-invoice"></i> My Recent Invoices <a href="{{ url_for('invoice_list') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Invoice #</th><th>Customer</th><th class="text-right">Total</th><th>Status</th></tr></thead>
+        <thead><tr><th>{{ t('Invoice #') }}</th><th>{{ t('Customer') }}</th><th class="text-right">{{ t('Total') }}</th><th>{{ t('Status') }}</th></tr></thead>
         <tbody>
           {% for inv in my_invoices %}
           <tr>
@@ -195,7 +195,7 @@
     <div class="card-header"><i class="fas fa-hotel" style="color:var(--gold)"></i> My Recent Vouchers <a href="{{ url_for('voucher_list') }}" style="margin-left:auto">View All →</a></div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Voucher #</th><th>Guest</th><th>Hotel</th><th>Check-In</th></tr></thead>
+        <thead><tr><th>{{ t('Voucher #') }}</th><th>{{ t('Guest') }}</th><th>{{ t('Hotel') }}</th><th>{{ t('Check-In') }}</th></tr></thead>
         <tbody>
           {% for v in my_vouchers %}
           <tr>

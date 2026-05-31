@@ -8,8 +8,8 @@
     <p>{{ vch.hotel_name or 'Package Voucher' }} &nbsp;·&nbsp; Created by {{ vch.created_by }}</p>
   </div>
   <div class="page-header-actions">
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Voucher</button>
-    <a href="{{ url_for('voucher_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> {{ t('Print Voucher') }}</button>
+    <a href="{{ url_for('voucher_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a>
   </div>
 </div>
 

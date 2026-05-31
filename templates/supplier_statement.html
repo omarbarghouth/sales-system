@@ -22,7 +22,7 @@
 {# ── Header ────────────────────────────────────────────────── #}
 <div class="page-header no-print">
   <div class="page-header-left">
-    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Supplier Statement</h1>
+    <h1><i class="fas fa-handshake" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ t('Supplier Statement') }}</h1>
     <p>Mutual ledger — payables, receivables &amp; running balance</p>
   </div>
   <div class="page-header-actions">
@@ -32,7 +32,7 @@
     </a>
     {% endif %}
     {% if supplier and ledger %}
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> {{ t('Print / PDF') }}</button>
     {% endif %}
   </div>
 </div>
@@ -41,26 +41,26 @@
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%">
     <div class="form-group" style="flex:2;min-width:200px">
-      <label>Supplier / Company</label>
+      <label>{{ t('Supplier / Company') }}</label>
       <select name="supplier" onchange="this.form.submit()" style="font-weight:700">
-        <option value="">— Select —</option>
+        <option value="">{{ t('Select') }}</option>
         {% for s in all_suppliers %}
         <option value="{{ s }}" {% if s==supplier %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="form-group" style="min-width:120px">
-      <label>From</label>
+      <label>{{ t('From') }}</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
     <div class="form-group" style="min-width:120px">
-      <label>To</label>
+      <label>{{ t('To') }}</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
     <div class="form-group" style="min-width:110px">
-      <label>Service</label>
+      <label>{{ t('Service') }}</label>
       <select name="svc_type" onchange="this.form.submit()">
-        <option value="">All</option>
+        <option value="">{{ t('All') }}</option>
         {% for s in ['FLIGHT','HOTEL','VISA','INSURANCE','TRANSFER','TOUR'] %}
         <option value="{{ s }}" {% if filters.svc_type==s %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
@@ -75,19 +75,19 @@
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px" class="no-print">
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-arrow-circle-up"></i></div>
-    <div class="kpi-label">Bought from Them</div>
+    <div class="kpi-label">{{ t('Bought from Them') }}</div>
     <div class="kpi-value red">{{ "%.3f"|format(summary.total_purchased) }}</div>
     <div class="kpi-sub">Payable · CR</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-arrow-circle-down"></i></div>
-    <div class="kpi-label">Sold to Them</div>
+    <div class="kpi-label">{{ t('Sold to Them') }}</div>
     <div class="kpi-value green">{{ "%.3f"|format(summary.total_sold_to) }}</div>
     <div class="kpi-sub">Receivable · DR</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--navy)"><i class="fas fa-exchange-alt"></i></div>
-    <div class="kpi-label">Payments</div>
+    <div class="kpi-label">{{ t('Payments') }}</div>
     <div class="kpi-value navy" style="font-size:13px">
       ↑ {{ "%.3f"|format(summary.total_paid_out) }}<br>
       <span style="font-size:11px;color:var(--muted)">↓ {{ "%.3f"|format(summary.total_received) }}</span>
@@ -96,7 +96,7 @@
   </div>
   <div class="kpi-box" style="border:2px solid {% if summary.status=='RECEIVABLE' %}var(--green){% elif summary.status=='PAYABLE' %}var(--red){% else %}var(--gold){% endif %}">
     <div class="kpi-icon"><i class="fas fa-balance-scale"></i></div>
-    <div class="kpi-label">Net Balance</div>
+    <div class="kpi-label">{{ t('Net Balance') }}</div>
     <div class="kpi-value {% if summary.status=='RECEIVABLE' %}green{% elif summary.status=='PAYABLE' %}red{% else %}gold{% endif %}" style="font-size:18px">
       {{ "%.3f"|format(summary.net_balance|abs) }}
     </div>
@@ -182,12 +182,12 @@
       <thead>
         <tr style="background:#0f1d35">
           {% set TH = 'padding:8px 9px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.7);white-space:nowrap' %}
-          <th style="{{ TH }};width:88px">Purchase Date</th>
-          <th style="{{ TH }};width:80px">Ref</th>
-          <th style="{{ TH }};min-width:110px">Passenger</th>
-          <th style="{{ TH }};width:110px">From → To</th>
-          <th style="{{ TH }};width:88px;color:#93c5fd">Travel Date</th>
-          <th style="{{ TH }};width:58px">Svc</th>
+          <th style="{{ TH }};width:88px">{{ t('Purchase Date') }}</th>
+          <th style="{{ TH }};width:80px">{{ t('Ref') }}</th>
+          <th style="{{ TH }};min-width:110px">{{ t('Passenger') }}</th>
+          <th style="{{ TH }};width:110px">{{ t('From → To') }}</th>
+          <th style="{{ TH }};width:88px;color:#93c5fd">{{ t('Travel Date') }}</th>
+          <th style="{{ TH }};width:58px">{{ t('Svc') }}</th>
           <th style="{{ TH }};width:90px;text-align:right;color:#fca5a5">Cost (JOD)<br><span style="font-size:7px;opacity:.55;font-weight:400">We owe ↑</span></th>
           <th style="{{ TH }};width:90px;text-align:right;color:#86efac">Paid (JOD)<br><span style="font-size:7px;opacity:.55;font-weight:400">Reduces debt ↓</span></th>
           <th style="{{ TH }};width:98px;text-align:right;color:#C8A84B">Balance (JOD)</th>
@@ -324,38 +324,3 @@
 
   {# ── Signature lines ───────────────────────────────────────── #}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 28px;border-top:1px solid #e2e8f0">
-    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
-    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel &amp; Tourism</div></div>
-    <div><div style="height:1px;background:#cbd5e1;margin-bottom:5px"></div>
-    <div style="font-size:10.5px;color:#94a3b8;text-align:center">Acknowledged — {{ supplier }} · Date: ___________</div></div>
-  </div>
-  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 22px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8">
-    <span>Alsondos Travel &amp; Tourism · Amman, Jordan</span>
-    <span id="supFooter">{{ today }}</span>
-  </div>
-</div>
-
-{# ── Legend ────────────────────────────────────────────────── #}
-<div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;align-items:center">
-  <span style="padding:3px 11px;border-radius:20px;background:#fee2e2;color:#7f1d1d;font-weight:700">PUR / RTN / HOT = Purchase (Cost ↑ — we owe them more)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#fef9c3;color:#78350f;font-weight:700">SPY = We paid them (Paid ↑ — reduces our debt)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#dcfce7;color:#14532d;font-weight:700">TXN = They bought from us (Paid ↑ — they owe us)</span>
-  <span style="padding:3px 11px;border-radius:20px;background:#e8eef8;color:#1B3A6B;font-weight:700">PAY = They paid us (Cost ↑ — clears receivable)</span>
-</div>
-
-{% else %}
-<div class="card" style="text-align:center;padding:52px">
-  <i class="fas fa-handshake" style="font-size:42px;color:var(--border);display:block;margin-bottom:14px;opacity:.35"></i>
-  <div style="font-size:17px;font-weight:700;color:var(--navy-dk);margin-bottom:7px">Select a Supplier</div>
-  <div style="font-size:13px;color:var(--muted)">Full mutual ledger — what we owe them and what they owe us.</div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block extra_js %}<script>
-(function(){
-  var d=new Date(),mo=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var ts=String(d.getDate()).padStart(2,'0')+' '+mo[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  ['supDate','supFooter'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=ts;});
-})();
-</script>{% endblock %}
