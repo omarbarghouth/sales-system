@@ -7,7 +7,7 @@
 </div>
 <div class="table-wrap">
   <table>
-    <thead><tr><th>{{ t('Pkg #') }}</th><th>{{ t('Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th><th>{{ t('Flight') }}</th><th>{{ t('Hotel') }}</th><th class="text-right">{{ t('Sell (JOD)') }}</th><th class="text-right">{{ t('Profit') }}</th>{% if is_admin %}<th>{{ t('Agent') }}</th>{% endif %}<th>{{ t('Actions') }}</th></tr></thead>
+    <thead><tr><th>Pkg #</th><th>Date</th><th>Company</th><th>Customer</th><th>Flight</th><th>Hotel</th><th class="text-right">Sell (JOD)</th><th class="text-right">Profit</th>{% if is_admin %}<th>Agent</th>{% endif %}<th>Actions</th></tr></thead>
     <tbody>
       {% for p in pkgs %}
       <tr>

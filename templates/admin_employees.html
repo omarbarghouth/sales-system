@@ -18,13 +18,13 @@
 </div>
 
 <div class="card">
-  <div class="card-header"><i class="fas fa-table"></i> {{ t('Employee Performance') }}</div>
+  <div class="card-header"><i class="fas fa-table"></i> Employee Performance</div>
   <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>{{ t('#') }}</th><th>{{ t('Employee') }}</th><th>{{ t('Role') }}</th><th class="text-right">{{ t('Transactions') }}</th>
-        <th class="text-right">{{ t('Revenue (JOD)') }}</th><th class="text-right">{{ t('Profit (JOD)') }}</th>
-        <th class="text-right">{{ t('Commission') }}</th><th>{{ t('Rate %') }}</th><th>{{ t('Actions') }}</th>
+        <th>#</th><th>Employee</th><th>Role</th><th class="text-right">Transactions</th>
+        <th class="text-right">Revenue (JOD)</th><th class="text-right">Profit (JOD)</th>
+        <th class="text-right">Commission</th><th>Rate %</th><th>Actions</th>
       </tr></thead>
       <tbody>
         {% for e in employees %}

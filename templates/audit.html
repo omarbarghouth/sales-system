@@ -4,13 +4,13 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>📜 {{ t('Audit Log') }}</h1>
+  <h1>📜 Audit Log</h1>
   <p>Complete history of all actions performed in the system</p>
 </div>
 
 <form method="GET" class="filter-bar">
   <div class="form-group">
-    <label>{{ t('Action') }}</label>
+    <label>Action</label>
     <select name="action">
       <option value="">All Actions</option>
       {% for a in ['CREATE','UPDATE','DELETE','LOGIN','LOGIN_DENIED','LOGOUT','EXPORT','RESET','ARCHIVE','RESTORE'] %}
@@ -19,7 +19,7 @@
     </select>
   </div>
   <div class="form-group">
-    <label>{{ t('Table') }}</label>
+    <label>Table</label>
     <select name="table_name">
       <option value="">All Tables</option>
       {% for t in ['sales','payments','users'] %}
@@ -28,18 +28,18 @@
     </select>
   </div>
   <div class="form-group">
-    <label>{{ t('Username') }}</label>
+    <label>Username</label>
     <input type="text" name="username" value="{{ filters.username }}" placeholder="Search user...">
   </div>
   <div class="form-group">
-    <label>{{ t('Date From') }}</label>
+    <label>Date From</label>
     <input type="date" name="date_from" value="{{ filters.date_from }}">
   </div>
   <div class="form-group">
-    <label>{{ t('Date To') }}</label>
+    <label>Date To</label>
     <input type="date" name="date_to" value="{{ filters.date_to }}">
   </div>
-  <button type="submit" class="btn btn-primary">🔍 {{ t('Filter') }}</button>
+  <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('audit_log') }}" class="btn btn-print">✕ Clear</a>
 </form>
 
@@ -47,14 +47,14 @@
   <table>
     <thead>
       <tr>
-        <th>{{ t('#') }}</th>
-        <th>{{ t('Timestamp') }}</th>
-        <th>{{ t('User') }}</th>
-        <th>{{ t('Action') }}</th>
-        <th>{{ t('Table') }}</th>
-        <th>{{ t('Record ID') }}</th>
-        <th>{{ t('Detail') }}</th>
-        <th>{{ t('IP Address') }}</th>
+        <th>#</th>
+        <th>Timestamp</th>
+        <th>User</th>
+        <th>Action</th>
+        <th>Table</th>
+        <th>Record ID</th>
+        <th>Detail</th>
+        <th>IP Address</th>
       </tr>
     </thead>
     <tbody>
@@ -78,4 +78,11 @@
         <td style="font-size:11px;color:var(--muted);font-family:monospace">{{ log.ip_address or '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="8
+      <tr><td colspan="8" class="text-center text-muted" style="padding:40px">No audit logs found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{{ render_pagination(page, total_pages, total_rows, 'audit_log', filters) }}
+{% endblock %}

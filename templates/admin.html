@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>🗄️ {{ t('Admin Database Viewer') }}</h1>
+  <h1>🗄️ Admin — Database Viewer</h1>
   <p>View and manage all raw data &nbsp;|&nbsp; {{ today }}</p>
 </div>
 
@@ -18,7 +18,7 @@
 
 <div class="filter-bar" style="margin-bottom:12px">
   <div class="form-group">
-    <label>{{ t('Table') }}</label>
+    <label>Table</label>
     <div style="display:flex;gap:8px">
       <a href="{{ url_for('admin', table='sales') }}" class="btn {% if table=='sales' %}btn-primary{% else %}btn-print{% endif %}">📋 Sales ({{ db_stats.sales_count }})</a>
       <a href="{{ url_for('admin', table='payments') }}" class="btn {% if table=='payments' %}btn-primary{% else %}btn-print{% endif %}">💳 Payments ({{ db_stats.payments_count }})</a>
@@ -29,7 +29,7 @@
 <form method="GET" class="filter-bar">
   <input type="hidden" name="table" value="{{ table }}">
   <div class="form-group">
-    <label>{{ t('Company') }}</label>
+    <label>Company</label>
     <select name="company">
       <option value="">All</option>
       {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
@@ -37,7 +37,7 @@
   </div>
   {% if table=='sales' %}
   <div class="form-group">
-    <label>{{ t('Status') }}</label>
+    <label>Status</label>
     <select name="status">
       <option value="">All</option>
       <option value="DONE"      {% if filters.status=='DONE'      %}selected{% endif %}>Done</option>
@@ -48,7 +48,7 @@
   {% endif %}
   <div class="form-group"><label>Date From</label><input type="date" name="date_from" value="{{ filters.date_from }}"></div>
   <div class="form-group"><label>Date To</label><input type="date" name="date_to" value="{{ filters.date_to }}"></div>
-  <button type="submit" class="btn btn-primary">🔍 {{ t('Filter') }}</button>
+  <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('admin', table=table) }}" class="btn btn-print">✕ Clear</a>
   <a href="{{ url_for('export_excel') }}" class="btn btn-success">⬇️ Export Excel</a>
   <a href="{{ url_for('reset_data') }}" class="btn btn-danger" style="margin-left:auto">🗑️ Reset All Data</a>
@@ -63,10 +63,10 @@
   <table>
     <thead>
       <tr>
-        <th>{{ t('ID') }}</th><th>{{ t('Sale Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th><th>{{ t('Route') }}</th>
-        <th>{{ t('Via') }}</th><th>{{ t('Type') }}</th><th>{{ t('Buy From') }}</th><th class="text-center">{{ t('Tix') }}</th>
-        <th>{{ t('Travel Date') }}</th><th class="text-right">{{ t('Net') }}</th><th class="text-right">{{ t('Sell') }}</th>
-        <th class="text-right">{{ t('Profit') }}</th><th>{{ t('Status') }}</th><th>{{ t('Remarks') }}</th><th class="no-print">{{ t('Actions') }}</th>
+        <th>ID</th><th>Sale Date</th><th>Company</th><th>Customer</th><th>Route</th>
+        <th>Via</th><th>Type</th><th>Buy From</th><th class="text-center">Tkts</th>
+        <th>Travel Date</th><th class="text-right">Net</th><th class="text-right">Sell</th>
+        <th class="text-right">Profit</th><th>Status</th><th>Remarks</th><th class="no-print">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -124,7 +124,7 @@
 <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>{{ t('ID') }}</th><th>{{ t('Pay Date') }}</th><th>{{ t('Company') }}</th><th class="text-right">{{ t('Amount') }}</th><th>{{ t('Notes') }}</th><th>{{ t('Created') }}</th><th class="no-print">{{ t('Actions') }}</th></tr>
+      <tr><th>ID</th><th>Pay Date</th><th>Company</th><th class="text-right">Amount</th><th>Notes</th><th>Created</th><th class="no-print">Actions</th></tr>
     </thead>
     <tbody>
       {% for p in payments %}

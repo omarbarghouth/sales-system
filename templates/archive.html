@@ -4,34 +4,34 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>📦 {{ t('Archive') }}</h1>
+  <h1>📦 Archive</h1>
   <p>Historical data — safely stored, fully viewable, restorable at any time &nbsp;|&nbsp; {{ today }}</p>
 </div>
 
 <!-- Archive Stats -->
 <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
   <div class="kpi-box orange">
-    <div class="kpi-label">{{ t('Archived Sales') }}</div>
+    <div class="kpi-label">Archived Sales</div>
     <div class="kpi-value orange">{{ archive_stats.sales_count }}</div>
     <div class="kpi-sub">Historical records</div>
   </div>
   <div class="kpi-box orange">
-    <div class="kpi-label">{{ t('Archived Payments') }}</div>
+    <div class="kpi-label">Archived Payments</div>
     <div class="kpi-value orange">{{ archive_stats.payments_count }}</div>
     <div class="kpi-sub">Historical records</div>
   </div>
   <div class="kpi-box gold">
-    <div class="kpi-label">{{ t('Archived Revenue') }}</div>
+    <div class="kpi-label">Archived Revenue</div>
     <div class="kpi-value gold">JOD {{ "%.2f"|format(archive_stats.total_sell or 0) }}</div>
     <div class="kpi-sub">Historical total</div>
   </div>
   <div class="kpi-box green">
-    <div class="kpi-label">{{ t('Archived Profit') }}</div>
+    <div class="kpi-label">Archived Profit</div>
     <div class="kpi-value green">JOD {{ "%.2f"|format(archive_stats.total_profit or 0) }}</div>
     <div class="kpi-sub">Historical total</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-label">{{ t('Archived Paid') }}</div>
+    <div class="kpi-label">Archived Paid</div>
     <div class="kpi-value">JOD {{ "%.2f"|format(archive_stats.total_paid or 0) }}</div>
     <div class="kpi-sub">Historical total</div>
   </div>
@@ -62,7 +62,7 @@
 <!-- Table Switcher -->
 <div class="filter-bar" style="margin-bottom:12px">
   <div class="form-group">
-    <label>{{ t('Viewing') }}</label>
+    <label>Viewing</label>
     <div style="display:flex;gap:8px">
       <a href="{{ url_for('archive', table='sales') }}"
          class="btn {% if table=='sales' %}btn-primary{% else %}btn-print{% endif %}">
@@ -80,7 +80,7 @@
 <form method="GET" class="filter-bar">
   <input type="hidden" name="table" value="{{ table }}">
   <div class="form-group">
-    <label>{{ t('Company') }}</label>
+    <label>Company</label>
     <select name="company">
       <option value="">All Companies</option>
       {% for co in companies %}
@@ -89,14 +89,14 @@
     </select>
   </div>
   <div class="form-group">
-    <label>{{ t('Date From') }}</label>
+    <label>Date From</label>
     <input type="date" name="date_from" value="{{ filters.date_from }}">
   </div>
   <div class="form-group">
-    <label>{{ t('Date To') }}</label>
+    <label>Date To</label>
     <input type="date" name="date_to" value="{{ filters.date_to }}">
   </div>
-  <button type="submit" class="btn btn-primary">🔍 {{ t('Filter') }}</button>
+  <button type="submit" class="btn btn-primary">🔍 Filter</button>
   <a href="{{ url_for('archive', table=table) }}" class="btn btn-print">✕ Clear</a>
 </form>
 
@@ -114,11 +114,11 @@
   <table>
     <thead>
       <tr>
-        <th>{{ t('ID') }}</th>
-        <th>{{ t('Sale Date') }}</th>
-        <th>{{ t('Company') }}</th>
-        <th>{{ t('Customer') }}</th>
-        <th>{{ t('Route') }}</th>
+        <th>ID</th>
+        <th>Sale Date</th>
+        <th>Company</th>
+        <th>Customer</th>
+        <th>Route</th>
         <th class="text-center">Tkts</th>
         <th>Travel Date</th>
         <th class="text-right">Net</th>
@@ -194,9 +194,9 @@
   <table>
     <thead>
       <tr>
-        <th>{{ t('ID') }}</th>
+        <th>ID</th>
         <th>Pay Date</th>
-        <th>{{ t('Company') }}</th>
+        <th>Company</th>
         <th class="text-right">Amount</th>
         <th>Notes</th>
         <th>Created</th>

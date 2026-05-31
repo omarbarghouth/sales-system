@@ -13,23 +13,23 @@
 
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
-    <div class="form-group" style="flex:2;min-width:150px"><label>{{ t('Company') }}</label>
+    <div class="form-group" style="flex:2;min-width:150px"><label>Company</label>
       <select name="company" onchange="this.form.submit()">
         <option value="">All</option>
         {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
       </select>
     </div>
-    <div class="form-group" style="min-width:130px"><label>{{ t('Status') }}</label>
+    <div class="form-group" style="min-width:130px"><label>Status</label>
       <select name="status" onchange="this.form.submit()">
         <option value="">All</option>
         <option value="STILL" {% if filters.status=='STILL' %}selected{% endif %}>Still</option>
         <option value="DONE"  {% if filters.status=='DONE'  %}selected{% endif %}>Done</option>
       </select>
     </div>
-    <div class="form-group" style="min-width:130px"><label>{{ t('From') }}</label>
+    <div class="form-group" style="min-width:130px"><label>From</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
-    <div class="form-group" style="min-width:130px"><label>{{ t('To') }}</label>
+    <div class="form-group" style="min-width:130px"><label>To</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
     </div>
     {% if filters.company or filters.status or filters.date_from or filters.date_to %}
@@ -41,10 +41,10 @@
 <div class="table-wrap">
   <table>
     <thead><tr>
-      <th>{{ t('ID') }}</th><th>{{ t('Type') }}</th><th>{{ t('Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Customer') }}</th>
-      <th>{{ t('Route') }}</th><th>{{ t('Tix') }}</th><th>{{ t('Travel Date') }}</th>
-      <th class="text-right">{{ t('Sell (JOD)') }}</th><th class="text-right">{{ t('Profit (JOD)') }}</th>
-      <th>{{ t('Status') }}</th><th>{{ t('Actions') }}</th>
+      <th>ID</th><th>Type</th><th>Date</th><th>Company</th><th>Customer</th>
+      <th>Route</th><th>Tix</th><th>Travel</th>
+      <th class="text-right">Sell (JOD)</th><th class="text-right">Profit (JOD)</th>
+      <th>Status</th><th>Actions</th>
     </tr></thead>
     <tbody>
       {% for s in sales %}

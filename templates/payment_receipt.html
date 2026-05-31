@@ -4,12 +4,12 @@
 {% block content %}
 <div class="page-header no-print">
   <div class="page-header-left">
-    <h1><i class="fas fa-receipt" style="color:var(--green);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ t('Payment Receipt') }}</h1>
+    <h1><i class="fas fa-receipt" style="color:var(--green);font-size:20px;vertical-align:middle;margin-right:6px"></i>Payment Receipt</h1>
     <p>{{ pay.company }} &nbsp;·&nbsp; {{ pay.pay_date }}</p>
   </div>
   <div class="page-header-actions">
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> {{ t('Print Receipt') }}</button>
-    <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Receipt</button>
+    <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
 

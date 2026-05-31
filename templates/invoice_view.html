@@ -8,9 +8,9 @@
     <p>Created by {{ inv.created_by }} · {{ inv.invoice_date }}</p>
   </div>
   <div class="page-header-actions">
-    <a href="{{ url_for('edit_invoice', inv_id=inv.id) }}" class="btn btn-edit"><i class="fas fa-pencil-alt"></i> {{ t('Edit') }}</a>
-    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> {{ t('Print / PDF') }}</button>
-    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> {{ t('Back') }}</a>
+    <a href="{{ url_for('edit_invoice', inv_id=inv.id) }}" class="btn btn-edit"><i class="fas fa-pencil-alt"></i> Edit</a>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
+    <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
 

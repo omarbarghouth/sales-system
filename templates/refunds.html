@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-undo-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ t('Refunds & Cancellations') }}</h1>
+    <h1><i class="fas fa-undo-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Refunds &amp; Cancellations</h1>
     <p>Track customer refunds, cancellation fees and supplier penalties</p>
   </div>
 </div>
@@ -14,25 +14,25 @@
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-receipt"></i></div>
-    <div class="kpi-label">{{ t('Total Refunds') }}</div>
+    <div class="kpi-label">Total Refunds</div>
     <div class="kpi-value navy">{{ totals.total_count or 0 }}</div>
     <div class="kpi-sub">{{ totals.pending_count or 0 }} pending</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--red)"><i class="fas fa-file-invoice-dollar"></i></div>
-    <div class="kpi-label">{{ t('Gross Cancelled') }}</div>
+    <div class="kpi-label">Gross Cancelled</div>
     <div class="kpi-value red">{{ "%.3f"|format((totals.total_gross or 0)|float) }}</div>
     <div class="kpi-sub">JOD original value</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--green)"><i class="fas fa-hand-holding-usd"></i></div>
-    <div class="kpi-label">{{ t('Total Refunded') }}</div>
+    <div class="kpi-label">Total Refunded</div>
     <div class="kpi-value green">{{ "%.3f"|format((totals.total_refunded or 0)|float) }}</div>
     <div class="kpi-sub">JOD returned to customers</div>
   </div>
   <div class="kpi-box">
     <div class="kpi-icon" style="color:var(--gold-dk)"><i class="fas fa-percent"></i></div>
-    <div class="kpi-label">{{ t('Fees Retained') }}</div>
+    <div class="kpi-label">Fees Retained</div>
     <div class="kpi-value gold">{{ "%.3f"|format((totals.total_fees or 0)|float) }}</div>
     <div class="kpi-sub">JOD cancellation fees</div>
   </div>
@@ -43,14 +43,14 @@
 
   {# ── New Refund Form ───────────────────────────────────────────── #}
   <div class="card">
-    <div class="card-header"><i class="fas fa-plus-circle"></i> {{ t('New Refund / Cancellation') }}</div>
+    <div class="card-header"><i class="fas fa-plus-circle"></i> New Refund / Cancellation</div>
     <div class="card-body">
       <form method="POST">
         <input type="hidden" name="action" value="create">
         <div class="form-grid form-grid-2" style="margin-bottom:14px">
 
           <div class="form-group">
-            <label>{{ t('Company') }} <span class="req">*</span></label>
+            <label>Company <span class="req">*</span></label>
             <select name="company" required>
               <option value="">— Select —</option>
               {% for co in companies %}
@@ -60,17 +60,17 @@
           </div>
 
           <div class="form-group">
-            <label>{{ t('Refund Date') }}</label>
+            <label>Refund Date</label>
             <input type="date" name="refund_date" value="{{ today }}" required>
           </div>
 
           <div class="form-group">
-            <label>{{ t('Customer Name') }}</label>
+            <label>Customer Name</label>
             <input type="text" name="customer" placeholder="Passenger name" style="text-transform:uppercase">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Type') }}</label>
+            <label>Type</label>
             <select name="refund_type">
               <option value="FULL">Full Refund</option>
               <option value="PARTIAL">Partial Refund</option>
@@ -80,37 +80,37 @@
           </div>
 
           <div class="form-group">
-            <label>{{ t('Sale ID (optional)') }}</label>
+            <label>Sale ID (optional)</label>
             <input type="number" name="sale_id" placeholder="Link to TXN-XXXX">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Original Amount (JOD)') }}</label>
+            <label>Original Amount (JOD)</label>
             <input type="number" step="0.001" name="gross_amount" placeholder="0.000" oninput="calcRefund()">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Cancellation Fee (JOD)') }}</label>
+            <label>Cancellation Fee (JOD)</label>
             <input type="number" step="0.001" name="cancellation_fee" id="cancelFee" placeholder="0.000" oninput="calcRefund()">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Refund to Customer (JOD)') }}</label>
+            <label>Refund to Customer (JOD)</label>
             <input type="number" step="0.001" name="refund_amount" id="refundAmt" placeholder="0.000" style="font-weight:700;color:var(--green)">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Supplier Penalty (JOD)') }}</label>
+            <label>Supplier Penalty (JOD)</label>
             <input type="number" step="0.001" name="supplier_penalty" placeholder="0.000">
           </div>
 
           <div class="form-group">
-            <label>{{ t('Supplier Refund (JOD)') }}</label>
+            <label>Supplier Refund (JOD)</label>
             <input type="number" step="0.001" name="supplier_refund" placeholder="0.000">
           </div>
 
           <div class="form-group" style="grid-column:span 2">
-            <label>{{ t('Reason') }}</label>
+            <label>Reason</label>
             <input type="text" name="reason" placeholder="Flight cancelled, customer request, visa rejected…">
           </div>
 
@@ -124,11 +124,11 @@
 
   {# ── Filters ───────────────────────────────────────────────────── #}
   <div class="card">
-    <div class="card-header"><i class="fas fa-filter"></i> {{ t('Filter Refunds') }}</div>
+    <div class="card-header"><i class="fas fa-filter"></i> Filter Refunds</div>
     <div class="card-body">
       <form method="GET">
         <div class="form-group" style="margin-bottom:12px">
-          <label>{{ t('Company') }}</label>
+          <label>Company</label>
           <select name="company" onchange="this.form.submit()">
             <option value="">All Companies</option>
             {% for co in companies %}

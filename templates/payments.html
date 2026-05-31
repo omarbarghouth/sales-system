@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-money-bill-wave"></i> {{ t('Payments') }}</h1>
+    <h1><i class="fas fa-money-bill-wave"></i> Payments</h1>
     <p>Record and manage company payments — JOD {{ "%.3f"|format(total_paid or 0) }} total received</p>
   </div>
 </div>
@@ -14,12 +14,12 @@
   {# ── Add Payment Form ─────────────────────────────────── #}
   {% if is_admin %}
   <div class="card" id="add-payment">
-    <div class="card-header"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> {{ t('Record New Payment') }}</div>
+    <div class="card-header"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> Record New Payment</div>
     <div class="card-body">
       <form method="POST">
         <div class="form-grid" style="gap:14px;margin-bottom:14px">
           <div class="form-group">
-            <label>{{ t('Company') }} <span style="color:var(--red)">*</span></label>
+            <label>Company <span style="color:var(--red)">*</span></label>
             <input type="text" name="company" list="company-list-pay" required
                    placeholder="Company name" style="text-transform:uppercase;font-weight:700">
             <datalist id="company-list-pay">
@@ -27,18 +27,18 @@
             </datalist>
           </div>
           <div class="form-group">
-            <label>{{ t('Amount (JOD)') }} <span style="color:var(--red)">*</span></label>
+            <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
             <input type="number" name="amount" step="0.001" min="0.001" required
                    placeholder="0.000" style="font-size:16px;font-weight:700">
           </div>
           <div class="form-group">
-            <label>{{ t('Payment Date') }} <span style="color:var(--red)">*</span></label>
+            <label>Payment Date <span style="color:var(--red)">*</span></label>
             <input type="date" name="pay_date" required value="{{ today }}">
           </div>
           <div class="form-group">
-            <label>{{ t('Payment Method') }}</label>
+            <label>Payment Method</label>
             <select name="method">
-              <option value="">{{ t('Select method') }}</option>
+              <option value="">— Select method —</option>
               <option value="Cash">💵 Cash</option>
               <option value="Bank Transfer">🏦 Bank Transfer</option>
               <option value="CliQ">📱 CliQ</option>
@@ -48,11 +48,11 @@
           </div>
         </div>
         <div class="form-group" style="margin-bottom:14px">
-          <label>{{ t('Notes (optional)') }}</label>
+          <label>Notes (optional)</label>
           <input type="text" name="notes" placeholder="Reference number, remarks…" maxlength="200">
         </div>
         <button type="submit" class="btn btn-red" style="width:100%">
-          <i class="fas fa-save"></i> {{ t('Record Payment') }}
+          <i class="fas fa-save"></i> Record Payment
         </button>
       </form>
     </div>
@@ -63,7 +63,7 @@
   <div style="display:flex;flex-direction:column;gap:14px">
     <div class="kpi-box green" style="flex:1">
       <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
-      <div class="kpi-label">{{ t('Total Payments Received') }}</div>
+      <div class="kpi-label">Total Payments Received</div>
       <div class="kpi-value green" style="font-size:24px">JOD {{ "%.3f"|format(total_paid or 0) }}</div>
       <div class="kpi-sub">{{ total_rows }} payment records</div>
     </div>
@@ -81,9 +81,9 @@
   <table>
     <thead>
       <tr>
-        <th>{{ t('ID') }}</th><th>{{ t('Pay Date') }}</th><th>{{ t('Company') }}</th><th>{{ t('Method') }}</th>
-        <th class="text-right">{{ t('Amount (JOD)') }}</th><th>{{ t('Notes') }}</th>
-        {% if is_admin %}<th>{{ t('Actions') }}</th>{% endif %}
+        <th>ID</th><th>Pay Date</th><th>Company</th><th>Method</th>
+        <th class="text-right">Amount (JOD)</th><th>Notes</th>
+        {% if is_admin %}<th>Actions</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -122,14 +122,14 @@
       </tr>
       {% else %}
       <tr><td colspan="{% if is_admin %}7{% else %}6{% endif %}" class="text-center" style="padding:32px;color:var(--muted)">
-        {{ t('No payments recorded yet') }}
+        No payments recorded yet.
       </td></tr>
       {% endfor %}
     </tbody>
     {% if payments %}
     <tfoot>
       <tr>
-        <td colspan="{% if is_admin %}4{% else %}3{% endif %}">{{ t('TOTAL RECEIVED') }}</td>
+        <td colspan="{% if is_admin %}4{% else %}3{% endif %}">TOTAL RECEIVED</td>
         <td class="text-right" style="color:#6dd58a;font-size:15px">JOD {{ "%.3f"|format(total_paid or 0) }}</td>
         <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
       </tr>

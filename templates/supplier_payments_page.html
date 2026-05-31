@@ -4,12 +4,12 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-money-bill-wave" style="color:var(--gold)"></i> {{ t('Supplier Payments') }}</h1>
-    <p>{{ t('Supplier payments hint') }}</p>
+    <h1><i class="fas fa-money-bill-wave" style="color:var(--gold)"></i> Supplier Payments</h1>
+    <p>Record payments made to suppliers and view recent payment history</p>
   </div>
   <div class="page-header-actions no-print">
     <a href="{{ url_for('supplier_statement') }}" class="btn btn-print">
-      <i class="fas fa-chart-line"></i> {{ t('Supplier Statement') }}
+      <i class="fas fa-chart-line"></i> Supplier Statement
     </a>
   </div>
 </div>
@@ -23,7 +23,7 @@
 <!-- ── Payment Form ────────────────────────────────────────────────────── -->
 <div class="card mb-4">
   <div class="card-header" style="background:var(--navy)">
-    <i class="fas fa-plus-circle"></i> {{ t('Record New Payment') }}
+    <i class="fas fa-plus-circle"></i> Record New Payment
   </div>
   <div style="padding:24px">
     <form method="POST" action="{{ url_for('add_supplier_payment') }}" id="payForm">
@@ -33,9 +33,9 @@
 
         <!-- Supplier -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Supplier') }} <span style="color:var(--red)">*</span></label>
+          <label>Supplier <span style="color:var(--red)">*</span></label>
           <select name="supplier" id="supplierInput" required style="font-weight:700">
-            <option value="">— {{ t('Select') }} —</option>
+            <option value="">— Select Supplier —</option>
             {% for s in suppliers %}
             <option value="{{ s.name }}" {% if s.name == prefill_supplier %}selected{% endif %}>{{ s.name }}</option>
             {% endfor %}
@@ -44,13 +44,13 @@
 
         <!-- Payment Date -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Payment Date') }} <span style="color:var(--red)">*</span></label>
+          <label>Payment Date <span style="color:var(--red)">*</span></label>
           <input type="date" name="pay_date" value="{{ today }}" required>
         </div>
 
         <!-- Amount -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Amount (JOD)') }} <span style="color:var(--red)">*</span></label>
+          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
           <input type="number" name="amount" step="0.01" min="0.01"
                  placeholder="0.00" required>
         </div>
@@ -61,9 +61,9 @@
 
         <!-- Payment Method -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Payment Method') }}</label>
+          <label>Payment Method</label>
           <select name="payment_method">
-            <option value="">— {{ t('Select') }} —</option>
+            <option value="">— Select —</option>
             <option value="CASH">Cash</option>
             <option value="BANK_TRANSFER">Bank Transfer</option>
             <option value="CLIQ">CliQ</option>
@@ -74,7 +74,7 @@
 
         <!-- Reference Number -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Reference / Cheque No.') }}</label>
+          <label>Reference / Cheque No.</label>
           <input type="text" name="reference_number"
                  placeholder="e.g. TXN-001, CHQ-1234…"
                  style="text-transform:uppercase;font-family:monospace">
@@ -82,7 +82,7 @@
 
         <!-- Service Type -->
         <div class="form-group" style="margin:0">
-          <label>{{ t('Service Type') }}</label>
+          <label>Service Type</label>
           <select name="svc_type">
             <option value="FLIGHT">Flight</option>
             <option value="HOTEL">Hotel</option>
@@ -96,16 +96,16 @@
 
       <!-- Notes -->
       <div class="form-group" style="margin-bottom:20px">
-        <label>{{ t('Notes') }}</label>
+        <label>Notes</label>
         <input type="text" name="notes" placeholder="Optional note about this payment…">
       </div>
 
       <div style="display:flex;gap:10px;align-items:center">
         <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save"></i> {{ t('Save Payment') }}
+          <i class="fas fa-save"></i> Save Payment
         </button>
         <button type="reset" class="btn btn-print">
-          <i class="fas fa-undo"></i> {{ t('Reset') }}
+          <i class="fas fa-undo"></i> Reset
         </button>
         {% if prefill_supplier %}
         <a href="{{ url_for('supplier_statement', supplier=prefill_supplier) }}"
@@ -121,7 +121,7 @@
 <!-- ── Recent Payments Table ───────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header" style="background:var(--navy-dk)">
-    <i class="fas fa-history"></i> {{ t('Recent Payments') }}
+    <i class="fas fa-history"></i> Recent Payments
     <span style="font-size:12px;font-weight:400;opacity:.75;margin-left:8px">(last 200)</span>
   </div>
   <div style="overflow-x:auto">
@@ -129,14 +129,14 @@
       <thead>
         <tr>
           <th>#</th>
-          <th>{{ t('Date') }}</th>
-          <th>{{ t('Supplier') }}</th>
-          <th>{{ t('Method') }}</th>
-          <th>{{ t('Reference') }}</th>
-          <th>{{ t('Service Type') }}</th>
-          <th style="text-align:right">{{ t('Amount (JOD)') }}</th>
-          <th>{{ t('Notes') }}</th>
-          <th class="no-print">{{ t('Actions') }}</th>
+          <th>Date</th>
+          <th>Supplier</th>
+          <th>Method</th>
+          <th>Reference</th>
+          <th>Service</th>
+          <th style="text-align:right">Amount (JOD)</th>
+          <th>Notes</th>
+          <th class="no-print">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -186,7 +186,7 @@
         {% else %}
         <tr>
           <td colspan="9" class="text-center text-muted" style="padding:40px">
-            {{ t('No payments recorded yet') }}
+            No payments recorded yet.
           </td>
         </tr>
         {% endfor %}
@@ -194,7 +194,7 @@
       {% if payments %}
       <tfoot>
         <tr style="background:var(--navy);color:#fff;font-weight:700">
-          <td colspan="6" style="text-align:right;padding:10px 16px">{{ t('Total Paid') }}:</td>
+          <td colspan="6" style="text-align:right;padding:10px 16px">Total Paid:</td>
           <td style="text-align:right;padding:10px 16px">
             {{ '%.3f'|format(payments|sum(attribute='amount')|float) }} JOD
           </td>
