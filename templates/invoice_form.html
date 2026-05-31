@@ -27,20 +27,13 @@
           <div class="form-grid form-grid-2" style="margin-bottom:14px">
             <div class="form-group">
               <label>Company / Client <span class="req">*</span></label>
-              <div class="erp-select" id="ss-inv-company">
-                <input type="text" name="company" class="erp-select-actual" tabindex="-1" aria-hidden="true"
-                       value="{{ (inv.company|upper) if inv else ((sale.company|upper) if sale else (company_filter or '')) }}">
-                <button type="button" class="erp-select-btn">
-                  <span class="es-label{{ '' if (inv.company if inv else (sale.company if sale else company_filter)) else ' es-ph' }}">
-                    {{ (inv.company|upper) if inv else ((sale.company|upper) if sale else (company_filter or 'Select company...')) }}
-                  </span>
-                  <i class="fas fa-chevron-down es-caret"></i>
-                </button>
-                <div class="erp-select-drop">
-                  <div class="erp-sd-search"><i class="fas fa-search"></i><input type="text" placeholder="Type company name..." autocomplete="off"></div>
-                  <div class="erp-sd-list"></div>
-                </div>
-              </div>
+              <input type="text" name="company" id="companyInput" required
+                     style="text-transform:uppercase;font-weight:700"
+                     value="{{ inv.company if inv else (sale.company if sale else company_filter) }}"
+                     oninput="loadCompanyTxns(this.value);invLsSearch(this,'invCoDrop','/api/companies?q='+encodeURIComponent(this.value),'companies')"
+                     onfocus="invLsSearch(this,'invCoDrop','/api/companies?q=','companies')"
+                     autocomplete="off" placeholder="Type company name…">
+              <div id="invCoDrop" class="live-dropdown" style="display:none"></div>
               <small>Select to auto-load related transactions</small>
             </div>
             <div class="form-group">
@@ -353,54 +346,37 @@ function loadCompanyTxns(val) {
 calcTotal();
 {% if company_filter %}loadCompanyTxns('{{ company_filter }}');{% endif %}
 
-// ERP Searchable Select
-function erpSelect(cfg) {
-  var wrap=document.getElementById(cfg.id); if(!wrap) return;
-  var actual=wrap.querySelector('.erp-select-actual');
-  var btn=wrap.querySelector('.erp-select-btn');
-  var lbl=btn.querySelector('.es-label');
-  var drop=wrap.querySelector('.erp-select-drop');
-  var srch=drop.querySelector('.erp-sd-search input');
-  var list=drop.querySelector('.erp-sd-list');
-  var timer;
-  function close(){btn.classList.remove('es-open');drop.classList.remove('es-open');}
-  function open(){
-    document.querySelectorAll('.erp-select-btn.es-open').forEach(function(b){b.classList.remove('es-open');});
-    document.querySelectorAll('.erp-select-drop.es-open').forEach(function(d){d.classList.remove('es-open');});
-    btn.classList.add('es-open');drop.classList.add('es-open');
-    srch.value='';srch.focus();load('');
-  }
-  function pick(val){
-    var d=cfg.uppercase?val.toUpperCase():val;
-    actual.value=d;lbl.textContent=d;lbl.classList.remove('es-ph');
-    close();if(cfg.onSelect)cfg.onSelect(d);
-  }
-  function load(q){
-    clearTimeout(timer);
-    timer=setTimeout(function(){
-      fetch(cfg.url+encodeURIComponent(q))
-        .then(function(r){return r.json();})
-        .then(function(d){
-          var items=(d[cfg.key]||[]).slice(0,40);
-          if(!items.length){list.innerHTML='<div class="erp-sd-empty">No results</div>';return;}
-          list.innerHTML=items.map(function(item){
-            var label=cfg.nameKey?item[cfg.nameKey]:item;
-            var disp=cfg.uppercase?label.toUpperCase():label;
-            return '<div class="erp-sd-opt" data-val="'+label.replace(/"/g,'&quot;')+'">'+disp+'</div>';
-          }).join('');
-          list.querySelectorAll('.erp-sd-opt').forEach(function(el){
-            el.addEventListener('mousedown',function(e){e.preventDefault();pick(el.dataset.val);});
-          });
-        })
-        .catch(function(){list.innerHTML='<div class="erp-sd-empty">Error loading</div>';});
-    },q.length?150:30);
-  }
-  btn.addEventListener('click',function(){drop.classList.contains('es-open')?close():open();});
-  srch.addEventListener('input',function(){load(this.value.trim());});
-  document.addEventListener('click',function(e){if(!wrap.contains(e.target))close();},true);
+// Compact live-search for invoice form
+var _invLsT = {};
+function invLsSearch(inp, dropId, url, key) {
+  clearTimeout(_invLsT[dropId]);
+  var drop = document.getElementById(dropId);
+  if (!drop) return;
+  _invLsT[dropId] = setTimeout(function(){
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      var items = d[key]||[];
+      if(!items.length){drop.style.display='none';return;}
+      drop.innerHTML = items.slice(0,30).map(function(item){
+        return '<div class="live-dropdown-item" data-val="'+item.replace(/"/g,'&quot;')+'">'+item+'</div>';
+      }).join('');
+      drop.querySelectorAll('.live-dropdown-item').forEach(function(el){
+        el.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          inp.value = el.dataset.val;
+          drop.style.display = 'none';
+          loadCompanyTxns(inp.value);
+          // Sync both company inputs
+          var other = inp.id==='companyInput' ? document.getElementById('companySearch') : document.getElementById('companyInput');
+          if(other) other.value = inp.value;
+        });
+      });
+      drop.style.display='block';
+    }).catch(function(){drop.style.display='none';});
+  }, 180);
 }
-erpSelect({id:'ss-inv-company',url:'/api/companies?q=',key:'companies',uppercase:true,
-  onSelect:function(val){loadCompanyTxns(val);}});
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.form-group'))
+    document.querySelectorAll('.live-dropdown').forEach(function(d){d.style.display='none';});
 });
 </script>
 {% endblock %}
