@@ -38,7 +38,7 @@
           <div class="form-group">
             <label>Payment Method</label>
             <select name="method">
-              <option value="">— Select method —</option>
+              <option value="">Select method</option>
               <option value="Cash">💵 Cash</option>
               <option value="Bank Transfer">🏦 Bank Transfer</option>
               <option value="CliQ">📱 CliQ</option>
@@ -122,7 +122,7 @@
       </tr>
       {% else %}
       <tr><td colspan="{% if is_admin %}7{% else %}6{% endif %}" class="text-center" style="padding:32px;color:var(--muted)">
-        No payments recorded yet.
+        No payments recorded yet
       </td></tr>
       {% endfor %}
     </tbody>

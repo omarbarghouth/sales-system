@@ -4,8 +4,8 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ 'Edit Invoice ' + inv.invoice_number if inv else 'New Invoice' }}</h1>
-    <p>{{ 'Update invoice details' if inv else 'Create and connect an invoice to a transaction' }}</p>
+    <h1><i class="fas fa-file-invoice" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>{{ (t('Edit Invoice') + ' ' + inv.invoice_number) if inv else t('New Invoice') }}</h1>
+    <p>Update invoice details') if inv else t('Create and connect an invoice</p>
   </div>
   <div class="page-header-actions">
     <a href="{{ url_for('invoice_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
@@ -101,7 +101,7 @@
           <div style="display:flex;gap:10px;justify-content:flex-end">
             <a href="{{ url_for('invoice_list') }}" class="btn btn-outline">Cancel</a>
             <button type="submit" class="btn btn-red">
-              <i class="fas fa-save"></i> {{ 'Update' if inv else 'Create' }} Invoice
+              <i class="fas fa-save"></i> Update') if inv else t('Create Invoice
             </button>
           </div>
         </form>

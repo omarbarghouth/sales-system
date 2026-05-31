@@ -11,12 +11,12 @@
 
   <!-- STEP 1: PREVIEW -->
   <div class="card" style="margin-bottom:20px">
-    <div class="card-header">🔍 Step 1 — Preview What Will Be Archived</div>
+    <div class="card-header">🔍 Step 1 Preview</div>
     <div class="card-body">
       <form method="GET">
         <div class="form-grid" style="grid-template-columns:1fr auto;gap:12px;align-items:end">
           <div class="form-group">
-            <label>Archive all records BEFORE this date</label>
+            <label>Archive before date</label>
             <input type="date" name="preview_date" value="{{ preview_date }}" required>
           </div>
           <button type="submit" class="btn btn-primary">🔍 Preview</button>
@@ -48,7 +48,7 @@
   <!-- STEP 2: CONFIRM & ARCHIVE -->
   {% if preview and preview_date and (preview.sales_count > 0 or preview.payments_count > 0) %}
   <div class="card">
-    <div class="card-header" style="background:var(--orange)">📦 Step 2 — Confirm Archive</div>
+    <div class="card-header" style="background:var(--orange)">📦 Step 2 Confirm Archive</div>
     <div class="card-body">
       <form method="POST">
         <input type="hidden" name="archive_date" value="{{ preview_date }}">
@@ -58,21 +58,21 @@
           <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
             <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
               <input type="checkbox" id="chk1" onchange="checkReady()">
-              <span>I have exported the Excel backup of current data</span>
+              <span>Archive confirm 1</span>
             </label>
             <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
               <input type="checkbox" id="chk2" onchange="checkReady()">
-              <span>I understand archived data will NOT appear in main reports</span>
+              <span>Archive confirm 2</span>
             </label>
             <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
               <input type="checkbox" id="chk3" onchange="checkReady()">
-              <span>I know I can restore any archived record at any time</span>
+              <span>Archive confirm 3</span>
             </label>
           </div>
         </div>
 
         <div class="form-group" style="margin-bottom:20px">
-          <label>Type <strong>ARCHIVE</strong> to confirm</label>
+          <label>Type ARCHIVE to confirm</label>
           <input type="text" name="confirm_text" id="confirmInput"
                  placeholder="Type ARCHIVE here..."
                  oninput="checkReady()" autocomplete="off"

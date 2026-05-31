@@ -13,7 +13,7 @@
     <label>Action</label>
     <select name="action">
       <option value="">All Actions</option>
-      {% for a in ['CREATE','UPDATE','DELETE','LOGIN','LOGIN_DENIED','LOGOUT','EXPORT','RESET','ARCHIVE','RESTORE'] %}
+      {% for a in ['CREATE','UPDATE','DELETE','LOGIN','LOGOUT','EXPORT'] %}
       <option value="{{ a }}" {% if filters.action==a %}selected{% endif %}>{{ a }}</option>
       {% endfor %}
     </select>
@@ -54,7 +54,6 @@
         <th>Table</th>
         <th>Record ID</th>
         <th>Detail</th>
-        <th>IP Address</th>
       </tr>
     </thead>
     <tbody>
@@ -66,8 +65,8 @@
         <td>
           <span class="badge
             {% if log.action=='CREATE' %}badge-done
-            {% elif log.action in ('DELETE','LOGIN_DENIED','RESET') %}badge-cancel
-            {% elif log.action in ('LOGIN','LOGOUT','EXPORT','ARCHIVE','RESTORE') %}badge-navy
+            {% elif log.action=='DELETE' %}badge-cancel
+            {% elif log.action in ('LOGIN','LOGOUT','EXPORT') %}badge-still
             {% else %}badge-still{% endif %}">
             {{ log.action }}
           </span>
@@ -75,10 +74,9 @@
         <td class="text-muted">{{ log.table_name }}</td>
         <td class="text-center text-muted">{{ log.record_id or '—' }}</td>
         <td style="font-size:12px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.detail }}">{{ log.detail }}</td>
-        <td style="font-size:11px;color:var(--muted);font-family:monospace">{{ log.ip_address or '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="text-center text-muted" style="padding:40px">No audit logs found.</td></tr>
+      <tr><td colspan="7" class="text-center text-muted" style="padding:40px">No audit logs found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

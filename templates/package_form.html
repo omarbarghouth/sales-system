@@ -2,7 +2,7 @@
 {% block title %}New Package — ALSONDOS{% endblock %}
 {% block content %}
 <div class="page-header">
-  <div class="page-header-left"><h1><i class="fas fa-box-open"></i> New Travel Package</h1><p>Build a complete package: flight + hotel + transfer + tours</p></div>
+  <div class="page-header-left"><h1><i class="fas fa-box-open"></i> New Travel Package</h1><p>Build a complete package</p></div>
   <div class="page-header-actions"><a href="{{ url_for('package_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a></div>
 </div>
 <form method="POST">
@@ -57,7 +57,7 @@
         <div class="form-group"><label>Transfer Type</label>
           <select name="transfer_type"><option value="">None</option><option>Airport Pickup</option><option>Airport Drop-off</option><option>Both Ways</option></select></div>
         <div class="form-group"><label>Pickup Time</label><input type="time" name="pickup_time"></div>
-        <div class="form-group"><label>Vehicle</label>
+        <div class="form-group"><label>Vehicle Type</label>
           <select name="vehicle_type"><option value="">Select…</option><option>Sedan</option><option>SUV</option><option>Van</option><option>Minibus</option></select></div>
       </div>
     </div>

@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&display=swap" rel="stylesheet">
 {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -172,7 +173,11 @@
       <div class="sb-user-info">
         <div class="sb-username">{{ session.username }}</div>
         <div class="sb-role-tag">
-          {% if session.user_role == 'admin' %}👑 Administrator{% else %}👤 Sales Agent{% endif %}
+          {% if session.user_role == 'admin' %}
+            👑 Administrator
+          {% else %}
+            👤 Sales Agent
+          {% endif %}
         </div>
       </div>
       <a href="{{ url_for('logout') }}" class="sb-logout-btn" title="Logout">
@@ -184,7 +189,7 @@
 
 </aside>
 
-{# Mobile overlay (closes sidebar when clicked) #}
+{# Mobile overlay #}
 <div class="sb-overlay" id="sbOverlay"></div>
 
 {# ═══════════════════════════════════════════════════════════════
@@ -253,12 +258,10 @@
   if (toggle)  toggle.addEventListener('click', openSidebar);
   if (overlay) overlay.addEventListener('click', closeSidebar);
 
-  // Close on Escape
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape') closeSidebar();
   });
 
-  // Close sidebar on nav link click (mobile UX)
   var links = sidebar ? sidebar.querySelectorAll('.sb-link, .sb-cta-btn') : [];
   links.forEach(function(link){
     link.addEventListener('click', function(){
