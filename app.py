@@ -143,6 +143,7 @@ def paginate(query, params, page, per_page=PER_PAGE):
 
 def init_db():
     db = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    db.autocommit = True
     cur = db.cursor()
 
     cur.execute('''
@@ -2375,6 +2376,7 @@ if __name__ == '__main__':
 def init_extension_db():
     """Run once to add new tables and columns to existing schema."""
     db  = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    db.autocommit = True
     cur = db.cursor()
 
     # ── Add created_by_user to sales ─────────────────────────────────────────
