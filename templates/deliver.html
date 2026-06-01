@@ -123,12 +123,21 @@ tr.row-done td.no-strike { opacity:1 !important; }
           <td>{{ loop.index }}</td>
           <td><strong>{{ t.company }}</strong></td>
           <td>{{ t.customer }}</td>
+          {% if dtype == 'RETURN' %}
+          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
+          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
+          <td class="text-muted">{{ t.via or '-' }}</td>
+          <td style="font-size:12.5px">{{ t.return_supplier or t.buy_from or '-' }}</td>
+          <td class="text-center"><strong>{{ t.tickets }}</strong></td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.return_date or '-' }}</td>
+          {% else %}
           <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
           <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
           <td class="text-muted">{{ t.via or '-' }}</td>
-          <td style="font-size:12.5px">{{ t.buy_from or t.return_supplier or '-' }}</td>
+          <td style="font-size:12.5px">{{ t.buy_from or '-' }}</td>
           <td class="text-center"><strong>{{ t.tickets }}</strong></td>
-          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or t.return_date or '-' }}</td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or '-' }}</td>
+          {% endif %}
           <td class="no-strike no-print">
             {% if is_done %}
               <span class="badge-done-btn"><i class="fas fa-check-circle"></i> Done</span>
