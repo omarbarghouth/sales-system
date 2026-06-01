@@ -1770,33 +1770,39 @@ def deliver_tomorrow():
     agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
 
     # Outbound tickets due tomorrow
+    # Use outbound_delivery if set, otherwise fall back to travel_date
     outbound_tickets = query_db(f'''
         SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
         FROM sales s {agent_join}
-        WHERE s.outbound_delivery=%s AND s.deleted=FALSE
+        WHERE s.deleted=FALSE
+          AND (
+            (s.outbound_delivery != '' AND s.outbound_delivery = %s)
+            OR
+            (COALESCE(s.outbound_delivery, '') = '' AND s.travel_date = %s AND COALESCE(s.travel_date, '') != '')
+          )
+          AND COALESCE(s.outbound_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
-    ''', [tomorrow_date] + extra_params) or []
+    ''', [tomorrow_date, tomorrow_date] + extra_params) or []
 
     # Return tickets due tomorrow
+    # Use return_delivery if set, otherwise fall back to return_date
     return_tickets = query_db(f'''
         SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
         FROM sales s {agent_join}
-        WHERE s.return_delivery=%s AND s.deleted=FALSE
+        WHERE s.deleted=FALSE
+          AND (
+            (s.return_delivery != '' AND s.return_delivery = %s)
+            OR
+            (COALESCE(s.return_delivery, '') = '' AND s.return_date = %s AND COALESCE(s.return_date, '') != '')
+          )
+          AND COALESCE(s.return_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
-    ''', [tomorrow_date] + extra_params) or []
+    ''', [tomorrow_date, tomorrow_date] + extra_params) or []
 
-    # Old-style tickets by travel_date
-    travel_date_tickets = query_db(f'''
-        SELECT s.*, {agent_select}, 'TRAVEL' AS delivery_type
-        FROM sales s {agent_join}
-        WHERE s.travel_date=%s
-          AND (s.outbound_delivery IS NULL OR s.outbound_delivery='')
-          AND s.deleted=FALSE
-        {extra_str}
-        ORDER BY s.company, s.customer
-    ''', [tomorrow_date] + extra_params) or []
+    # Legacy travel_date tickets (no delivery dates set at all)
+    travel_date_tickets = []
 
     # Lists for filter dropdowns
     agents    = query_db(
