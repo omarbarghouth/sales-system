@@ -1782,7 +1782,6 @@ def deliver_tomorrow():
             OR
             (COALESCE(s.outbound_delivery, '') = '' AND s.travel_date = %s AND COALESCE(s.travel_date, '') != '')
           )
-          AND COALESCE(s.outbound_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
     ''', [view_date, view_date] + extra_params) or []
@@ -1798,7 +1797,6 @@ def deliver_tomorrow():
             OR
             (COALESCE(s.return_delivery, '') = '' AND s.return_date = %s AND COALESCE(s.return_date, '') != '')
           )
-          AND COALESCE(s.return_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
     ''', [view_date, view_date] + extra_params) or []
