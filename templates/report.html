@@ -86,11 +86,18 @@
         {% endfor %}
       </select>
     </div>
+
+    <div class="form-group" style="flex:2;min-width:160px">
+      <label><i class="fas fa-user" style="color:var(--navy);margin-right:3px"></i>Customer Name</label>
+      <input type="text" name="customer" value="{{ filters.get('customer','') }}"
+             placeholder="Search by name…" autocomplete="off">
+    </div>
+
     <div style="display:flex;gap:7px;align-self:flex-end">
       <button type="submit" class="btn btn-primary btn-sm">
         <i class="fas fa-search"></i> Search
       </button>
-      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') %}
+      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') or filters.get('customer') %}
       <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" title="Clear filters">
         <i class="fas fa-times"></i>
       </a>
