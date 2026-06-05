@@ -346,19 +346,24 @@
 </div>
 
 {# ── Deliver Tomorrow Alert ───────────────────────────────── #}
-{% if tomorrow %}
+{% if tomorrow or tomorrow_returns %}
 <div class="deliver-banner no-print">
   <div class="deliver-icon">🚨</div>
   <div>
     <div class="deliver-title">Tickets to Deliver Tomorrow</div>
     <div class="deliver-sub">Must be prepared today — action required!</div>
   </div>
-  <div class="deliver-count">{{ tomorrow|length }}</div>
+  <div class="deliver-count">{{ (tomorrow|length) + (tomorrow_returns|length) }}</div>
   <a href="{{ url_for('deliver_tomorrow') }}" class="btn btn-print no-print">
     <i class="fas fa-eye"></i> View Full List
   </a>
 </div>
-<div class="table-wrap mb-6">
+
+{% if tomorrow %}
+<div class="section-title" style="margin:1rem 0 .4rem;font-weight:700;color:var(--navy)">
+  <i class="fas fa-plane-departure"></i> Outbound Tickets ({{ tomorrow|length }})
+</div>
+<div class="table-wrap mb-4">
   <table>
     <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Travel Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
     <tbody>
@@ -377,6 +382,33 @@
     </tbody>
   </table>
 </div>
+{% endif %}
+
+{% if tomorrow_returns %}
+<div class="section-title" style="margin:1rem 0 .4rem;font-weight:700;color:#b8860b">
+  <i class="fas fa-plane-arrival"></i> Return Tickets ({{ tomorrow_returns|length }})
+</div>
+<div class="table-wrap mb-6">
+  <table>
+    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Return Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in tomorrow_returns %}
+      <tr>
+        <td class="text-muted">{{ loop.index }}</td>
+        <td><strong>{{ t.company }}</strong></td>
+        <td>{{ t.customer }}</td>
+        <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
+        <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
+        <td><strong style="color:var(--red)">{{ t.return_date }}</strong></td>
+        <td class="text-center">{{ t.tickets }}</td>
+        <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% endif %}
 
 {# ── Recent Audit Activity ────────────────────────────────── #}

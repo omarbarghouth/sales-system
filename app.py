@@ -41,7 +41,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF mitigation layer 2
 csrf = CSRFProtect(app)
 
 # ── Rate limiter (brute-force protection) ─────────────────────────────────────
-limiter = Limiter(app, key_func=get_remote_address, default_limits=[])
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+limiter.init_app(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -783,10 +784,34 @@ def index():
     ''')
 
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    # Outbound tickets: travel_date or outbound_delivery = tomorrow
     tomorrow = query_db('''
-        SELECT company, customer, from_loc, to_loc, travel_date, tickets, status
-        FROM sales WHERE travel_date=%s AND deleted=FALSE ORDER BY company
-    ''', [tomorrow_date])
+        SELECT company, customer, from_loc, to_loc, travel_date,
+               outbound_delivery, return_date, tickets, status, outbound_status
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND (
+              (outbound_delivery != '' AND outbound_delivery = %s)
+              OR (COALESCE(outbound_delivery,'') = '' AND travel_date = %s)
+          )
+          AND COALESCE(outbound_status,'PENDING') != 'DONE'
+        ORDER BY company
+    ''', [tomorrow_date, tomorrow_date])
+    # Return tickets: return_date or return_delivery = tomorrow
+    tomorrow_returns = query_db('''
+        SELECT company, customer, to_loc, from_loc, return_date,
+               return_delivery, return_supplier, tickets, status, return_status
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND trip_type IN ('RETURN','ROUNDTRIP','ROUND')
+          AND (
+              (return_delivery != '' AND return_delivery = %s)
+              OR (COALESCE(return_delivery,'') = '' AND return_date = %s)
+          )
+          AND return_date != ''
+          AND COALESCE(return_status,'PENDING') != 'DONE'
+        ORDER BY company
+    ''', [tomorrow_date, tomorrow_date]) or []
 
     # Recent activity from audit log
     recent_logs = query_db('''
@@ -867,7 +892,7 @@ def index():
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
         monthly=monthly, top_companies=top_companies,
-        tomorrow=tomorrow, companies=companies,
+        tomorrow=tomorrow, tomorrow_returns=tomorrow_returns, companies=companies,
         recent_logs=recent_logs,
         recent_txns=recent_txns,
         outstanding_by_company=outstanding_by_company,
