@@ -218,7 +218,7 @@
     </colgroup>
     <thead>
       <tr>
-        <th>ID</th>
+        <th style="min-width:48px">ID</th>
         <th>Type</th>
         <th>Date</th>
         <th>Company</th>
@@ -244,7 +244,7 @@
     <tbody>
       {% for s in sales %}
       <tr>
-        <td style="color:var(--muted-lt);font-size:11px">{{ s.id }}</td>
+        <td style="color:var(--muted-lt);font-size:11px;white-space:nowrap">{{ s.id }}</td>
         <td>{% set st = (s.service_type or 'FLIGHT') %}<span class="svc-badge svc-{{ st }}"><i class="fas {{ st|svc_icon }}"></i>{{ st }}</span></td>
         <td style="font-size:12px;white-space:nowrap">{{ s.sale_date }}</td>
 
