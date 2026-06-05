@@ -1325,7 +1325,13 @@ select:not(.form-group select):not(.filter-bar select):focus {
     border-bottom: 3px solid #1B3A6B;
     margin-bottom: 20px;
   }
-  .print-doc-header img { height: 44px; width: auto; }
+  .print-doc-header img { height: 80px; width: auto; }
+
+  /* Enlarge all logos on every printed page */
+  img[src*="logo"] {
+    height: 80px !important;
+    width: auto !important;
+  }
 }
 
 .print-only { display: none; }
