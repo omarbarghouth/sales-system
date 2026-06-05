@@ -1714,6 +1714,8 @@ def delete_payment_page(pay_id):
 def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     today_str     = str(date.today())
+    # Allow viewing any date via ?view_date=YYYY-MM-DD
+    view_date = request.args.get('view_date', '').strip() or tomorrow_date
 
     # Auto-update outbound statuses (active only)
     execute_db('''
@@ -1783,9 +1785,9 @@ def deliver_tomorrow():
           AND COALESCE(s.outbound_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
-    ''', [tomorrow_date, tomorrow_date] + extra_params) or []
+    ''', [view_date, view_date] + extra_params) or []
 
-    # Return tickets due tomorrow
+    # Return tickets due on view_date
     # Use return_delivery if set, otherwise fall back to return_date
     return_tickets = query_db(f'''
         SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
@@ -1799,7 +1801,7 @@ def deliver_tomorrow():
           AND COALESCE(s.return_status, 'PENDING') != 'DONE'
         {extra_str}
         ORDER BY s.company, s.customer
-    ''', [tomorrow_date, tomorrow_date] + extra_params) or []
+    ''', [view_date, view_date] + extra_params) or []
 
     # Legacy travel_date tickets (no delivery dates set at all)
     travel_date_tickets = []
@@ -1811,12 +1813,17 @@ def deliver_tomorrow():
     companies = get_companies_list()
 
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
+    try:
+        view_date_str = datetime.strptime(view_date, '%Y-%m-%d').strftime('%d %B %Y')
+    except Exception:
+        view_date_str = tomorrow_str
     return render_template('deliver.html',
         outbound_tickets=outbound_tickets,
         return_tickets=return_tickets,
         travel_date_tickets=travel_date_tickets,
-        tomorrow=tomorrow_str,
+        tomorrow=view_date_str,
         tomorrow_date=tomorrow_date,
+        view_date=view_date,
         agents=agents,
         companies=companies,
         filters=dict(
@@ -1826,6 +1833,7 @@ def deliver_tomorrow():
             passenger=f_passenger,
             status=f_status,
             agent_id=f_agent,
+            view_date=view_date,
         )
     )
 
