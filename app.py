@@ -1330,6 +1330,7 @@ def sales_report():
     date_to   = request.args.get('date_to', '')
     agent_id  = request.args.get('agent_id', '')
     svc_type  = request.args.get('svc_type', '')
+    customer  = request.args.get('customer', '').strip()
     page      = max(1, int(request.args.get('page', 1)))
 
     base_q  = '''
@@ -1363,6 +1364,11 @@ def sales_report():
         base_q  += ' AND UPPER(COALESCE(s.service_type,\'FLIGHT\'))=%s'
         count_q += ' AND UPPER(COALESCE(service_type,\'FLIGHT\'))=%s'
         params.append(svc_type.upper()); cparams.append(svc_type.upper())
+    if customer:
+        base_q  += ' AND UPPER(s.customer) LIKE %s'
+        count_q += ' AND UPPER(customer) LIKE %s'
+        _c = '%' + customer.upper() + '%'
+        params.append(_c); cparams.append(_c)
 
     base_q += ' ORDER BY s.sale_date DESC, s.id DESC'
 
@@ -1373,7 +1379,6 @@ def sales_report():
     sales, total_rows, total_pages = paginate(base_q, params, page)
 
     companies = get_companies_list()
-    # All users for agent filter dropdown (admin only)
     agents = []
     if session.get('user_role') == 'admin':
         agents = query_db('SELECT id, username, COALESCE(full_name,username) AS display FROM users ORDER BY username') or []
@@ -1381,7 +1386,8 @@ def sales_report():
     return render_template('report.html',
         sales=sales, totals=totals, companies=companies, svc_filter=svc_type, agents=agents,
         filters={'company':company,'status':status,'date_from':date_from,
-                 'date_to':date_to, 'agent_id':agent_id, 'svc_type':svc_type, 'service_type':svc_type},
+                 'date_to':date_to, 'agent_id':agent_id, 'svc_type':svc_type,
+                 'service_type':svc_type, 'customer':customer},
         page=page, total_pages=total_pages, total_rows=total_rows
     )
 
