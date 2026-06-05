@@ -197,7 +197,7 @@
       <thead>
         <tr style="background:#0f1d35">
           <th style="padding:9px 8px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:82px;white-space:nowrap">Date</th>
-          <th style="padding:9px 8px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:72px;white-space:nowrap">Ref</th>
+          <th style="padding:9px 8px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:36px;white-space:nowrap">#</th>
           <th style="padding:9px 8px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7)">Description / Passenger</th>
           <th style="padding:9px 8px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:50px;white-space:nowrap">Svc</th>
           <th style="padding:9px 8px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);width:82px;white-space:nowrap">Travel Date</th>
@@ -216,14 +216,9 @@
 
           <td style="padding:7px 10px;color:#64748b;font-size:11px;white-space:nowrap;font-family:monospace">{{ e.date }}</td>
 
-          <td style="padding:7px 10px">
-            <span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
-              {% if e.type=='sale' %}background:#fee2e2;color:#7f1d1d
-              {% elif e.type=='purchase' %}background:#e0f2fe;color:#0c4a6e
-              {% elif e.type=='payment_in' %}background:#dcfce7;color:#14532d
-              {% else %}background:#fef9c3;color:#78350f{% endif %}">
-              {{ e.ref }}
-            </span>
+          <td style="padding:7px 8px;text-align:center">
+            <span style="font-size:11px;font-weight:700;color:#475569" title="{{ e.ref }}">{{ loop.index }}</span>
+            <div style="font-size:8.5px;color:#94a3b8;font-family:monospace;margin-top:1px">{{ e.ref }}</div>
           </td>
 
           <td style="padding:7px 6px;color:#1e293b;line-height:1.4">

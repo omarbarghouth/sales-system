@@ -183,7 +183,7 @@
         <tr style="background:#0f1d35">
           {% set TH = 'padding:8px 9px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.7);white-space:nowrap' %}
           <th style="{{ TH }};width:88px">Purchase Date</th>
-          <th style="{{ TH }};width:80px">Ref</th>
+          <th style="{{ TH }};width:36px;text-align:center">#</th>
           <th style="{{ TH }};min-width:110px">Passenger</th>
           <th style="{{ TH }};width:110px">From → To</th>
           <th style="{{ TH }};width:88px;color:#93c5fd">Travel Date</th>
@@ -212,16 +212,10 @@
             {{ e.date }}
           </td>
 
-          {# — Ref badge — #}
-          <td style="padding:7px 9px">
-            <span style="font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:20px;white-space:nowrap;
-              {% if e.type=='sale' %}background:#dcfce7;color:#14532d
-              {% elif e.type=='purchase' %}background:#fee2e2;color:#7f1d1d
-              {% elif e.type=='payment_in' %}background:#dcfce7;color:#14532d
-              {% elif e.type=='payment_out' %}background:#fef3c7;color:#78350f
-              {% else %}background:#e8eef8;color:#1B3A6B{% endif %}">
-              {{ e.ref }}
-            </span>
+          {# — Row number — #}
+          <td style="padding:7px 8px;text-align:center">
+            <span style="font-size:11px;font-weight:700;color:#475569" title="{{ e.ref }}">{{ loop.index }}</span>
+            <div style="font-size:8.5px;color:#94a3b8;font-family:monospace;margin-top:1px">{{ e.ref }}</div>
           </td>
 
           {# — Passenger / description — #}
