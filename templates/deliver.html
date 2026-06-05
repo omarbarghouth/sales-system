@@ -3,8 +3,8 @@
 
 {% block extra_css %}
 <style>
-tr.row-done td { opacity:.45; }
-tr.row-done td.no-strike { opacity:1 !important; }
+tr.row-done td { text-decoration:line-through; opacity:.6; }
+tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important; }
 .btn-mark-done {
   display:inline-flex;align-items:center;gap:5px;
   padding:5px 14px;border-radius:20px;font-size:11.5px;font-weight:700;
@@ -55,6 +55,18 @@ tr.row-done td.no-strike { opacity:1 !important; }
     </form>
   </div>
 </div>
+
+<form method="GET" action="{{ url_for('deliver_tomorrow') }}" class="filter-bar no-print" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:8px">
+    <label style="font-weight:700;font-size:13px;color:var(--navy)"><i class="fas fa-calendar-alt"></i> View Date:</label>
+    <input type="date" name="view_date" value="{{ filters.view_date or tomorrow_date }}"
+           style="padding:7px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">
+  </div>
+  <button type="submit" class="btn btn-primary" style="padding:7px 18px"><i class="fas fa-search"></i> Go</button>
+  {% if filters.view_date and filters.view_date != tomorrow_date %}
+  <a href="{{ url_for('deliver_tomorrow') }}" class="btn" style="padding:7px 18px;background:#e2e8f0;color:#1e293b"><i class="fas fa-undo"></i> Back to Tomorrow</a>
+  {% endif %}
+</form>
 
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px">
   <div class="kpi-box" style="border-left:4px solid var(--navy)">
