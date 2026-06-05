@@ -11,25 +11,37 @@ from functools import wraps
 from flask import (Flask, render_template, request, redirect,
                    url_for, jsonify, g, Response, session, flash)
 import bcrypt
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 
-# ── Secret key — validated at startup ────────────────────────────────────────
-_SECRET_KEY      = os.environ.get('SECRET_KEY', '')
-_FALLBACK_KEY    = 'alsondos-secret-change-in-production-2024'
-_KNOWN_WEAK_KEYS = {_FALLBACK_KEY, 'secret', 'dev', 'development', 'test', 'changeme'}
+# ── Secret key — required at startup ─────────────────────────────────────────
+_SECRET_KEY      = os.environ.get('SECRET_KEY', '').strip()
+_KNOWN_WEAK_KEYS = {
+    'alsondos-secret-change-in-production-2024',
+    'secret', 'dev', 'development', 'test', 'changeme', '',
+}
 if not _SECRET_KEY or _SECRET_KEY in _KNOWN_WEAK_KEYS:
-    import warnings
-    warnings.warn(
-        "SECURITY WARNING: SECRET_KEY is not set or is using the insecure default. "
-        "Set a strong SECRET_KEY environment variable before going to production. "
-        "Sessions signed with the default key are forgeable.",
-        stacklevel=1,
+    raise RuntimeError(
+        "FATAL: SECRET_KEY environment variable is not set or uses an insecure default.\n"
+        "Generate a strong key and add it to /etc/sales.env:\n"
+        "  python -c \"import secrets; print(secrets.token_hex(32))\""
     )
-app.secret_key = _SECRET_KEY or _FALLBACK_KEY
+app.secret_key = _SECRET_KEY
 
-# ── Session lifetime: 8 hours idle timeout ────────────────────────────────────
-app.permanent_session_lifetime = timedelta(hours=8)
+# ── Session security ──────────────────────────────────────────────────────────
+app.permanent_session_lifetime    = timedelta(hours=8)
+app.config['SESSION_COOKIE_SECURE']   = True   # HTTPS only
+app.config['SESSION_COOKIE_HTTPONLY'] = True   # no JS access to cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF mitigation layer 2
+
+# ── CSRF protection (covers all POST forms + AJAX via X-CSRFToken header) ─────
+csrf = CSRFProtect(app)
+
+# ── Rate limiter (brute-force protection) ─────────────────────────────────────
+limiter = Limiter(app, key_func=get_remote_address, default_limits=[])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -242,6 +254,14 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_audit_user       ON audit_logs(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_audit_table      ON audit_logs(table_name)",
         "CREATE INDEX IF NOT EXISTS idx_audit_created    ON audit_logs(created_at)",
+        # Employee dashboard / my_sales — filters by user
+        "CREATE INDEX IF NOT EXISTS idx_sales_user       ON sales(created_by_user_id) WHERE deleted=FALSE",
+        # Statement queries — always filter by company + date together
+        "CREATE INDEX IF NOT EXISTS idx_sales_co_date    ON sales(company, sale_date DESC) WHERE deleted=FALSE",
+        # Accounting entries — queried by ref on every edit/delete
+        "CREATE INDEX IF NOT EXISTS idx_acct_ref         ON accounting_entries(ref_type, ref_id, ref_table) WHERE is_reversed=FALSE",
+        # Supplier payments lookup
+        "CREATE INDEX IF NOT EXISTS idx_sup_pay_supplier ON supplier_payments(supplier) WHERE deleted=FALSE",
     ]
     for idx in indexes:
         cur.execute(idx)
@@ -250,11 +270,14 @@ def init_db():
 
     cur.execute('SELECT COUNT(*) FROM users')
     if cur.fetchone()[0] == 0:
-        pw_hash = bcrypt.hashpw('admin123'.encode(), bcrypt.gensalt()).decode()
+        import secrets as _sec
+        _tmp_pw  = _sec.token_urlsafe(14)
+        pw_hash  = bcrypt.hashpw(_tmp_pw.encode(), bcrypt.gensalt()).decode()
         cur.execute("INSERT INTO users (username, password_hash, role) VALUES (%s,%s,%s)",
                     ('admin', pw_hash, 'admin'))
         db.commit()
-        print("✅ Default admin: username=admin password=admin123")
+        print(f"✅ First-run admin created. Username: admin  Password: {_tmp_pw}")
+        print("⚠️  Change this password immediately after first login.")
 
     cur.execute('SELECT COUNT(*) FROM sales')
     if cur.fetchone()[0] == 0:
@@ -321,12 +344,14 @@ def post_ledger(ref_type, ref_id, ref_table, company, description, debit, credit
     Post an immutable accounting entry to the shadow ledger.
     Never updates or deletes — use is_reversed=TRUE for corrections.
     Called after every sale, payment, supplier payment, and refund.
+    Returns the new entry id, or None on failure.
     """
     try:
-        execute_db("""
+        entry_id = execute_db("""
             INSERT INTO accounting_entries
             (entry_date, ref_type, ref_id, ref_table, company, description, debit, credit, created_by)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (
             entry_date or str(date.today()),
             ref_type,
@@ -338,9 +363,11 @@ def post_ledger(ref_type, ref_id, ref_table, company, description, debit, credit
             round(float(credit or 0), 3),
             session.get('user_id') if 'user_id' in session else None,
         ))
+        return entry_id
     except Exception as _le:
         logger.error(f"Ledger post failed ({ref_type}/{ref_id}): {_le}")
         # Never crash the main flow — ledger is supplementary
+        return None
 
 
 def post_sale_items(sale_id, service_type, supplier, description, net_cost, sell_price, quantity=1):
@@ -569,6 +596,7 @@ def server_error(e):
 
 # ── Auth Routes ───────────────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", error_message="Too many login attempts. Please wait a minute and try again.")
 def login():
     if 'user_id' in session:
         return redirect(url_for('index'))
@@ -1701,7 +1729,21 @@ def edit_payment(pay_id):
 @app.route('/payments/delete/<int:pay_id>', methods=['POST'])
 @admin_required
 def delete_payment_page(pay_id):
-    p = query_db('SELECT company, amount FROM payments WHERE id=%s', [pay_id], one=True)
+    p = query_db('SELECT company, amount, pay_date FROM payments WHERE id=%s', [pay_id], one=True)
+    if p:
+        # Reverse the original ledger entry before soft-deleting
+        _orig = query_db(
+            """SELECT id FROM accounting_entries
+               WHERE ref_type='PAYMENT' AND ref_id=%s AND ref_table='payments'
+                 AND is_reversed=FALSE
+               ORDER BY id DESC LIMIT 1""",
+            [pay_id], one=True
+        )
+        if _orig:
+            execute_db("UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s", [_orig['id']])
+        post_ledger('PAYMENT_REVERSAL', pay_id, 'payments', p['company'],
+                    f"Reversal of PAY-{pay_id:04d} (deleted)",
+                    debit=p['amount'], credit=0, entry_date=p['pay_date'])
     execute_db('UPDATE payments SET deleted=TRUE WHERE id=%s', [pay_id])
     log_action('DELETE', 'payments', pay_id,
                f"{p['company'] if p else ''} | Amount:{p['amount'] if p else ''}")
@@ -2045,7 +2087,20 @@ def admin():
 @app.route('/admin/delete-payment/<int:pay_id>', methods=['POST'])
 @admin_required
 def delete_payment(pay_id):
-    p = query_db('SELECT company, amount FROM payments WHERE id=%s', [pay_id], one=True)
+    p = query_db('SELECT company, amount, pay_date FROM payments WHERE id=%s', [pay_id], one=True)
+    if p:
+        _orig = query_db(
+            """SELECT id FROM accounting_entries
+               WHERE ref_type='PAYMENT' AND ref_id=%s AND ref_table='payments'
+                 AND is_reversed=FALSE
+               ORDER BY id DESC LIMIT 1""",
+            [pay_id], one=True
+        )
+        if _orig:
+            execute_db("UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s", [_orig['id']])
+        post_ledger('PAYMENT_REVERSAL', pay_id, 'payments', p['company'],
+                    f"Reversal of PAY-{pay_id:04d} (deleted via admin)",
+                    debit=p['amount'], credit=0, entry_date=p['pay_date'])
     execute_db('UPDATE payments SET deleted=TRUE WHERE id=%s', [pay_id])
     log_action('DELETE', 'payments', pay_id,
                f"{p['company'] if p else ''} | {p['amount'] if p else ''}")
@@ -3749,7 +3804,7 @@ def _get_supplier_list():
 
 # ── Refunds ───────────────────────────────────────────────────────────────────
 @app.route('/refunds', methods=['GET','POST'])
-@login_required
+@admin_required
 def refunds():
     if request.method == 'POST':
         action = request.form.get('action','create')
@@ -3770,6 +3825,24 @@ def refunds():
             if not company:
                 flash('Company is required.', 'danger')
                 return redirect(url_for('refunds'))
+            if gross_amt <= 0:
+                flash('Refund gross amount must be greater than zero.', 'danger')
+                return redirect(url_for('refunds'))
+            if refund_amt < 0 or cancel_fee < 0:
+                flash('Refund amount and cancellation fee cannot be negative.', 'danger')
+                return redirect(url_for('refunds'))
+            # Validate refund does not exceed original sale amount
+            if sale_id:
+                _orig_sale = query_db(
+                    'SELECT sell FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True
+                )
+                if _orig_sale and gross_amt > float(_orig_sale['sell']) * 1.001:
+                    flash(
+                        f"Refund gross amount ({gross_amt:.3f} JOD) exceeds the "
+                        f"original sale amount ({float(_orig_sale['sell']):.3f} JOD).",
+                        'danger'
+                    )
+                    return redirect(url_for('refunds'))
 
             rid = execute_db("""
                 INSERT INTO refunds
@@ -4177,10 +4250,25 @@ def add_supplier_payment():
 @app.route('/supplier-payment/<int:pay_id>/delete', methods=['POST'])
 @admin_required
 def delete_supplier_payment(pay_id):
+    sp = query_db('SELECT supplier, amount, pay_date FROM supplier_payments WHERE id=%s', [pay_id], one=True)
+    if sp:
+        _orig = query_db(
+            """SELECT id FROM accounting_entries
+               WHERE ref_type='SUPPLIER_PAYMENT' AND ref_id=%s AND ref_table='supplier_payments'
+                 AND is_reversed=FALSE
+               ORDER BY id DESC LIMIT 1""",
+            [pay_id], one=True
+        )
+        if _orig:
+            execute_db("UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s", [_orig['id']])
+        post_ledger('SUPPLIER_PAYMENT_REVERSAL', pay_id, 'supplier_payments', sp['supplier'],
+                    f"Reversal of supplier payment #{pay_id} (deleted)",
+                    debit=0, credit=sp['amount'], entry_date=sp['pay_date'])
     execute_db('UPDATE supplier_payments SET deleted=TRUE WHERE id=%s', [pay_id])
-    log_action('DELETE', 'supplier_payments', pay_id, 'Supplier payment deleted')
+    log_action('DELETE', 'supplier_payments', pay_id,
+               f"Supplier payment deleted: {sp['supplier'] if sp else ''} JOD {sp['amount'] if sp else ''}")
     flash('Payment deleted.', 'success')
-    supplier = request.form.get('supplier','')
+    supplier = request.form.get('supplier', sp['supplier'] if sp else '')
     return redirect(url_for('supplier_statement', supplier=supplier))
 
 
@@ -4218,8 +4306,14 @@ def supplier_payments_page():
 #  MASTER DATA — Companies, Suppliers, Customers
 # ══════════════════════════════════════════════════════════════════════════════
 
+_companies_cache = {'data': None, 'ts': 0.0}
+
 def get_companies_list():
-    """All companies — safe fallback if master_companies table missing."""
+    """All companies — cached for 30 minutes to avoid full sales table scan on every form load."""
+    import time
+    now = time.time()
+    if _companies_cache['data'] is not None and now - _companies_cache['ts'] < 1800:
+        return _companies_cache['data']
     try:
         rows = query_db("""
             SELECT name FROM (
@@ -4229,15 +4323,18 @@ def get_companies_list():
                 WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>''
             ) t ORDER BY name
         """) or []
-        return [r['name'] for r in rows]
+        result = [r['name'] for r in rows]
     except Exception:
         try: get_db().rollback()
         except: pass
         try:
             rows = query_db("SELECT DISTINCT UPPER(TRIM(company)) as name FROM sales WHERE deleted=FALSE AND TRIM(COALESCE(company,''))<>'' ORDER BY name") or []
-            return [r['name'] for r in rows]
+            result = [r['name'] for r in rows]
         except Exception:
-            return []
+            result = _companies_cache['data'] or []
+    _companies_cache['data'] = result
+    _companies_cache['ts']   = now
+    return result
 
 def get_suppliers_list(svc_type=None):
     """All active suppliers — from master table + any in sales not yet seeded."""
@@ -4804,3 +4901,15 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
+
+# ── Health check ──────────────────────────────────────────────────────────────
+@app.route('/health')
+@csrf.exempt
+def health():
+    """Lightweight liveness probe for Nginx / uptime monitors."""
+    try:
+        query_db('SELECT 1', one=True)
+        return jsonify(status='ok', db='connected'), 200
+    except Exception as e:
+        return jsonify(status='error', db=str(e)), 500

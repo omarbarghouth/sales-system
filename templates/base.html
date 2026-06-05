@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{% block title %}ALSONDOS TRAVEL ERP{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -269,5 +270,45 @@
 </script>
 
 {% block extra_js %}{% endblock %}
+<script>
+(function(){
+  var meta = document.querySelector('meta[name="csrf-token"]');
+  if (!meta) return;
+  var token = meta.getAttribute('content');
+
+  // Inject hidden csrf_token into every POST form that doesn't already have one
+  document.querySelectorAll('form').forEach(function(form){
+    if (form.method.toLowerCase() === 'post' && !form.querySelector('[name="csrf_token"]')) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = token;
+      form.appendChild(inp);
+    }
+  });
+
+  // Attach CSRF header to all non-GET fetch() calls
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    opts = opts || {};
+    if (opts.method && opts.method.toUpperCase() !== 'GET'){
+      opts.headers = Object.assign({'X-CSRFToken': token}, opts.headers || {});
+    }
+    return _fetch(url, opts);
+  };
+
+  // Attach CSRF header to all non-GET XMLHttpRequest calls
+  var _open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method){
+    this._csrfMethod = method;
+    return _open.apply(this, arguments);
+  };
+  var _send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function(){
+    if (this._csrfMethod && this._csrfMethod.toUpperCase() !== 'GET'){
+      try { this.setRequestHeader('X-CSRFToken', token); } catch(e){}
+    }
+    return _send.apply(this, arguments);
+  };
+})();
+</script>
 </body>
 </html>
