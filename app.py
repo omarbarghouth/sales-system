@@ -1577,6 +1577,13 @@ def statement():
         _ORD = {'sale':0,'purchase':1,'payment_in':2,'payment_out':3}
         ledger_entries.sort(key=lambda x:(x['date'], _ORD.get(x['type'],9), x['ref']))
 
+        # Renumber payment refs sequentially within this company's statement
+        _pay_n = 0
+        for e in ledger_entries:
+            if e['type'] == 'payment_in':
+                _pay_n += 1
+                e['ref'] = f"PAY-{_pay_n:02d}"
+
         # Running balance
         running = 0.0
         for e in ledger_entries:
@@ -4179,6 +4186,13 @@ def supplier_statement():
         # ── Sort: date → type priority → ref ─────────────────────────────────
         _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3}
         ledger_entries.sort(key=lambda x:(str(x['date']), _ORD.get(x['type'],9), x['ref']))
+
+        # Renumber payment refs sequentially within this supplier's statement
+        _spy_n = 0
+        for e in ledger_entries:
+            if e['type'] == 'payment_out':
+                _spy_n += 1
+                e['ref'] = f"PAY-{_spy_n:02d}"
 
         # ── Running balance ───────────────────────────────────────────────────
         # Positive = they owe us (net receivable)
