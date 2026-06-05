@@ -345,15 +345,14 @@
 
 </div>
 
-{# ── Deliver Tomorrow Alert ───────────────────────────────── #}
-{% if tomorrow or tomorrow_returns %}
-<div class="deliver-banner no-print">
-  <div class="deliver-icon">🚨</div>
+{# ── Deliver Tomorrow ─────────────────────────────────────── #}
+<div class="deliver-banner no-print" style="{% if tomorrow or tomorrow_returns %}background:var(--red-light,#fff0f0){% else %}background:#f8f9fa{% endif %}">
+  <div class="deliver-icon">{% if tomorrow or tomorrow_returns %}🚨{% else %}✅{% endif %}</div>
   <div>
     <div class="deliver-title">Tickets to Deliver Tomorrow</div>
-    <div class="deliver-sub">Must be prepared today — action required!</div>
+    <div class="deliver-sub">{% if tomorrow or tomorrow_returns %}Must be prepared today — action required!{% else %}No pending deliveries for tomorrow{% endif %}</div>
   </div>
-  <div class="deliver-count">{{ (tomorrow|length) + (tomorrow_returns|length) }}</div>
+  <div class="deliver-count" style="{% if not (tomorrow or tomorrow_returns) %}color:#28a745{% endif %}">{{ (tomorrow|length) + (tomorrow_returns|length) }}</div>
   <a href="{{ url_for('deliver_tomorrow') }}" class="btn btn-print no-print">
     <i class="fas fa-eye"></i> View Full List
   </a>
