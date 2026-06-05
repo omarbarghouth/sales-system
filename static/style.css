@@ -499,7 +499,7 @@ thead th {
   position: sticky;
   top: 0;
 }
-thead th:first-child { border-radius: var(--radius) 0 0 0; }
+thead th:first-child { border-radius: var(--radius) 0 0 0; min-width: 48px; width: 48px; }
 thead th:last-child  { border-radius: 0 var(--radius) 0 0; }
 
 tbody tr { transition: background var(--dur); }
