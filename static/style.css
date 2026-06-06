@@ -357,6 +357,7 @@ a { color: inherit; }
 }
 @media(max-width:1320px){ .kpi-grid { grid-template-columns: repeat(3,1fr) } }
 @media(max-width:860px){  .kpi-grid { grid-template-columns: repeat(2,1fr) } }
+@media(max-width:900px){  .top-two-grid { grid-template-columns: 1fr !important; } }
 @media(max-width:500px){  .kpi-grid { grid-template-columns: 1fr } }
 
 .kpi-box {
