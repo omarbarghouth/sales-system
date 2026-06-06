@@ -41,6 +41,7 @@
           <td class="text-right" style="color:#9b59b6;font-weight:700">{{ "%.2f"|format(e.commission|float) }}</td>
           <td>
             <form method="POST" action="{{ url_for('set_commission_rate', uid=e.id) }}" style="display:flex;gap:4px;align-items:center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="number" name="commission_rate" value="{{ e.commission_rate|int }}" min="0" max="100" step="1"
                      style="width:60px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
               <button type="submit" class="btn btn-sm btn-edit" title="Set rate">%</button>

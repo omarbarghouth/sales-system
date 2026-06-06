@@ -6,6 +6,7 @@
   <div class="page-header-actions"><a href="{{ url_for('package_list') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a></div>
 </div>
 <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
   <div class="form-section">
     <div class="form-section-header"><i class="fas fa-info-circle" style="color:var(--gold)"></i> Package Info</div>

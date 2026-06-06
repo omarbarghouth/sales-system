@@ -45,6 +45,7 @@
   {% if table == 'sales' and archive_stats.sales_count > 0 %}
   <form method="POST" action="{{ url_for('restore_all_sales') }}"
         onsubmit="return confirm('↩ Restore ALL {{ archive_stats.sales_count }} archived sales back to the active system?\n\nThey will appear in reports and dashboard again.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">↩ Restore ALL Sales to Active</button>
   </form>
   {% endif %}
@@ -52,6 +53,7 @@
   {% if table == 'payments' and archive_stats.payments_count > 0 %}
   <form method="POST" action="{{ url_for('restore_all_payments') }}"
         onsubmit="return confirm('↩ Restore ALL {{ archive_stats.payments_count }} archived payments back to the active system?\n\nThey will appear in reports and dashboard again.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">↩ Restore ALL Payments to Active</button>
   </form>
   {% endif %}
@@ -147,11 +149,13 @@
             <!-- Restore -->
             <form method="POST" action="{{ url_for('restore_sale', sale_id=s.id) }}"
                   onsubmit="return confirm('Restore sale #{{ s.id }} to active system?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-edit" style="font-size:11px;padding:5px 10px">↩ Restore</button>
             </form>
             <!-- Delete permanently -->
             <form method="POST" action="{{ url_for('archive_delete_sale', sale_id=s.id) }}"
                   onsubmit="return confirm('⚠️ PERMANENTLY delete sale #{{ s.id }}? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger">🗑</button>
             </form>
           </div>
@@ -216,10 +220,12 @@
           <div class="gap-8">
             <form method="POST" action="{{ url_for('restore_payment', pay_id=p.id) }}"
                   onsubmit="return confirm('Restore payment #{{ p.id }} to active system?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-edit" style="font-size:11px;padding:5px 10px">↩ Restore</button>
             </form>
             <form method="POST" action="{{ url_for('archive_delete_payment', pay_id=p.id) }}"
                   onsubmit="return confirm('⚠️ PERMANENTLY delete payment #{{ p.id }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger">🗑</button>
             </form>
           </div>

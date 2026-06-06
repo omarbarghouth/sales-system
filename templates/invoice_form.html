@@ -20,6 +20,7 @@
       <div class="card-header"><i class="fas fa-edit"></i> Invoice Details</div>
       <div class="card-body">
         <form method="POST" id="invoiceForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% if sale %}<input type="hidden" name="sale_id" value="{{ sale.id }}">{% endif %}
           {% if inv %}<input type="hidden" name="sale_id" value="{{ inv.sale_id or '' }}">{% endif %}
           <input type="hidden" name="_linked_sale_id" id="linkedSaleId" value="">

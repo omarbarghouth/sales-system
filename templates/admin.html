@@ -92,6 +92,7 @@
             <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit">✏️</a>
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
                   onsubmit="return confirm('⚠️ Delete sale #{{ s.id }} for {{ s.customer }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger">🗑</button>
             </form>
           </div>
@@ -138,6 +139,7 @@
         <td class="no-print">
           <form method="POST" action="{{ url_for('delete_payment', pay_id=p.id) }}"
                 onsubmit="return confirm('⚠️ Delete payment #{{ p.id }} of ${{ p.amount }} from {{ p.company }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger">🗑 Delete</button>
           </form>
         </td>

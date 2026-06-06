@@ -27,6 +27,7 @@
   </div>
   <div style="padding:24px">
     <form method="POST" action="{{ url_for('add_supplier_payment') }}" id="payForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="redirect_to" value="supplier_payments_page">
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
@@ -175,6 +176,7 @@
                   action="{{ url_for('delete_supplier_payment', pay_id=p.id) }}"
                   onsubmit="return confirm('Delete this payment?')"
                   style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="supplier" value="{{ p.supplier }}">
               <button class="btn-icon" title="Delete"
                       style="background:none;border:none;cursor:pointer;color:var(--red)">

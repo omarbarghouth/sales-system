@@ -72,6 +72,7 @@
         The ERP structure, routes, and settings are preserved.
       </div>
       <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group" style="margin-bottom:18px">
           <label>Type <strong style="color:var(--red)">DELETE ALL DATA</strong> to confirm</label>
           <input type="text" name="confirm_text" required

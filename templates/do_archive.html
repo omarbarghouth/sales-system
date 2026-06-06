@@ -51,6 +51,7 @@
     <div class="card-header" style="background:var(--orange)">📦 Step 2 — Confirm Archive</div>
     <div class="card-body">
       <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="archive_date" value="{{ preview_date }}">
 
         <div style="background:#FEF9E7;border:1px solid #F39C12;border-radius:8px;padding:16px;margin-bottom:20px">

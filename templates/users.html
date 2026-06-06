@@ -16,6 +16,7 @@
     <div class="card-header"><i class="fas fa-user-plus"></i> Create New Account</div>
     <div class="card-body">
       <form method="POST" action="{{ url_for('add_user') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-grid form-grid-2" style="margin-bottom:14px">
           <div class="form-group">
             <label>Username <span class="req">*</span></label>
@@ -52,6 +53,7 @@
     <div class="card-header"><i class="fas fa-lock"></i> Change My Password</div>
     <div class="card-body">
       <form method="POST" action="{{ url_for('change_password') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:14px">
           <div class="form-group">
             <label>Current Password <span class="req">*</span></label>
@@ -142,6 +144,7 @@
               {# Toggle active/inactive #}
               {% if u.is_active != False %}
               <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="disable">
                 <button type="submit" class="btn btn-xs btn-warning" title="Disable" {% if u.id == session.user_id %}disabled{% endif %}>
                   <i class="fas fa-ban"></i>
@@ -149,6 +152,7 @@
               </form>
               {% else %}
               <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="enable">
                 <button type="submit" class="btn btn-xs btn-success" title="Enable">
                   <i class="fas fa-check"></i>
@@ -160,6 +164,7 @@
               {% if u.id != session.user_id %}
               <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
                     onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-danger btn-xs" title="Delete">
                   <i class="fas fa-trash"></i>
                 </button>
@@ -184,6 +189,7 @@
     </div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:22px" id="resetPwDesc">Set a new password for this user.</div>
     <form method="POST" id="resetPwForm" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group" style="margin-bottom:16px">
         <label>New Password <span class="req">*</span></label>
         <input type="password" name="new_password" id="newPwInput" required minlength="6" placeholder="Min 6 characters" autocomplete="new-password">

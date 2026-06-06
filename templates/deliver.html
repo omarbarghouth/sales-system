@@ -51,6 +51,7 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
   <div class="page-header-actions no-print">
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
     <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
     </form>
   </div>
@@ -157,6 +158,7 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
               <form method="POST" action="{{ url_for('mark_delivered', sale_id=t.id) }}"
                     class="mark-done-form" data-sale="{{ t.id }}" data-dtype="{{ dtype }}"
                     style="display:inline;margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="dtype" value="{{ dtype }}">
                 <input type="hidden" name="redirect_args" value="{{ filter_qs }}">
                 <button type="submit" class="btn-mark-done">

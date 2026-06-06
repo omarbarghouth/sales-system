@@ -16,6 +16,7 @@
   <div class="card-header"><i class="fas fa-edit"></i> Edit Payment Details</div>
   <div class="card-body">
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-grid" style="gap:16px;margin-bottom:16px">
         <div class="form-group">
           <label>Company <span style="color:var(--red)">*</span></label>
