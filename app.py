@@ -1518,6 +1518,7 @@ def statement():
                     'debit':       0.0,
                     'credit':      cost,
                     'type':        'purchase',
+                    'travel_date': s.get('travel_date','') or '',
                     'id':          s['id'],
                 })
 
@@ -1545,6 +1546,7 @@ def statement():
                 'debit':                0.0,
                 'credit':               cost,
                 'type':                 'purchase',
+                'travel_date':          s.get('return_date','') or s.get('travel_date','') or '',
                 'id':                   s['id'],
                 'return_ticket_number': _rtn,
             })
@@ -1575,6 +1577,7 @@ def statement():
                         'debit':       0.0,
                         'credit':      cost,
                         'type':        'purchase',
+                        'travel_date': s.get('travel_date','') or '',
                         'id':          s['id'],
                     })
 
