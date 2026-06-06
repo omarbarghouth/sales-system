@@ -17,6 +17,7 @@
     <div class="card-header"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> Record New Payment</div>
     <div class="card-body">
       <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-grid" style="gap:14px;margin-bottom:14px">
           <div class="form-group">
             <label>Company <span style="color:var(--red)">*</span></label>
