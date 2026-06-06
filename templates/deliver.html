@@ -111,14 +111,18 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
   <div class="card-header" style="background:{{ color }}">
     <i class="fas fa-{{ icon }}"></i> {{ title }} ({{ tickets|length }})
   </div>
-  <div style="overflow-x:auto">
-    <table>
+  <div>
+    <table style="table-layout:fixed;width:100%">
       <thead>
         <tr>
-          <th>#</th><th>Company</th><th>Customer</th>
-          <th>From</th><th>To</th><th>Via</th>
-          <th>Buy From</th><th>Tickets</th><th>Travel Date</th>
-          <th class="no-print" style="min-width:130px">Delivery</th>
+          <th style="width:32px">#</th>
+          <th style="width:15%">Company</th>
+          <th>Customer</th>
+          <th style="width:90px">Route</th>
+          <th style="width:15%">Supplier</th>
+          <th style="width:44px;text-align:center">Tix</th>
+          <th style="width:100px">Date</th>
+          <th class="no-print" style="width:110px">Delivery</th>
         </tr>
       </thead>
       <tbody>
@@ -133,22 +137,18 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
         {% set is_done = (cur_status == 'DONE') %}
         <tr id="row-{{ dtype }}-{{ t.id }}" class="{{ 'row-done' if is_done else '' }}">
           <td>{{ loop.index }}</td>
-          <td><strong>{{ t.company }}</strong></td>
-          <td>{{ t.customer }}</td>
+          <td><strong style="font-size:12px">{{ t.company }}</strong></td>
+          <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.customer }}</td>
           {% if dtype == 'RETURN' %}
-          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-          <td class="text-muted">{{ t.via or '-' }}</td>
-          <td style="font-size:12.5px">{{ t.return_supplier or t.buy_from or '-' }}</td>
+          <td style="white-space:nowrap"><strong style="color:var(--navy);font-size:12px">{{ t.to_loc }} → {{ t.from_loc }}</strong></td>
+          <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.return_supplier or t.buy_from or '-' }}</td>
           <td class="text-center"><strong>{{ t.tickets }}</strong></td>
-          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.return_date or '-' }}</td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--red);font-size:12px">{{ t.return_date or '-' }}</td>
           {% else %}
-          <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-          <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-          <td class="text-muted">{{ t.via or '-' }}</td>
-          <td style="font-size:12.5px">{{ t.buy_from or '-' }}</td>
+          <td style="white-space:nowrap"><strong style="color:var(--navy);font-size:12px">{{ t.from_loc }} → {{ t.to_loc }}</strong></td>
+          <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.buy_from or '-' }}</td>
           <td class="text-center"><strong>{{ t.tickets }}</strong></td>
-          <td style="white-space:nowrap;font-weight:600;color:var(--red)">{{ t.travel_date or '-' }}</td>
+          <td style="white-space:nowrap;font-weight:600;color:var(--red);font-size:12px">{{ t.travel_date or '-' }}</td>
           {% endif %}
           <td class="no-strike no-print">
             {% if is_done %}
