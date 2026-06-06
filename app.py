@@ -893,7 +893,10 @@ def index():
 
     # Top 10 suppliers by purchase volume
     top_suppliers = query_db("""
-        SELECT supplier, total_cost, txn_count FROM (
+        SELECT supplier,
+               SUM(total_cost) AS total_cost,
+               SUM(txn_count)  AS txn_count
+        FROM (
             SELECT UPPER(TRIM(buy_from)) AS supplier,
                    COALESCE(SUM(CASE WHEN outbound_cost>0 THEN outbound_cost ELSE net END),0) AS total_cost,
                    COUNT(*) AS txn_count
