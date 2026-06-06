@@ -437,18 +437,27 @@
   <i class="fas fa-plane-departure"></i> Outbound Tickets ({{ tomorrow|length }})
 </div>
 <div class="table-wrap mb-4">
-  <table>
-    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Travel Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
+  <table style="table-layout:fixed;width:100%">
+    <thead><tr>
+      <th style="width:30px">#</th>
+      <th style="width:16%">Company</th>
+      <th>Customer</th>
+      <th style="width:80px">Route</th>
+      <th style="width:14%">Supplier</th>
+      <th style="width:100px">Travel Date</th>
+      <th style="width:50px;text-align:center">Tix</th>
+      <th style="width:70px">Status</th>
+    </tr></thead>
     <tbody>
       {% for t in tomorrow %}
       <tr>
         <td class="text-muted">{{ loop.index }}</td>
-        <td><strong>{{ t.company }}</strong></td>
-        <td>{{ t.customer }}</td>
-        <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-        <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-        <td><strong style="color:var(--red)">{{ t.travel_date }}</strong></td>
-        <td class="text-center">{{ t.tickets }}</td>
+        <td><strong style="font-size:12px">{{ t.company }}</strong></td>
+        <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.customer }}</td>
+        <td style="white-space:nowrap"><strong style="color:var(--navy);font-size:12px">{{ t.from_loc }} → {{ t.to_loc }}</strong></td>
+        <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">{{ t.outbound_delivery or '—' }}</td>
+        <td><strong style="color:var(--red);font-size:12px">{{ t.travel_date }}</strong></td>
+        <td class="text-center"><strong>{{ t.tickets }}</strong></td>
         <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
       </tr>
       {% endfor %}
@@ -462,18 +471,27 @@
   <i class="fas fa-plane-arrival"></i> Return Tickets ({{ tomorrow_returns|length }})
 </div>
 <div class="table-wrap mb-6">
-  <table>
-    <thead><tr><th>#</th><th>Company</th><th>Customer</th><th>From</th><th>To</th><th>Return Date</th><th class="text-center">Tickets</th><th>Status</th></tr></thead>
+  <table style="table-layout:fixed;width:100%">
+    <thead><tr>
+      <th style="width:30px">#</th>
+      <th style="width:16%">Company</th>
+      <th>Customer</th>
+      <th style="width:80px">Route</th>
+      <th style="width:14%">Supplier</th>
+      <th style="width:100px">Return Date</th>
+      <th style="width:50px;text-align:center">Tix</th>
+      <th style="width:70px">Status</th>
+    </tr></thead>
     <tbody>
       {% for t in tomorrow_returns %}
       <tr>
         <td class="text-muted">{{ loop.index }}</td>
-        <td><strong>{{ t.company }}</strong></td>
-        <td>{{ t.customer }}</td>
-        <td><strong style="color:var(--navy)">{{ t.to_loc }}</strong></td>
-        <td><strong style="color:var(--navy)">{{ t.from_loc }}</strong></td>
-        <td><strong style="color:var(--red)">{{ t.return_date }}</strong></td>
-        <td class="text-center">{{ t.tickets }}</td>
+        <td><strong style="font-size:12px">{{ t.company }}</strong></td>
+        <td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.customer }}</td>
+        <td style="white-space:nowrap"><strong style="color:var(--navy);font-size:12px">{{ t.to_loc }} → {{ t.from_loc }}</strong></td>
+        <td style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">{{ t.return_supplier or '—' }}</td>
+        <td><strong style="color:var(--red);font-size:12px">{{ t.return_date }}</strong></td>
+        <td class="text-center"><strong>{{ t.tickets }}</strong></td>
         <td><span class="badge badge-{{ t.status|lower }}">{{ t.status }}</span></td>
       </tr>
       {% endfor %}
