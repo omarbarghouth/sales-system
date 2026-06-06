@@ -221,35 +221,35 @@
 {# ── Top Customers & Top Suppliers ──────────────────────────── #}
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px" class="top-two-grid">
 
-  {# Top 10 Customers #}
+  {# Top 10 Companies by Tickets #}
   <div class="card">
     <div class="card-header">
-      <i class="fas fa-user-friends" style="color:var(--navy)"></i> Top 10 Customers
+      <i class="fas fa-plane" style="color:var(--navy)"></i> Top 10 Companies by Tickets
     </div>
     <div style="overflow-x:auto">
       <table>
         <thead>
           <tr>
             <th>#</th>
-            <th>Customer</th>
-            <th class="text-right">Txns</th>
+            <th>Company</th>
+            <th class="text-right">Transactions</th>
+            <th class="text-right">Tickets</th>
             <th class="text-right">Revenue (JOD)</th>
-            <th class="text-right">Profit (JOD)</th>
           </tr>
         </thead>
         <tbody>
-          {% for c in top_customers %}
+          {% for c in top_debtors %}
           <tr>
             <td style="color:var(--muted);font-size:12px"><strong>{{ loop.index }}</strong></td>
-            <td style="font-weight:600;color:var(--navy);font-size:12.5px">
-              {{ c.customer }}
+            <td style="font-weight:700;color:var(--navy);font-size:12.5px">
+              <a href="{{ url_for('statement', company=c.company) }}" style="color:var(--navy);text-decoration:none">{{ c.company }}</a>
             </td>
             <td class="text-right text-muted">{{ c.txn_count }}</td>
+            <td class="text-right" style="color:var(--navy);font-weight:800;font-size:14px">{{ c.total_tickets }}</td>
             <td class="text-right" style="color:var(--gold);font-weight:700">{{ "%.3f"|format((c.total_sell or 0)|float) }}</td>
-            <td class="text-right" style="color:#16a34a;font-weight:700">{{ "%.3f"|format((c.total_profit or 0)|float) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-center text-muted" style="padding:24px">No customer data yet</td></tr>
+          <tr><td colspan="5" class="text-center text-muted" style="padding:24px">No data yet</td></tr>
           {% endfor %}
         </tbody>
       </table>
