@@ -877,6 +877,44 @@ def index():
     chart_company_totals= [float(r['total'] or 0) for r in top_companies]
     has_monthly_data    = any(v > 0 for v in chart_month_sells)
 
+    # Top 10 customers by total revenue
+    top_customers = query_db("""
+        SELECT customer,
+               COUNT(*)                    AS txn_count,
+               COALESCE(SUM(sell),0)       AS total_sell,
+               COALESCE(SUM(profit),0)     AS total_profit
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND TRIM(COALESCE(customer,'')) <> ''
+        GROUP BY customer
+        ORDER BY total_sell DESC
+        LIMIT 10
+    """) or []
+
+    # Top 10 suppliers by purchase volume
+    top_suppliers = query_db("""
+        SELECT supplier, total_cost, txn_count FROM (
+            SELECT UPPER(TRIM(buy_from)) AS supplier,
+                   COALESCE(SUM(CASE WHEN outbound_cost>0 THEN outbound_cost ELSE net END),0) AS total_cost,
+                   COUNT(*) AS txn_count
+            FROM sales
+            WHERE deleted=FALSE AND is_archived=FALSE
+              AND TRIM(COALESCE(buy_from,'')) <> ''
+            GROUP BY UPPER(TRIM(buy_from))
+            UNION ALL
+            SELECT UPPER(TRIM(hotel_supplier)),
+                   COALESCE(SUM(hotel_net),0),
+                   COUNT(*)
+            FROM sales
+            WHERE deleted=FALSE AND is_archived=FALSE
+              AND TRIM(COALESCE(hotel_supplier,'')) <> ''
+            GROUP BY UPPER(TRIM(hotel_supplier))
+        ) t
+        GROUP BY supplier
+        ORDER BY SUM(total_cost) DESC
+        LIMIT 10
+    """) or []
+
     # Recent transactions with agent names
     recent_txns = query_db("""
         SELECT s.*,
@@ -906,6 +944,8 @@ def index():
         svc_counts=svc_counts,
         svc_sells=svc_sells,
         svc_profits=svc_profits,
+        top_customers=top_customers,
+        top_suppliers=top_suppliers,
         today=date.today().strftime('%d %B %Y')
     )
 
