@@ -877,17 +877,17 @@ def index():
     chart_company_totals= [float(r['total'] or 0) for r in top_companies]
     has_monthly_data    = any(v > 0 for v in chart_month_sells)
 
-    # Top 10 customers by total revenue
-    top_customers = query_db("""
-        SELECT customer,
-               COUNT(*)                    AS txn_count,
-               COALESCE(SUM(sell),0)       AS total_sell,
-               COALESCE(SUM(profit),0)     AS total_profit
+    # Top 10 companies by total tickets purchased
+    top_debtors = query_db("""
+        SELECT company,
+               COUNT(*)          AS txn_count,
+               COALESCE(SUM(tickets),0) AS total_tickets,
+               COALESCE(SUM(sell),0)    AS total_sell
         FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
-          AND TRIM(COALESCE(customer,'')) <> ''
-        GROUP BY customer
-        ORDER BY total_sell DESC
+          AND TRIM(COALESCE(company,'')) <> ''
+        GROUP BY company
+        ORDER BY total_tickets DESC
         LIMIT 10
     """) or []
 
@@ -947,7 +947,7 @@ def index():
         svc_counts=svc_counts,
         svc_sells=svc_sells,
         svc_profits=svc_profits,
-        top_customers=top_customers,
+        top_debtors=top_debtors,
         top_suppliers=top_suppliers,
         today=date.today().strftime('%d %B %Y')
     )
