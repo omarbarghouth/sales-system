@@ -123,6 +123,10 @@
        class="sb-link {% if request.endpoint=='audit_log' %}active{% endif %}">
       <i class="fas fa-clipboard-list"></i> Audit Logs
     </a>
+    <a href="{{ url_for('balance_adjustments') }}"
+       class="sb-link {% if request.endpoint=='balance_adjustments' %}active{% endif %}">
+      <i class="fas fa-sliders-h"></i> Balance Adjustments
+    </a>
     <a href="{{ url_for('archive') }}"
        class="sb-link {% if request.endpoint in ('archive','do_archive') %}active{% endif %}">
       <i class="fas fa-archive"></i> Archive

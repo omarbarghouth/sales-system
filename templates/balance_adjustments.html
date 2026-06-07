@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Balance Adjustments — ALSONDOS TRAVEL{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-sliders-h" style="color:#7c3aed;font-size:20px;vertical-align:middle;margin-right:6px"></i>Opening Balance Adjustments</h1>
+    <p>Safely reconcile historical balances without modifying existing transactions</p>
+  </div>
+</div>
+
+{# ── Create Form ─────────────────────────────────────────────── #}
+<div class="card mb-6">
+  <div class="card-header" style="background:#7c3aed">
+    <i class="fas fa-plus-circle"></i> New Adjustment Entry
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="create">
+
+      <div class="form-grid" style="gap:14px;margin-bottom:14px">
+
+        <div class="form-group">
+          <label>Account Type <span style="color:var(--red)">*</span></label>
+          <select name="account_type" id="account_type_sel" onchange="toggleAccountList()">
+            <option value="COMPANY">Company</option>
+            <option value="SUPPLIER">Supplier</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Account Name <span style="color:var(--red)">*</span></label>
+          <input type="text" name="account" id="account_input"
+                 list="account-list" required
+                 placeholder="Select or type account name…"
+                 style="text-transform:uppercase;font-weight:700"
+                 value="{{ request.args.get('account','') }}">
+          <datalist id="account-list">
+            {% for co in companies %}<option value="{{ co }}">{% endfor %}
+          </datalist>
+          <datalist id="supplier-list">
+            {% for s in suppliers %}<option value="{{ s.name if s.name is defined else s }}">{% endfor %}
+          </datalist>
+        </div>
+
+        <div class="form-group">
+          <label>Date <span style="color:var(--red)">*</span></label>
+          <input type="date" name="adj_date" required value="{{ today }}">
+        </div>
+
+        <div class="form-group">
+          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
+          <input type="number" name="amount" step="0.001" min="0.001" required
+                 placeholder="0.000" style="font-size:16px;font-weight:700">
+        </div>
+
+        <div class="form-group">
+          <label>Entry Type <span style="color:var(--red)">*</span></label>
+          <select name="entry_type">
+            <option value="CREDIT">Credit — reduces balance (company owes less)</option>
+            <option value="DEBIT">Debit — increases balance (company owes more)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="grid-column:span 2">
+          <label>Reason <span style="color:var(--red)">*</span></label>
+          <input type="text" name="reason" required
+                 placeholder="e.g. Opening Balance Adjustment — historical balance before ERP migration"
+                 maxlength="200">
+        </div>
+
+        <div class="form-group" style="grid-column:span 2">
+          <label>Notes (optional)</label>
+          <input type="text" name="notes" placeholder="Any additional notes…" maxlength="300">
+        </div>
+
+      </div>
+
+      {# Accounting guide #}
+      <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:14px;margin-bottom:16px;font-size:12.5px;color:#5b21b6">
+        <strong><i class="fas fa-info-circle"></i> How to choose entry type:</strong><br>
+        <span style="display:block;margin-top:6px">
+          <strong>ERP balance &gt; Real balance</strong> → Use <strong>CREDIT</strong> to reduce the ERP balance
+          &nbsp;|&nbsp;
+          <strong>ERP balance &lt; Real balance</strong> → Use <strong>DEBIT</strong> to increase the ERP balance
+        </span>
+        <span style="display:block;margin-top:4px;color:#6b7280">
+          Example: ERP shows 1210 JOD DR, real balance is 570 JOD DR → difference is 640 JOD → create CREDIT of 640 JOD
+        </span>
+      </div>
+
+      <button type="submit" class="btn" style="background:#7c3aed;color:#fff;width:100%">
+        <i class="fas fa-save"></i> Create Adjustment Entry
+      </button>
+    </form>
+  </div>
+</div>
+
+{# ── Existing Adjustments ────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <i class="fas fa-list"></i> All Adjustments ({{ adjustments|length }})
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Account Type</th>
+          <th>Account</th>
+          <th>Entry Type</th>
+          <th class="text-right">Amount (JOD)</th>
+          <th>Reason</th>
+          <th>Notes</th>
+          <th>Created By</th>
+          <th class="no-print">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in adjustments %}
+        <tr>
+          <td style="color:var(--muted);font-size:11px">{{ loop.index }}</td>
+          <td style="font-family:monospace;font-size:12px">{{ a.adj_date }}</td>
+          <td>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;
+              {% if a.account_type=='COMPANY' %}background:#e0e7ff;color:#3730a3
+              {% else %}background:#fce7f3;color:#9d174d{% endif %}">
+              {{ a.account_type }}
+            </span>
+          </td>
+          <td style="font-weight:700;color:#1e293b">
+            {% if a.account_type == 'COMPANY' %}
+            <a href="{{ url_for('statement', company=a.account) }}" style="color:var(--navy);text-decoration:none">{{ a.account }}</a>
+            {% else %}
+            <a href="{{ url_for('supplier_statement', supplier=a.account) }}" style="color:var(--navy);text-decoration:none">{{ a.account }}</a>
+            {% endif %}
+          </td>
+          <td>
+            <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;
+              {% if a.entry_type=='DEBIT' %}background:#fee2e2;color:#991b1b
+              {% else %}background:#dcfce7;color:#166534{% endif %}">
+              {{ a.entry_type }}
+            </span>
+          </td>
+          <td class="text-right" style="font-weight:700;font-size:13px;
+            {% if a.entry_type=='DEBIT' %}color:#991b1b{% else %}color:#166534{% endif %}">
+            {{ "%.3f"|format(a.amount|float) }}
+          </td>
+          <td style="font-size:12px;color:#374151">{{ a.reason }}</td>
+          <td style="font-size:11px;color:var(--muted)">{{ a.notes or '—' }}</td>
+          <td style="font-size:11px;color:var(--muted)">{{ a.created_by_name or '—' }}</td>
+          <td class="no-print">
+            <form method="POST" onsubmit="return confirm('Delete this adjustment? This will affect the statement balance.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="adj_id" value="{{ a.id }}">
+              <button type="submit" class="btn btn-danger btn-xs">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" style="padding:32px;text-align:center;color:var(--muted)">
+            No adjustments yet. Use the form above to create one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function toggleAccountList() {
+  var type = document.getElementById('account_type_sel').value;
+  var inp  = document.getElementById('account_input');
+  inp.setAttribute('list', type === 'SUPPLIER' ? 'supplier-list' : 'account-list');
+  inp.value = '';
+  inp.placeholder = type === 'SUPPLIER' ? 'Select or type supplier name…' : 'Select or type company name…';
+}
+// Pre-fill from URL params
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var acc = params.get('account');
+  var typ = params.get('account_type');
+  if (acc) document.getElementById('account_input').value = acc;
+  if (typ) {
+    document.getElementById('account_type_sel').value = typ;
+    toggleAccountList();
+    if (acc) document.getElementById('account_input').value = acc;
+  }
+})();
+</script>
+{% endblock %}

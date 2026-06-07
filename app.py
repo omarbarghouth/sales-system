@@ -1625,8 +1625,29 @@ def statement():
                 'id':          sp['id'],
             })
 
+        # Opening balance adjustments for this company
+        for adj in _q(
+            "SELECT * FROM balance_adjustments WHERE deleted=FALSE AND account_type='COMPANY' "
+            "AND UPPER(TRIM(account))=UPPER(%s) ORDER BY adj_date,id",
+            [company]
+        ):
+            if date_from and str(adj['adj_date']) < date_from: continue
+            if date_to   and str(adj['adj_date']) > date_to:   continue
+            ledger_entries.append({
+                'date':        adj['adj_date'],
+                'ref':         f"ADJ-{adj['id']:04d}",
+                'description': adj['reason'] or 'Balance Adjustment',
+                'passenger':   adj['notes'] or '',
+                'svc':         '',
+                'debit':       float(adj['amount']) if adj['entry_type'] == 'DEBIT'  else 0.0,
+                'credit':      float(adj['amount']) if adj['entry_type'] == 'CREDIT' else 0.0,
+                'type':        'adjustment',
+                'travel_date': '',
+                'id':          adj['id'],
+            })
+
         # Sort: date > type priority > ref
-        _ORD = {'sale':0,'purchase':1,'payment_in':2,'payment_out':3}
+        _ORD = {'sale':0,'purchase':1,'payment_in':2,'payment_out':3,'adjustment':4}
         ledger_entries.sort(key=lambda x:(x['date'], _ORD.get(x['type'],9), x['ref']))
 
         # Renumber payment refs sequentially within this company's statement
@@ -2984,6 +3005,28 @@ def init_extension_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_company_id  ON sales(company_id)  WHERE company_id IS NOT NULL")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_supplier_id ON sales(supplier_id) WHERE supplier_id IS NOT NULL")
 
+    # ════════════════════════════════════════════════════════════════════════
+    # PHASE E — balance_adjustments: opening balance / historical corrections
+    # Never modifies existing transactions. Appears as a normal ledger line.
+    # ════════════════════════════════════════════════════════════════════════
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS balance_adjustments (
+            id           SERIAL PRIMARY KEY,
+            account      TEXT NOT NULL,
+            account_type TEXT NOT NULL DEFAULT 'COMPANY',
+            adj_date     TEXT NOT NULL,
+            amount       NUMERIC(12,3) NOT NULL,
+            entry_type   TEXT NOT NULL DEFAULT 'CREDIT',
+            reason       TEXT NOT NULL DEFAULT '',
+            notes        TEXT DEFAULT '',
+            created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at   TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+            deleted      BOOLEAN DEFAULT FALSE
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_adj_account ON balance_adjustments(UPPER(account)) WHERE deleted=FALSE")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_adj_date    ON balance_adjustments(adj_date) WHERE deleted=FALSE")
+
     db.commit()
     cur.close()
     db.close()
@@ -4235,8 +4278,31 @@ def supplier_statement():
             _e.setdefault('pnr',           '')
             _e.setdefault('ticket_number', '')
 
+        # Opening balance adjustments for this supplier
+        for adj in (query_db(
+            "SELECT * FROM balance_adjustments WHERE deleted=FALSE AND account_type='SUPPLIER' "
+            "AND UPPER(TRIM(account))=UPPER(%s) ORDER BY adj_date,id",
+            [supplier]
+        ) or []):
+            ledger_entries.append({
+                'date':        adj['adj_date'],
+                'ref':         f"ADJ-{adj['id']:04d}",
+                'description': adj['reason'] or 'Balance Adjustment',
+                'customer':    adj['notes'] or '',
+                'svc':         '',
+                'debit':       float(adj['amount']) if adj['entry_type'] == 'DEBIT'  else 0.0,
+                'credit':      float(adj['amount']) if adj['entry_type'] == 'CREDIT' else 0.0,
+                'type':        'adjustment',
+                'travel_date': '',
+                'from_loc':    '',
+                'to_loc':      '',
+                'pnr':         '',
+                'ticket_number': '',
+                'id':          adj['id'],
+            })
+
         # ── Sort: date → type priority → ref ─────────────────────────────────
-        _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3}
+        _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3, 'adjustment':4}
         ledger_entries.sort(key=lambda x:(str(x['date']), _ORD.get(x['type'],9), x['ref']))
 
         # Renumber payment refs sequentially within this supplier's statement
@@ -4992,6 +5058,74 @@ def admin_update_employee(uid):
                (full_name, email, phone, uid))
     flash('Employee profile updated.', 'success')
     return redirect(url_for('admin_employees'))
+
+
+# ── Balance Adjustments ───────────────────────────────────────────────────────
+@app.route('/admin/adjustments', methods=['GET', 'POST'])
+@admin_required
+def balance_adjustments():
+    if request.method == 'POST':
+        action = request.form.get('action', 'create')
+
+        if action == 'create':
+            account      = request.form.get('account', '').upper().strip()
+            account_type = request.form.get('account_type', 'COMPANY')
+            adj_date     = request.form.get('adj_date', str(date.today()))
+            amount       = round(float(request.form.get('amount', 0) or 0), 3)
+            entry_type   = request.form.get('entry_type', 'CREDIT')
+            reason       = request.form.get('reason', '').strip()
+            notes        = request.form.get('notes', '').strip()
+
+            if not account:
+                flash('Account name is required.', 'danger')
+                return redirect(url_for('balance_adjustments'))
+            if amount <= 0:
+                flash('Amount must be greater than zero.', 'danger')
+                return redirect(url_for('balance_adjustments'))
+            if not reason:
+                flash('Reason is required.', 'danger')
+                return redirect(url_for('balance_adjustments'))
+
+            adj_id = execute_db("""
+                INSERT INTO balance_adjustments
+                (account, account_type, adj_date, amount, entry_type, reason, notes, created_by)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (account, account_type, adj_date, amount, entry_type,
+                  reason, notes, session.get('user_id')))
+
+            log_action('CREATE', 'balance_adjustments', adj_id,
+                       f"{account_type} {account} | {entry_type} JOD {amount:.3f} | {reason}")
+            flash(f'Adjustment created — {entry_type} JOD {amount:.3f} for {account}.', 'success')
+            return redirect(url_for('balance_adjustments'))
+
+        elif action == 'delete':
+            adj_id = int(request.form.get('adj_id', 0))
+            adj = query_db('SELECT account, amount, entry_type FROM balance_adjustments WHERE id=%s', [adj_id], one=True)
+            execute_db('UPDATE balance_adjustments SET deleted=TRUE WHERE id=%s', [adj_id])
+            log_action('DELETE', 'balance_adjustments', adj_id,
+                       f"Deleted adjustment: {adj['account'] if adj else ''} {adj['entry_type'] if adj else ''} JOD {adj['amount'] if adj else ''}")
+            flash('Adjustment deleted.', 'success')
+            return redirect(url_for('balance_adjustments'))
+
+    # GET — list all adjustments
+    adjustments = query_db("""
+        SELECT a.*, u.username as created_by_name
+        FROM balance_adjustments a
+        LEFT JOIN users u ON a.created_by = u.id
+        WHERE a.deleted=FALSE
+        ORDER BY a.adj_date DESC, a.id DESC
+    """) or []
+
+    companies = get_companies_list()
+    suppliers = get_suppliers_list()
+
+    return render_template('balance_adjustments.html',
+        adjustments=adjustments,
+        companies=companies,
+        suppliers=suppliers,
+        today=str(date.today()),
+    )
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

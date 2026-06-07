@@ -44,6 +44,12 @@
     <p>Mutual B2B ledger · full debit / credit / running balance</p>
   </div>
   <div class="page-header-actions">
+    {% if is_admin %}
+    <a href="{{ url_for('balance_adjustments') }}?account={{ company }}&account_type=COMPANY"
+       class="btn btn-primary btn-sm" style="background:#7c3aed;border-color:#7c3aed">
+      <i class="fas fa-sliders-h"></i> Opening Balance Adjustment
+    </a>
+    {% endif %}
     {% if company and ledger %}
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print / PDF</button>
     {% endif %}
@@ -209,7 +215,8 @@
       <tbody>
         {% for e in ledger %}
         <tr style="border-bottom:1px solid #f1f5f9;
-          {% if e.type=='payment_in' %}background:#f0fdf4
+          {% if e.type=='adjustment' %}background:#faf5ff;border-left:3px solid #7c3aed
+          {% elif e.type=='payment_in' %}background:#f0fdf4
           {% elif e.type=='payment_out' %}background:#fefce8
           {% elif e.type=='purchase' %}background:#f8fafc
           {% else %}background:#fff{% endif %}">
