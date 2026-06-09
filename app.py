@@ -1098,6 +1098,13 @@ def add_sale():
             float(request.form.get('outbound_cost',0) or 0),
             float(request.form.get('return_cost',0) or 0)
         ))
+        # Assign transaction number
+        if new_id:
+            _txn = next_txn_number()
+            try:
+                execute_db('UPDATE sales SET txn_number=%s WHERE id=%s', (_txn, new_id))
+            except Exception:
+                pass
         try:
             log_action('CREATE','sales',new_id,
                        f"{request.form.get('customer','').upper()} | {extra_vals['service_type']} | Sell:{sell}")
@@ -3006,6 +3013,28 @@ def init_extension_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_supplier_id ON sales(supplier_id) WHERE supplier_id IS NOT NULL")
 
     # ════════════════════════════════════════════════════════════════════════
+    # PHASE E-1 — txn_number: human-readable transaction number (T-0001...)
+    # ════════════════════════════════════════════════════════════════════════
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE sales ADD COLUMN IF NOT EXISTS txn_number TEXT DEFAULT '';
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    """)
+    # Backfill existing active records that have no txn_number yet
+    cur.execute("""
+        UPDATE sales s
+        SET txn_number = sub.new_num
+        FROM (
+            SELECT id,
+                   'T-' || LPAD(ROW_NUMBER() OVER (ORDER BY id)::TEXT, 4, '0') AS new_num
+            FROM sales
+            WHERE deleted=FALSE
+        ) sub
+        WHERE s.id = sub.id AND (s.txn_number IS NULL OR s.txn_number = '')
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_txn_number ON sales(txn_number) WHERE deleted=FALSE")
+
+    # ════════════════════════════════════════════════════════════════════════
     # PHASE E — balance_adjustments: opening balance / historical corrections
     # Never modifies existing transactions. Appears as a normal ledger line.
     # ════════════════════════════════════════════════════════════════════════
@@ -3039,6 +3068,21 @@ except Exception as _ext_err:
 
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
+def next_txn_number() -> str:
+    """Generate the next sequential transaction number T-XXXX."""
+    try:
+        row = query_db(
+            "SELECT txn_number FROM sales WHERE deleted=FALSE AND txn_number<>'' ORDER BY id DESC LIMIT 1",
+            one=True
+        )
+        if row and row['txn_number']:
+            last_num = int(row['txn_number'].replace('T-', ''))
+            return f"T-{(last_num + 1):04d}"
+    except Exception:
+        pass
+    return "T-0001"
+
+
 def next_doc_number(doc_type: str) -> str:
     """
     Smart document numbering with TESTING MODE reset support.
@@ -3396,6 +3440,13 @@ def add_sale_v2():
             _rtn,                                                          # 52 return_ticket_number
             _rpnr,                                                         # 53 return_pnr
         ))
+        # Assign transaction number
+        if new_id:
+            _txn = next_txn_number()
+            try:
+                execute_db('UPDATE sales SET txn_number=%s WHERE id=%s', (_txn, new_id))
+            except Exception:
+                pass
         try:
             log_action('CREATE','sales',new_id,
                        f"{request.form.get('customer','').upper()} | Sell:{sell}")
