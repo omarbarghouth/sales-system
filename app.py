@@ -1989,6 +1989,137 @@ def deliver_tomorrow():
         )
     )
 
+@app.route('/deliver-tomorrow/export')
+@login_required
+def deliver_tomorrow_export():
+    """Export the current Deliver Tomorrow view to Excel."""
+    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    view_date = request.args.get('view_date', '').strip() or tomorrow_date
+
+    f_travel_date = request.args.get('travel_date', '').strip()
+    f_company     = request.args.get('company', '').strip().upper()
+    f_supplier    = request.args.get('supplier', '').strip().upper()
+    f_passenger   = request.args.get('passenger', '').strip().upper()
+    f_status      = request.args.get('status', '').strip().upper()
+    f_agent       = request.args.get('agent_id', '').strip()
+
+    extra_where, extra_params = [], []
+    if f_company:
+        extra_where.append("AND UPPER(s.company) LIKE %s")
+        extra_params.append('%' + f_company + '%')
+    if f_supplier:
+        extra_where.append("AND (UPPER(COALESCE(s.buy_from,'')) LIKE %s OR UPPER(COALESCE(s.return_supplier,'')) LIKE %s)")
+        extra_params.extend(['%' + f_supplier + '%', '%' + f_supplier + '%'])
+    if f_passenger:
+        extra_where.append("AND UPPER(s.customer) LIKE %s")
+        extra_params.append('%' + f_passenger + '%')
+    if f_status:
+        extra_where.append("AND (COALESCE(s.outbound_status,s.status,'PENDING')=%s OR COALESCE(s.return_status,s.status,'PENDING')=%s)")
+        extra_params.extend([f_status, f_status])
+    if f_agent:
+        extra_where.append("AND s.created_by_user_id=%s")
+        extra_params.append(f_agent)
+    if f_travel_date:
+        extra_where.append("AND s.travel_date=%s")
+        extra_params.append(f_travel_date)
+    extra_str = ' '.join(extra_where)
+
+    agent_select = "COALESCE(u.full_name, s.created_by_username, '—') AS agent_display"
+    agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
+
+    outbound_tickets = query_db(f'''
+        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.deleted=FALSE
+          AND (
+            (s.outbound_delivery != '' AND s.outbound_delivery = %s)
+            OR
+            (COALESCE(s.outbound_delivery, '') = '' AND s.travel_date = %s AND COALESCE(s.travel_date, '') != '')
+          )
+        {extra_str}
+        ORDER BY s.company, s.customer
+    ''', [view_date, view_date] + extra_params) or []
+
+    return_tickets = query_db(f'''
+        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.deleted=FALSE
+          AND (
+            (s.return_delivery != '' AND s.return_delivery = %s)
+            OR
+            (COALESCE(s.return_delivery, '') = '' AND s.return_date = %s AND COALESCE(s.return_date, '') != '')
+          )
+        {extra_str}
+        ORDER BY s.company, s.customer
+    ''', [view_date, view_date] + extra_params) or []
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Deliver Tomorrow'
+
+    header_font = Font(bold=True, color='FFFFFF')
+    out_fill    = PatternFill('solid', fgColor='1B3A6B')
+    ret_fill    = PatternFill('solid', fgColor='8B6914')
+    center      = Alignment(horizontal='center', vertical='center')
+
+    columns = ['#', 'Type', 'Company', 'Customer', 'Route', 'Supplier', 'Tickets', 'Date', 'Status']
+    ws.append(columns)
+    for col_idx, _ in enumerate(columns, 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font   = Font(bold=True, color='FFFFFF')
+        cell.fill   = PatternFill('solid', fgColor='1B3A6B')
+        cell.alignment = center
+
+    row_num = 1
+    for t in outbound_tickets:
+        row_num += 1
+        route  = f"{t['from_loc'] or ''} → {t['to_loc'] or ''}"
+        status = t.get('outbound_status') or t.get('status') or 'PENDING'
+        ws.append([
+            row_num - 1, 'OUTBOUND',
+            t['company'], t['customer'],
+            route,
+            t.get('buy_from') or '-',
+            t['tickets'],
+            str(t.get('travel_date') or '-'),
+            status,
+        ])
+
+    for t in return_tickets:
+        row_num += 1
+        route  = f"{t['to_loc'] or ''} → {t['from_loc'] or ''}"
+        status = t.get('return_status') or t.get('status') or 'PENDING'
+        ws.append([
+            row_num - 1, 'RETURN',
+            t['company'], t['customer'],
+            route,
+            t.get('return_supplier') or t.get('buy_from') or '-',
+            t['tickets'],
+            str(t.get('return_date') or '-'),
+            status,
+        ])
+
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 10
+    ws.column_dimensions['C'].width = 22
+    ws.column_dimensions['D'].width = 22
+    ws.column_dimensions['E'].width = 18
+    ws.column_dimensions['F'].width = 22
+    ws.column_dimensions['G'].width = 8
+    ws.column_dimensions['H'].width = 14
+    ws.column_dimensions['I'].width = 10
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"deliver_{view_date}.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
 @app.route('/deliver-tomorrow/mark/<int:sale_id>', methods=['POST'])
 @login_required
 def mark_delivered(sale_id):
