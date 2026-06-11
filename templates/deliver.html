@@ -50,6 +50,12 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
   </div>
   <div class="page-header-actions no-print">
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
+    <a href="{{ url_for('deliver_tomorrow_export', view_date=filters.view_date or tomorrow_date,
+        travel_date=filters.travel_date, company=filters.company, supplier=filters.supplier,
+        passenger=filters.passenger, status=filters.status, agent_id=filters.agent_id) }}"
+       class="btn" style="background:#217346;color:#fff;font-weight:700">
+      <i class="fas fa-file-excel"></i> Export Excel
+    </a>
     <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
