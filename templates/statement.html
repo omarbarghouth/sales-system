@@ -9,30 +9,34 @@
 /* ── Print ────────────────────────────────────────────────── */
 @media print{
   @page{size:A4 portrait;margin:8mm 8mm 10mm 8mm}
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
   body>*{display:none!important}
-  .sidebar,.topbar,.page-header,.filter-bar,.no-print,
-  .stmt-kpis,.stmt-legend{display:none!important}
-  body{margin:0!important;background:#fff!important}
-  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important}
-  #stmtDoc{display:block!important;box-shadow:none!important;border-radius:0!important;width:194mm!important;overflow:visible!important}
-  /* Hide the overflow-x wrapper so table can stretch */
+  .sidebar,.mobile-topbar,.topbar,.page-header,.filter-bar,.no-print,
+  .stmt-kpis,.stmt-legend,.sb-overlay{display:none!important}
+  body{margin:0!important;padding:0!important;background:#fff!important;font-size:8pt}
+  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important;max-width:100%!important}
+  #stmtDoc{display:block!important;box-shadow:none!important;border-radius:0!important;
+           width:100%!important;margin:0!important;overflow:visible!important}
   #stmtDoc div[style*="overflow-x"]{overflow:visible!important}
+  /* ── Table: fixed layout with mm widths — portrait A4 (194mm usable) ── */
   table{width:194mm!important;table-layout:fixed!important;border-collapse:collapse!important}
-  th,td{padding:2.5pt 3pt!important;font-size:7pt!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap!important}
-  /* Col order: Date | Ref | Description | Svc | Travel Date | Debit | Credit | Balance
-     Total: 18+16+60+12+22+22+22+22 = 194mm */
-  table th:nth-child(1),table td:nth-child(1){width:18mm!important}  /* Date */
-  table th:nth-child(2),table td:nth-child(2){width:16mm!important}  /* Ref */
-  table th:nth-child(3),table td:nth-child(3){width:60mm!important;white-space:normal!important;word-wrap:break-word!important;line-height:1.3!important}  /* Description / Passenger */
+  th{padding:3pt 4pt!important;font-size:7pt!important;white-space:nowrap!important;overflow:hidden}
+  td{padding:3pt 4pt!important;font-size:8pt!important;
+     white-space:normal!important;word-break:break-word!important;
+     overflow:visible!important;text-overflow:clip!important;vertical-align:top!important}
+  /* Col: Date | # | Description | Svc | Travel Date | Debit | Credit | Balance
+     Total: 20+14+64+12+22+20+20+22 = 194mm */
+  table th:nth-child(1),table td:nth-child(1){width:20mm!important}  /* Date */
+  table th:nth-child(2),table td:nth-child(2){width:14mm!important}  /* # / Ref */
+  table th:nth-child(3),table td:nth-child(3){width:64mm!important;line-height:1.35!important}  /* Description */
   table th:nth-child(4),table td:nth-child(4){width:12mm!important}  /* Svc */
   table th:nth-child(5),table td:nth-child(5){width:22mm!important}  /* Travel Date */
-  table th:nth-child(6),table td:nth-child(6){width:22mm!important}  /* Debit */
-  table th:nth-child(7),table td:nth-child(7){width:22mm!important}  /* Credit */
-  table th:nth-child(8),table td:nth-child(8){width:22mm!important}  /* Balance */
-  tr{page-break-inside:avoid}
-  thead{display:table-header-group}
-  tfoot{display:table-footer-group}
+  table th:nth-child(6),table td:nth-child(6){width:20mm!important;text-align:right!important}  /* Debit */
+  table th:nth-child(7),table td:nth-child(7){width:20mm!important;text-align:right!important}  /* Credit */
+  table th:nth-child(8),table td:nth-child(8){width:22mm!important;text-align:right!important}  /* Balance */
+  tr{page-break-inside:avoid!important;break-inside:avoid!important}
+  thead{display:table-header-group!important}
+  tfoot{display:table-footer-group!important}
 }
 </style>{% endblock %}
 

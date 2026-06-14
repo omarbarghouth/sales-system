@@ -3,18 +3,69 @@
 
 {% block extra_css %}<style>
 @media print{
-  @page{size:A4 portrait;margin:10mm 10mm 12mm 10mm}
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  /* ── Page setup: landscape so all 9 columns fit ── */
+  @page{size:A4 landscape;margin:8mm 10mm 10mm 10mm}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+
+  /* ── Hide chrome, keep only #supDoc ── */
   body>*{display:none!important}
-  .sidebar,.topbar,.page-header,.filter-bar,.no-print{display:none!important}
-  body{margin:0!important;background:#fff!important}
-  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important}
-  #supDoc{display:block!important;box-shadow:none!important;border-radius:0!important;width:100%!important}
-  table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
-  th,td{padding:3pt 5pt!important;font-size:7.5pt!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
-  tr{page-break-inside:avoid}
-  thead{display:table-header-group}
-  tfoot{display:table-footer-group}
+  .sidebar,.mobile-topbar,.page-header,.filter-bar,.no-print,
+  .kpi-box,.sb-overlay{display:none!important}
+  body{margin:0!important;padding:0!important;background:#fff!important;font-size:8pt}
+  .main-content{display:block!important;margin:0!important;padding:0!important;width:100%!important;max-width:100%!important}
+  #supDoc{display:block!important;box-shadow:none!important;border-radius:0!important;
+          width:100%!important;margin:0!important;overflow:visible!important}
+
+  /* ── Branded header ── */
+  #supDoc>div:first-child{padding:10pt 14pt!important;border-bottom:3pt solid #C8A84B!important}
+  #supDoc>div:first-child img{height:38pt!important}
+
+  /* ── Summary grid ── */
+  #supDoc>div:nth-child(2){border-bottom:1pt solid #e2e8f0!important}
+  #supDoc>div:nth-child(2)>div{padding:7pt 10pt!important}
+  #supDoc>div:nth-child(2) div[style*="font-size:17px"]{font-size:12pt!important}
+  #supDoc>div:nth-child(2) div[style*="font-size:9px"]{font-size:7pt!important}
+
+  /* ── Balance banner ── */
+  #supDoc>div:nth-child(3){padding:7pt 14pt!important}
+  #supDoc>div:nth-child(3) div[style*="font-size:20px"]{font-size:12pt!important}
+  #supDoc>div:nth-child(3) div[style*="font-size:11px"]{font-size:7.5pt!important}
+
+  /* ── Table: let it breathe ── */
+  table{width:100%!important;table-layout:auto!important;border-collapse:collapse!important}
+  th{padding:4pt 5pt!important;font-size:7pt!important;white-space:nowrap!important}
+  td{padding:4pt 5pt!important;font-size:8pt!important;
+     white-space:normal!important;word-break:break-word!important;
+     overflow:visible!important;text-overflow:clip!important;vertical-align:top!important}
+
+  /* ── Keep row colors, prevent splitting mid-row ── */
+  tr{page-break-inside:avoid!important;break-inside:avoid!important}
+  thead{display:table-header-group!important}
+  tfoot{display:table-footer-group!important}
+
+  /* ── Column widths tuned for A4 landscape (277mm usable ≈ 787pt) ── */
+  table colgroup,
+  thead tr th:nth-child(1){width:58pt!important}   /* Date */
+  thead tr th:nth-child(2){width:20pt!important}   /* # */
+  thead tr th:nth-child(3){width:110pt!important}  /* Passenger */
+  thead tr th:nth-child(4){width:70pt!important}   /* Route */
+  thead tr th:nth-child(5){width:50pt!important}   /* Travel Date */
+  thead tr th:nth-child(6){width:30pt!important}   /* Svc */
+  thead tr th:nth-child(7){width:58pt!important}   /* Cost */
+  thead tr th:nth-child(8){width:58pt!important}   /* Paid */
+  thead tr th:nth-child(9){width:62pt!important}   /* Balance */
+
+  /* ── Suppress screen-only sub-labels ── */
+  .no-print{display:none!important}
+
+  /* ── Signature block ── */
+  #supDoc>div:last-child{padding:10pt 20pt 8pt!important;border-top:1pt solid #e2e8f0!important}
+
+  /* ── Force all inline style font-size overrides ── */
+  td span[style*="font-size:12px"],td div[style*="font-size:12px"]{font-size:8pt!important}
+  td span[style*="font-size:11px"],td div[style*="font-size:11px"]{font-size:7.5pt!important}
+  td span[style*="font-size:10"],td div[style*="font-size:10"]{font-size:7pt!important}
+  td span[style*="font-size:9"],td div[style*="font-size:9"]{font-size:6.5pt!important}
 }
 </style>{% endblock %}
 
