@@ -13,28 +13,35 @@
 
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
+    <div class="form-group" style="flex:2;min-width:150px"><label>Customer Name</label>
+      <input type="text" name="customer" value="{{ filters.customer }}"
+             placeholder="Search by customer…" style="text-transform:uppercase">
+    </div>
     <div class="form-group" style="flex:2;min-width:150px"><label>Company</label>
-      <select name="company" onchange="this.form.submit()">
-        <option value="">All</option>
+      <select name="company">
+        <option value="">All Companies</option>
         {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
       </select>
     </div>
-    <div class="form-group" style="min-width:130px"><label>Status</label>
-      <select name="status" onchange="this.form.submit()">
+    <div class="form-group" style="min-width:120px"><label>Status</label>
+      <select name="status">
         <option value="">All</option>
         <option value="STILL" {% if filters.status=='STILL' %}selected{% endif %}>Still</option>
         <option value="DONE"  {% if filters.status=='DONE'  %}selected{% endif %}>Done</option>
       </select>
     </div>
     <div class="form-group" style="min-width:130px"><label>From</label>
-      <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
     </div>
     <div class="form-group" style="min-width:130px"><label>To</label>
-      <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
     </div>
-    {% if filters.company or filters.status or filters.date_from or filters.date_to %}
-    <a href="{{ url_for('my_sales') }}" class="btn btn-outline btn-sm" style="align-self:flex-end"><i class="fas fa-times"></i></a>
-    {% endif %}
+    <div style="align-self:flex-end;display:flex;gap:6px">
+      <button type="submit" class="btn btn-primary" style="padding:8px 16px"><i class="fas fa-search"></i></button>
+      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.customer %}
+      <a href="{{ url_for('my_sales') }}" class="btn btn-outline" style="padding:8px 12px" title="Clear filters"><i class="fas fa-times"></i></a>
+      {% endif %}
+    </div>
   </form>
 </div>
 

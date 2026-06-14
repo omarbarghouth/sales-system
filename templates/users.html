@@ -26,14 +26,16 @@
           </div>
           <div class="form-group">
             <label>Password <span class="req">*</span></label>
-            <input type="password" name="password" required placeholder="Min 6 characters"
-                   autocomplete="new-password">
+            <input type="password" name="password" required placeholder="Min 8 chars + 1 number"
+                   autocomplete="new-password" minlength="8">
+            <small>At least 8 characters and one number</small>
           </div>
           <div class="form-group">
             <label>Role</label>
             <select name="role">
-              <option value="user">👤 Employee / Sales Agent</option>
-              <option value="admin">👑 Admin (full access)</option>
+              <option value="user">👤 Sales Agent — own transactions only</option>
+              <option value="manager">📊 Manager — statements, payments, all transactions</option>
+              <option value="admin">👑 Admin — full access</option>
             </select>
           </div>
           <div class="form-group">
@@ -115,8 +117,8 @@
             </div>
           </td>
           <td>
-            <span class="badge badge-{% if u.role=='admin' %}pending{% else %}navy{% endif %}">
-              {% if u.role == 'admin' %}👑 Admin{% else %}👤 Agent{% endif %}
+            <span class="badge badge-{% if u.role=='admin' %}pending{% elif u.role=='manager' %}gold{% else %}navy{% endif %}">
+              {% if u.role == 'admin' %}👑 Admin{% elif u.role == 'manager' %}📊 Manager{% else %}👤 Agent{% endif %}
             </span>
           </td>
           <td class="text-center">
@@ -192,7 +194,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group" style="margin-bottom:16px">
         <label>New Password <span class="req">*</span></label>
-        <input type="password" name="new_password" id="newPwInput" required minlength="6" placeholder="Min 6 characters" autocomplete="new-password">
+        <input type="password" name="new_password" id="newPwInput" required minlength="8" placeholder="Min 8 chars + 1 number" autocomplete="new-password">
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button type="button" onclick="closeResetPw()" class="btn btn-outline">Cancel</button>

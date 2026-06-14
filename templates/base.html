@@ -39,7 +39,9 @@
     </div>
     {% endif %}
 
-    {% if is_admin %}
+    {% set user_role = session.get('user_role','user') %}
+
+    {% if user_role == 'admin' %}
     {# ════════════ ADMIN NAVIGATION ════════════ #}
 
     <div class="sb-section">Main</div>
@@ -91,7 +93,7 @@
     <div class="sb-section">Delivery</div>
     <a href="{{ url_for('deliver_tomorrow') }}"
        class="sb-link {% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
-      <i class="fas fa-truck"></i> Deliver Tomorrow
+      <i class="fas fa-satellite-dish"></i> Deliver Tomorrow
     </a>
 
     <div class="sb-section">Management</div>
@@ -130,6 +132,63 @@
     <a href="{{ url_for('archive') }}"
        class="sb-link {% if request.endpoint in ('archive','do_archive') %}active{% endif %}">
       <i class="fas fa-archive"></i> Archive
+    </a>
+
+    {% elif user_role == 'manager' %}
+    {# ════════════ MANAGER NAVIGATION ════════════ #}
+
+    <div class="sb-section">Main</div>
+    <a href="{{ url_for('index') }}"
+       class="sb-link {% if request.endpoint=='index' %}active{% endif %}">
+      <i class="fas fa-chart-pie"></i> Dashboard
+    </a>
+
+    <div class="sb-section">Operations</div>
+    <a href="{{ url_for('sales_report') }}"
+       class="sb-link {% if request.endpoint=='sales_report' %}active{% endif %}">
+      <i class="fas fa-exchange-alt"></i> Transactions
+    </a>
+    <a href="{{ url_for('statement') }}"
+       class="sb-link {% if request.endpoint=='statement' %}active{% endif %}">
+      <i class="fas fa-file-invoice-dollar"></i> Statements
+    </a>
+    <a href="{{ url_for('supplier_statement') }}"
+       class="sb-link {% if request.endpoint=='supplier_statement' %}active{% endif %}">
+      <i class="fas fa-truck"></i> Supplier Statements
+    </a>
+    <a href="{{ url_for('payments') }}"
+       class="sb-link {% if request.endpoint=='payments' %}active{% endif %}">
+      <i class="fas fa-money-bill-wave"></i> Payments
+    </a>
+    <a href="{{ url_for('supplier_payments_page') }}"
+       class="sb-link {% if request.endpoint=='supplier_payments_page' %}active{% endif %}">
+      <i class="fas fa-money-bill-wave"></i> Supplier Payments
+    </a>
+
+    <div class="sb-section">Documents</div>
+    <a href="{{ url_for('invoice_list') }}"
+       class="sb-link {% if 'invoice' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-file-invoice"></i> Invoices
+    </a>
+    <a href="{{ url_for('voucher_list') }}"
+       class="sb-link {% if 'voucher' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-hotel"></i> Hotel Vouchers
+    </a>
+    <a href="{{ url_for('package_list') }}"
+       class="sb-link {% if 'package' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-box-open"></i> Packages
+    </a>
+
+    <div class="sb-section">Delivery</div>
+    <a href="{{ url_for('deliver_tomorrow') }}"
+       class="sb-link {% if request.endpoint=='deliver_tomorrow' %}active{% endif %}">
+      <i class="fas fa-satellite-dish"></i> Deliver Tomorrow
+    </a>
+
+    <div class="sb-section">Reports</div>
+    <a href="{{ url_for('admin_employees') }}"
+       class="sb-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-users-cog"></i> Staff & Commission
     </a>
 
     {% else %}
@@ -314,5 +373,76 @@
   };
 })();
 </script>
+
+{% if logged_in %}
+<script>
+/* ── Session expiry warning (fires 15 min before 8-hour timeout) ── */
+(function(){
+  var SESSION_MS  = 8 * 60 * 60 * 1000;   // 8 hours (must match Flask config)
+  var WARN_BEFORE = 15 * 60 * 1000;        // warn 15 min before expiry
+  var warned = false;
+
+  function showSessionWarning() {
+    if (warned) return;
+    warned = true;
+    var bar = document.createElement('div');
+    bar.id = 'session-warning';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;' +
+      'background:#b45309;color:#fff;padding:14px 20px;font-size:14px;font-weight:600;' +
+      'display:flex;align-items:center;justify-content:space-between;gap:12px;' +
+      'box-shadow:0 -2px 8px rgba(0,0,0,.25)';
+    bar.innerHTML =
+      '<span><i class="fas fa-clock" style="margin-right:8px"></i>' +
+      'Your session will expire in 15 minutes. Save your work and refresh the page to stay logged in.</span>' +
+      '<div style="display:flex;gap:8px">' +
+      '<a href="/" style="background:#fff;color:#b45309;padding:6px 16px;border-radius:6px;' +
+        'font-weight:700;text-decoration:none;font-size:13px">Refresh Session</a>' +
+      '<button onclick="document.getElementById(\'session-warning\').remove()" ' +
+        'style="background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;' +
+        'padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px">Dismiss</button>' +
+      '</div>';
+    document.body.appendChild(bar);
+  }
+
+  setTimeout(showSessionWarning, SESSION_MS - WARN_BEFORE);
+
+  /* Reset timer on user activity so active users don't see false warning */
+  var resetTimer;
+  function onActivity() {
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(showSessionWarning, SESSION_MS - WARN_BEFORE);
+    warned = false;
+    var existing = document.getElementById('session-warning');
+    if (existing) existing.remove();
+  }
+  ['click','keydown','scroll'].forEach(function(ev){
+    document.addEventListener(ev, onActivity, {passive:true});
+  });
+})();
+</script>
+
+<script>
+/* ── Double-submit prevention on all transaction/payment forms ── */
+(function(){
+  document.addEventListener('submit', function(e){
+    var form = e.target;
+    /* Only protect forms with a submit button (not tiny delete confirm forms) */
+    var btn = form.querySelector('button[type="submit"].btn-red, button[type="submit"].btn-lg');
+    if (!btn) return;
+    if (form.dataset.submitting === '1') { e.preventDefault(); return; }
+    form.dataset.submitting = '1';
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+    /* Re-enable after 8s in case of validation error / redirect */
+    setTimeout(function(){
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      form.dataset.submitting = '0';
+    }, 8000);
+  });
+})();
+</script>
+{% endif %}
 </body>
 </html>
