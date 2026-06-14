@@ -5056,6 +5056,7 @@ def new_package():
              tour_name,tour_date,tour_included,
              net_cost,sell_price,profit,status,notes)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (
             pkg_num, sid,
             session['user_id'], session.get('username',''),
