@@ -1127,6 +1127,12 @@ def add_sale():
                             extra_vals.get('outbound_cost') or net,
                             sell,
                             request.form.get('tickets',1))
+        # Sync PACKAGE transactions to the packages table
+        if new_id and extra_vals.get('service_type', 'FLIGHT') == 'PACKAGE':
+            try:
+                sync_package_from_sale(new_id)
+            except Exception:
+                pass
         flash('Transaction saved successfully.', 'success')
         return redirect(url_for('sales_report'))  # POST→REDIRECT→GET
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
@@ -1345,6 +1351,12 @@ def edit_sale(sale_id):
 
             log_action('UPDATE', 'sales', sale_id,
                        f"{_new_customer} | {_svc_label} | OldSell:{_old_sell} NewSell:{sell}")
+            # Sync PACKAGE transactions to the packages table
+            if service_type == 'PACKAGE':
+                try:
+                    sync_package_from_sale(sale_id)
+                except Exception:
+                    pass
             flash('Transaction updated successfully.', 'success')
             return redirect(url_for('sales_report'))
 
@@ -3270,6 +3282,125 @@ def next_doc_number(doc_type: str) -> str:
             except: pass
 
 
+# ── Package sync helper ───────────────────────────────────────────────────────
+def sync_package_from_sale(sale_id):
+    """
+    Create or update a packages table row from a PACKAGE-type sale.
+    Safe to call multiple times — uses sale_id as the dedup key.
+    Does nothing and returns None if sale is not found or not PACKAGE type.
+    """
+    try:
+        sale = query_db(
+            "SELECT * FROM sales WHERE id=%s AND deleted=FALSE", [sale_id], one=True
+        )
+        if not sale or (sale.get('service_type') or 'FLIGHT').upper() != 'PACKAGE':
+            return None
+
+        # Pull first tour from tours_json for the simple tour fields
+        tours = []
+        try:
+            raw = sale.get('tours_json') or '[]'
+            tours = json.loads(raw) if isinstance(raw, str) else (raw or [])
+        except Exception:
+            tours = []
+        first_tour = tours[0] if tours else {}
+
+        flight_route = ''
+        fl = (sale.get('from_loc') or '').strip()
+        tl = (sale.get('to_loc')   or '').strip()
+        if fl and fl != '-':
+            flight_route = f"{fl} → {tl}" if tl and tl != '-' else fl
+
+        existing = query_db(
+            "SELECT id, package_number FROM packages WHERE sale_id=%s AND deleted=FALSE",
+            [sale_id], one=True
+        )
+
+        fields = dict(
+            company       = (sale.get('company')       or '').upper().strip(),
+            customer      = (sale.get('customer')      or '').upper().strip(),
+            package_date  = sale.get('sale_date')      or str(date.today()),
+            airline       = (sale.get('airline')       or '').upper().strip(),
+            flight_route  = flight_route,
+            departure_date= sale.get('travel_date')    or '',
+            return_date   = sale.get('return_date')    or '',
+            baggage       = sale.get('baggage')        or '',
+            pnr           = (sale.get('pnr')           or '').upper().strip(),
+            hotel_name    = sale.get('hotel_name')     or '',
+            room_type     = sale.get('hotel_room')     or '',
+            meal_plan     = sale.get('hotel_meal')     or '',
+            checkin_date  = sale.get('hotel_checkin')  or '',
+            checkout_date = sale.get('hotel_checkout') or '',
+            nights        = int(sale.get('hotel_nights') or 0),
+            transfer_type = sale.get('transfer_type')  or '',
+            pickup_time   = sale.get('transfer_pickup') or '',
+            vehicle_type  = sale.get('transfer_vehicle')or '',
+            tour_name     = first_tour.get('name', ''),
+            tour_date     = first_tour.get('date', ''),
+            tour_included = first_tour.get('status', '') == 'INCLUDED',
+            net_cost      = float(sale.get('net')  or 0),
+            sell_price    = float(sale.get('sell') or 0),
+            profit        = round(float(sale.get('sell') or 0) - float(sale.get('net') or 0), 3),
+            notes         = sale.get('remarks') or '',
+        )
+
+        if existing:
+            execute_db("""
+                UPDATE packages SET
+                    company=%s, customer=%s, package_date=%s,
+                    airline=%s, flight_route=%s, departure_date=%s, return_date=%s,
+                    baggage=%s, pnr=%s,
+                    hotel_name=%s, room_type=%s, meal_plan=%s,
+                    checkin_date=%s, checkout_date=%s, nights=%s,
+                    transfer_type=%s, pickup_time=%s, vehicle_type=%s,
+                    tour_name=%s, tour_date=%s, tour_included=%s,
+                    net_cost=%s, sell_price=%s, profit=%s, notes=%s
+                WHERE sale_id=%s AND deleted=FALSE
+            """, (
+                fields['company'], fields['customer'], fields['package_date'],
+                fields['airline'], fields['flight_route'], fields['departure_date'], fields['return_date'],
+                fields['baggage'], fields['pnr'],
+                fields['hotel_name'], fields['room_type'], fields['meal_plan'],
+                fields['checkin_date'], fields['checkout_date'], fields['nights'],
+                fields['transfer_type'], fields['pickup_time'], fields['vehicle_type'],
+                fields['tour_name'], fields['tour_date'], fields['tour_included'],
+                fields['net_cost'], fields['sell_price'], fields['profit'], fields['notes'],
+                sale_id,
+            ))
+            return existing['id']
+        else:
+            pkg_num = next_doc_number('PKG')
+            new_pkg_id = execute_db("""
+                INSERT INTO packages
+                (package_number, sale_id, created_by_id, created_by,
+                 company, customer, package_date,
+                 airline, flight_route, departure_date, return_date, baggage, pnr,
+                 hotel_name, room_type, meal_plan, checkin_date, checkout_date, nights,
+                 transfer_type, pickup_time, vehicle_type,
+                 tour_name, tour_date, tour_included,
+                 net_cost, sell_price, profit, status, notes)
+                VALUES (%s,%s,%s,%s, %s,%s,%s, %s,%s,%s,%s,%s,%s,
+                        %s,%s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                pkg_num, sale_id,
+                sale.get('created_by_user_id'), sale.get('created_by_username') or '',
+                fields['company'], fields['customer'], fields['package_date'],
+                fields['airline'], fields['flight_route'], fields['departure_date'],
+                fields['return_date'], fields['baggage'], fields['pnr'],
+                fields['hotel_name'], fields['room_type'], fields['meal_plan'],
+                fields['checkin_date'], fields['checkout_date'], fields['nights'],
+                fields['transfer_type'], fields['pickup_time'], fields['vehicle_type'],
+                fields['tour_name'], fields['tour_date'], fields['tour_included'],
+                fields['net_cost'], fields['sell_price'], fields['profit'],
+                'ACTIVE', fields['notes'],
+            ))
+            return new_pkg_id
+    except Exception as _e:
+        logger.error(f"sync_package_from_sale({sale_id}) error: {_e}")
+        return None
+
+
 # ── Ownership guard — employees see only their own sales ─────────────────────
 def own_sale_required(f):
     """Allow admins full access; users only access their own sales."""
@@ -3599,6 +3730,12 @@ def add_sale_v2():
                             f"{_svc} {_fl}{'→'+_tl if _tl else ''}",
                             _oc, sell,
                             request.form.get('tickets',1))
+        # Sync PACKAGE transactions to the packages table
+        if new_id and service_type == 'PACKAGE':
+            try:
+                sync_package_from_sale(new_id)
+            except Exception:
+                pass
         flash('Transaction saved successfully.', 'success')
         # POST → REDIRECT → GET: prevents duplicate submission on back/refresh
         if session.get('user_role') != 'admin':
@@ -5017,6 +5154,30 @@ def delete_voucher(vch_id):
 #  PACKAGES
 # ══════════════════════════════════════════════════════════════════════════════
 
+@app.route('/admin/sync-packages', methods=['POST'])
+@admin_required
+def admin_sync_packages():
+    """One-time backfill: create packages table rows for all PACKAGE-type sales."""
+    sales = query_db(
+        "SELECT id FROM sales WHERE UPPER(COALESCE(service_type,'FLIGHT'))='PACKAGE' AND deleted=FALSE"
+    ) or []
+    synced = skipped = errors = 0
+    for s in sales:
+        existing = query_db(
+            "SELECT id FROM packages WHERE sale_id=%s AND deleted=FALSE", [s['id']], one=True
+        )
+        if existing:
+            skipped += 1
+            continue
+        result = sync_package_from_sale(s['id'])
+        if result:
+            synced += 1
+        else:
+            errors += 1
+    flash(f'Sync complete: {synced} created, {skipped} already existed, {errors} errors.', 'success')
+    return redirect(url_for('package_list'))
+
+
 @app.route('/packages')
 @login_required
 def package_list():
@@ -5030,7 +5191,8 @@ def package_list():
     q += ' ORDER BY created_at DESC'
     pkgs, total_rows, total_pages = paginate(q, params, page)
     return render_template('packages.html', pkgs=pkgs, page=page,
-                           total_pages=total_pages, total_rows=total_rows)
+                           total_pages=total_pages, total_rows=total_rows,
+                           is_admin=is_admin)
 
 
 @app.route('/packages/new', methods=['GET', 'POST'])
