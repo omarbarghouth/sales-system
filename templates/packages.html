@@ -3,7 +3,18 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left"><h1><i class="fas fa-box-open"></i> Travel Packages</h1><p>{{ total_rows }} packages</p></div>
-  <div class="page-header-actions"><a href="{{ url_for('new_package') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Package</a></div>
+  <div class="page-header-actions">
+    {% if is_admin %}
+    <form method="POST" action="{{ url_for('admin_sync_packages') }}" style="display:inline"
+          onsubmit="return confirm('Sync all PACKAGE transactions into the Packages module? This is safe and skips duplicates.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn" style="background:#0f766e;color:#fff;font-weight:700">
+        <i class="fas fa-sync-alt"></i> Sync from Transactions
+      </button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('new_package') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Package</a>
+  </div>
 </div>
 <div class="table-wrap">
   <table>
