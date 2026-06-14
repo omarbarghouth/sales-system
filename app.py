@@ -548,7 +548,20 @@ def admin_required(f):
             return redirect(url_for('login'))
         if session.get('user_role') != 'admin':
             flash('Admin access required.', 'danger')
-            return redirect(url_for('index'))
+            return redirect(url_for('employee_dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+def finance_required(f):
+    """Allow admin and manager roles; block plain sales agents."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in.', 'warning')
+            return redirect(url_for('login'))
+        if session.get('user_role') not in ('admin', 'manager'):
+            flash('This page is restricted to management.', 'danger')
+            return redirect(url_for('employee_dashboard'))
         return f(*args, **kwargs)
     return decorated
 
@@ -588,12 +601,28 @@ def svc_color_filter(svc):
 
 @app.errorhandler(404)
 def not_found(e):
-    return render_template('error.html', code=404, msg='Page not found.'), 404
+    return render_template('error.html', code=404,
+        title='Page Not Found',
+        msg='The page you are looking for does not exist or has been moved.'), 404
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('error.html', code=403,
+        title='Access Denied',
+        msg='You do not have permission to access this page. Contact your administrator.'), 403
 
 @app.errorhandler(500)
 def server_error(e):
-    logger.error(f"500 error: {e}")
-    return render_template('error.html', code=500, msg='Internal server error. Please try again.'), 500
+    logger.error(f"500 error: {e}", exc_info=True)
+    return render_template('error.html', code=500,
+        title='System Error',
+        msg='Something went wrong. The issue has been logged. Please try again or contact your administrator.'), 500
+
+from flask_wtf.csrf import CSRFError
+@app.errorhandler(CSRFError)
+def csrf_error(e):
+    flash('Your session has expired or the form timed out. Please try again.', 'warning')
+    return redirect(request.referrer or url_for('login'))
 
 # ── Auth Routes ───────────────────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
@@ -625,6 +654,8 @@ def login():
             _next = request.form.get('next', '').strip()
             if _next and _next.startswith('/') and not _next.startswith('//'):
                 next_page = _next
+            elif user['role'] not in ('admin', 'manager'):
+                next_page = url_for('employee_dashboard')
             else:
                 next_page = url_for('index')
             return redirect(next_page)
@@ -725,8 +756,8 @@ def change_password():
 @admin_required
 def admin_reset_pw(uid):
     new_pw = request.form.get('new_password','')
-    if len(new_pw) < 6:
-        flash('Password must be at least 6 characters.', 'danger')
+    if len(new_pw) < 8 or not any(c.isdigit() for c in new_pw):
+        flash('Password must be at least 8 characters and contain at least one number.', 'danger')
         return redirect(url_for('manage_users'))
     pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
     execute_db('UPDATE users SET password_hash=%s WHERE id=%s', (pw_hash, uid))
@@ -1455,7 +1486,7 @@ def sales_report():
 
 # ── Statement ─────────────────────────────────────────────────────────────────
 @app.route('/statement')
-@login_required
+@finance_required
 def statement():
     company   = request.args.get('company','').strip()
     date_from = request.args.get('date_from','').strip()
@@ -2391,7 +2422,7 @@ def audit_log():
 
 # ── Excel Export ──────────────────────────────────────────────────────────────
 @app.route('/export/excel')
-@login_required
+@finance_required
 def export_excel():
     wb = openpyxl.Workbook()
     header_font  = Font(bold=True, color="FFFFFF", size=11)
@@ -3543,6 +3574,7 @@ def my_sales():
     status    = request.args.get('status', '')
     date_from = request.args.get('date_from', '')
     date_to   = request.args.get('date_to', '')
+    customer  = request.args.get('customer', '').strip().upper()
     page      = max(1, int(request.args.get('page', 1)))
 
     q = 'SELECT * FROM sales WHERE deleted=FALSE AND created_by_user_id=%s'
@@ -3557,6 +3589,9 @@ def my_sales():
         q += ' AND sale_date>=%s'; cq += ' AND sale_date>=%s'; params.append(date_from)
     if date_to:
         q += ' AND sale_date<=%s'; cq += ' AND sale_date<=%s'; params.append(date_to)
+    if customer:
+        q += ' AND UPPER(customer) LIKE %s'; cq += ' AND UPPER(customer) LIKE %s'
+        params.append('%' + customer + '%')
     q += ' ORDER BY sale_date DESC, id DESC'
 
     agg = query_db(cq, params, one=True)
@@ -3571,7 +3606,7 @@ def my_sales():
 
     return render_template('my_sales.html',
         sales=sales, totals=totals, companies=companies,
-        filters={'company':company,'status':status,'date_from':date_from,'date_to':date_to},
+        filters={'company':company,'status':status,'date_from':date_from,'date_to':date_to,'customer':customer},
         page=page, total_pages=total_pages, total_rows=total_rows,
     )
 
@@ -4383,7 +4418,7 @@ def refunds():
 
 
 @app.route('/supplier-statement')
-@login_required
+@finance_required
 def supplier_statement():
     """
     Mutual supplier ledger.
