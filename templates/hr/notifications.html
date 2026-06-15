@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Notifications — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-bell" style="color:var(--navy)"></i> Notifications</h1>
+    <p>{{ notifications|length }} notification{{ 's' if notifications|length != 1 }}</p>
+  </div>
+  <div class="page-header-actions">
+    {% if notifications %}
+    <form method="post" action="{{ url_for('hr_notifications_mark_read') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline"><i class="fas fa-check-double"></i> Mark All Read</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if notifications %}
+<div class="card" style="padding:0;overflow:hidden">
+  {% for n in notifications %}
+  {% set type_color = {'success':'#065f46,#d1fae5,#1E7B34','danger':'#991b1b,#fee2e2,#dc2626','info':'#1B3A6B,#eef4ff,#1B3A6B','warning':'#92400e,#fef3c7,#D97706'}.get(n.type, '#475569,#f1f5f9,#64748b').split(',') %}
+  <div style="display:flex;gap:14px;align-items:flex-start;padding:16px 20px;border-bottom:1px solid #f1f5f9;
+              {% if not n.is_read %}background:#fafbff{% endif %}">
+    <div style="width:36px;height:36px;border-radius:50%;background:{{ type_color[1] }};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+      <i class="fas fa-{% if n.type=='success' %}check{% elif n.type=='danger' %}times{% elif n.type=='warning' %}exclamation{% else %}info{% endif %}"
+         style="color:{{ type_color[2] }};font-size:14px"></i>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13.5px;color:var(--text);line-height:1.5">{{ n.message }}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">
+        <i class="fas fa-clock" style="margin-right:4px"></i>{{ n.created_at[:16] if n.created_at else '' }}
+      </div>
+    </div>
+    {% if not n.is_read %}
+    <div style="width:8px;height:8px;border-radius:50%;background:#1B3A6B;margin-top:6px;flex-shrink:0" title="Unread"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="padding:64px;text-align:center">
+  <i class="fas fa-bell-slash" style="font-size:48px;color:#e2e8f0;margin-bottom:16px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--muted)">No notifications</div>
+  <div style="font-size:13px;color:var(--muted);margin-top:6px">You'll be notified here when leave requests are submitted or actioned.</div>
+</div>
+{% endif %}
+{% endblock %}

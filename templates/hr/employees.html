@@ -8,6 +8,9 @@
     <p>{{ total }} employee{{ 's' if total != 1 else '' }} found</p>
   </div>
   <div class="page-header-actions">
+    <a href="{{ url_for('hr_export_employees') }}" class="btn btn-outline" title="Export to Excel">
+      <i class="fas fa-file-excel" style="color:#1E7B34"></i> Export
+    </a>
     <a href="{{ url_for('hr_add_employee') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Employee</a>
     <a href="{{ url_for('hr_dashboard') }}"    class="btn btn-outline"><i class="fas fa-tachometer-alt"></i> HR Dashboard</a>
   </div>

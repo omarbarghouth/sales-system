@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}My Attendance — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-clock" style="color:var(--navy)"></i> My Attendance</h1>
+    <p>{{ emp.full_name }} · {{ emp.employee_id }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_my_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+{# ── Month filter ── #}
+<div class="card" style="padding:14px 20px;margin-bottom:18px">
+  <form method="get" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label class="form-label">Month</label>
+      <input type="month" name="month" value="{{ q_month }}" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+    <a href="{{ url_for('hr_my_attendance') }}" class="btn btn-outline">This Month</a>
+  </form>
+</div>
+
+{# ── Summary KPIs ── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  {% for val, label, color, bg, unit in [
+    (records|length, 'Days Recorded', '#1B3A6B', '#eef4ff', ''),
+    (on_time, 'On Time', '#065f46', '#d1fae5', ''),
+    (total_hours, 'Total Hours', '#6D28D9', '#f5f3ff', 'h'),
+    (total_late, 'Late Minutes', '#dc2626' if total_late > 0 else '#64748b', '#fee2e2' if total_late > 0 else '#f1f5f9', 'm'),
+  ] %}
+  <div class="card" style="padding:16px 20px;border-top:3px solid {{ color }}">
+    <div style="font-size:26px;font-weight:900;color:{{ color }}">{{ val }}{{ unit }}</div>
+    <div style="font-size:11px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.6px;margin-top:2px">{{ label }}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:2px">{{ q_month }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if records %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Check In</th>
+        <th>Check Out</th>
+        <th>Hours Worked</th>
+        <th>Late</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in records %}
+      <tr>
+        <td style="font-weight:700;white-space:nowrap;font-size:13px">{{ a.att_date }}</td>
+        <td>
+          {% if a.check_in %}
+          <span style="font-family:monospace;font-weight:700;color:#1E7B34;font-size:13px">{{ a.check_in }}</span>
+          {% else %}<span style="color:var(--muted)">—</span>{% endif %}
+        </td>
+        <td>
+          {% if a.check_out %}
+          <span style="font-family:monospace;font-weight:700;color:#1B3A6B;font-size:13px">{{ a.check_out }}</span>
+          {% else %}<span style="color:var(--muted)">—</span>{% endif %}
+        </td>
+        <td>
+          {% if a.hours_worked > 0 %}
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-weight:800;font-size:15px;color:{% if a.hours_worked >= 8 %}#1E7B34{% elif a.hours_worked >= 6 %}#D97706{% else %}#dc2626{% endif %}">
+              {{ "%.1f"|format(a.hours_worked) }}
+            </span>
+            <span style="font-size:11px;color:var(--muted)">hrs</span>
+          </div>
+          {% else %}<span style="color:var(--muted)">—</span>{% endif %}
+        </td>
+        <td>
+          {% if a.late_minutes > 0 %}
+          <span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700">+{{ a.late_minutes }}m</span>
+          {% elif a.check_in %}
+          <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700">On time</span>
+          {% else %}<span style="color:var(--muted)">—</span>{% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--muted)">{{ a.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <i class="fas fa-clock" style="font-size:40px;color:#e2e8f0;margin-bottom:14px"></i>
+  <div style="font-size:15px;font-weight:700;color:var(--muted)">No attendance records for {{ q_month }}</div>
+  <div style="font-size:13px;color:var(--muted);margin-top:6px">Records are added by HR — contact your manager if something is missing.</div>
+</div>
+{% endif %}
+{% endblock %}

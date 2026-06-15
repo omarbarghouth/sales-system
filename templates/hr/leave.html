@@ -4,10 +4,13 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-calendar-alt" style="color:var(--navy)"></i> Leave Management</h1>
+    <h1><i class="fas fa-calendar-alt" style="color:var(--navy)"></i> Leave &amp; Permissions</h1>
     <p>{{ total }} request{{ 's' if total != 1 else '' }}</p>
   </div>
   <div class="page-header-actions">
+    <a href="{{ url_for('hr_export_leave') }}" class="btn btn-outline" title="Export to Excel">
+      <i class="fas fa-file-excel" style="color:#1E7B34"></i> Export
+    </a>
     <a href="{{ url_for('hr_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> HR Dashboard</a>
   </div>
 </div>
@@ -32,7 +35,7 @@
       <label class="form-label">Leave Type</label>
       <select name="type" class="form-control">
         <option value="">All Types</option>
-        {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
+        {% for lt in ['Annual Leave','Sick Leave','Emergency Leave','Unpaid Leave','Hourly Permission'] %}
         <option value="{{ lt }}" {% if q_type==lt %}selected{% endif %}>{{ lt }}</option>
         {% endfor %}
       </select>
@@ -59,10 +62,9 @@
     <thead>
       <tr>
         <th>Employee</th>
-        <th>Leave Type</th>
-        <th>From</th>
-        <th>To</th>
-        <th>Days</th>
+        <th>Type</th>
+        <th>Date(s) / Time</th>
+        <th>Duration</th>
         <th>Reason</th>
         <th>Status</th>
         <th>Approved By</th>
@@ -94,15 +96,34 @@
             {{ lr.leave_type }}
           </span>
         </td>
-        <td style="white-space:nowrap;font-size:13px">{{ lr.start_date }}</td>
-        <td style="white-space:nowrap;font-size:13px">{{ lr.end_date }}</td>
+        <td style="white-space:nowrap;font-size:13px">
+          {% if lr.leave_type == 'Hourly Permission' %}
+            {{ lr.start_date }}<br>
+            <span style="font-size:11px;color:#6D28D9;font-weight:700">
+              <i class="fas fa-clock"></i> {{ lr.from_time }} – {{ lr.to_time }}
+            </span>
+          {% else %}
+            {{ lr.start_date }}
+            {% if lr.end_date and lr.end_date != lr.start_date %}
+              <span style="color:var(--muted)">→</span> {{ lr.end_date }}
+            {% endif %}
+          {% endif %}
+        </td>
         <td style="text-align:center">
-          <span style="font-weight:800;font-size:15px;color:var(--navy)">{{ lr.days }}</span>
+          {% if lr.leave_type == 'Hourly Permission' %}
+            <span style="font-weight:800;font-size:14px;color:#6D28D9">{{ lr.duration_hours }}h</span><br>
+            <span style="font-size:10px;color:var(--muted)">≈ {{ "%.2f"|format(lr.duration_hours / 8) }}d</span>
+          {% else %}
+            <span style="font-weight:800;font-size:15px;color:var(--navy)">{{ lr.days }}</span>
+            <span style="font-size:10px;color:var(--muted)">day{{ 's' if lr.days != 1 }}</span>
+          {% endif %}
         </td>
         <td style="font-size:12px;color:var(--muted);max-width:160px">
           <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ lr.reason or '—' }}</span>
           {% if lr.rejection_reason %}
           <span style="color:#dc2626;font-size:11px"><i class="fas fa-times-circle"></i> {{ lr.rejection_reason }}</span>
+          {% elif lr.approval_notes %}
+          <span style="color:#065f46;font-size:11px"><i class="fas fa-check-circle"></i> {{ lr.approval_notes }}</span>
           {% endif %}
         </td>
         <td>

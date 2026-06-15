@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}My Documents — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-folder-open" style="color:var(--navy)"></i> My Documents</h1>
+    <p>{{ emp.full_name }} · {{ emp.employee_id }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_my_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+{% if documents %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Document</th>
+        <th>Size</th>
+        <th>Uploaded By</th>
+        <th>Date</th>
+        <th style="width:100px">Download</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in documents %}
+      <tr>
+        <td>
+          <span style="background:#eef4ff;color:#1B3A6B;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">
+            {{ doc.doc_type }}
+          </span>
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            {% if doc.filename.endswith('.pdf') %}
+              <i class="fas fa-file-pdf" style="color:#dc2626;font-size:16px"></i>
+            {% elif doc.filename.endswith(('.jpg','.jpeg','.png')) %}
+              <i class="fas fa-file-image" style="color:#8b5cf6;font-size:16px"></i>
+            {% elif doc.filename.endswith(('.xls','.xlsx')) %}
+              <i class="fas fa-file-excel" style="color:#1E7B34;font-size:16px"></i>
+            {% else %}
+              <i class="fas fa-file-alt" style="color:#64748b;font-size:16px"></i>
+            {% endif %}
+            <span style="font-size:13px;font-weight:600">{{ doc.original_name }}</span>
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--muted)">{{ "%.1f"|format(doc.file_size / 1024) }} KB</td>
+        <td style="font-size:12px;color:var(--muted)">{{ doc.uploaded_by }}</td>
+        <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ doc.uploaded_at[:10] }}</td>
+        <td>
+          <a href="{{ url_for('static', filename='uploads/hr/docs/' ~ doc.filename) }}" target="_blank"
+             class="btn" style="padding:5px 12px;font-size:11px;background:#eef4ff;color:#1B3A6B;border:none;font-weight:700">
+            <i class="fas fa-download"></i> Download
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:56px;text-align:center">
+  <i class="fas fa-folder-open" style="font-size:48px;color:#e2e8f0;margin-bottom:16px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--muted)">No documents uploaded yet</div>
+  <div style="font-size:13px;color:var(--muted);margin-top:6px">HR will upload your contracts, IDs and certificates here.</div>
+</div>
+{% endif %}
+{% endblock %}

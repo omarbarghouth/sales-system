@@ -140,7 +140,7 @@
           <div class="form-group" style="min-width:130px">
             <label class="form-label">Leave Type</label>
             <select name="leave_type" class="form-control">
-              {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
+              {% for lt in ['Annual Leave','Sick Leave','Emergency Leave','Unpaid Leave','Hourly Permission'] %}
               <option>{{ lt }}</option>
               {% endfor %}
             </select>
@@ -165,31 +165,47 @@
         <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
           <strong style="font-size:13px;color:var(--navy)">Submit Leave Request</strong>
         </div>
-        <form method="post" action="{{ url_for('hr_leave_request') }}" style="padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <form method="post" action="{{ url_for('hr_leave_request') }}" id="profileLeaveForm" style="padding:16px 18px">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="employee_id" value="{{ emp.id }}">
           <input type="hidden" name="redirect_to" value="profile">
-          <div class="form-group" style="min-width:150px">
-            <label class="form-label">Leave Type</label>
-            <select name="leave_type" class="form-control">
-              {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
-              <option>{{ lt }}</option>
-              {% endfor %}
-            </select>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div class="form-group" style="min-width:160px">
+              <label class="form-label">Type</label>
+              <select name="leave_type" id="profileLeaveType" class="form-control" onchange="profileToggleLeave(this.value)">
+                {% for lt in ['Annual Leave','Sick Leave','Emergency Leave','Unpaid Leave','Hourly Permission'] %}
+                <option>{{ lt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group" id="pStartDate">
+              <label class="form-label">Start Date</label>
+              <input type="date" name="start_date" id="pStartDateInput" class="form-control" required>
+            </div>
+            <div class="form-group" id="pEndDate">
+              <label class="form-label">End Date</label>
+              <input type="date" name="end_date" class="form-control" required>
+            </div>
+            <div class="form-group" id="pFromTime" style="display:none">
+              <label class="form-label">From</label>
+              <input type="time" name="from_time" id="pFromTimeInput" class="form-control" onchange="profileCalcDur()">
+            </div>
+            <div class="form-group" id="pToTime" style="display:none">
+              <label class="form-label">To</label>
+              <input type="time" name="to_time" id="pToTimeInput" class="form-control" onchange="profileCalcDur()">
+            </div>
+            <div class="form-group" style="flex:1;min-width:140px">
+              <label class="form-label">Reason</label>
+              <input type="text" name="reason" class="form-control" placeholder="Optional">
+            </div>
+            <button type="submit" class="btn btn-primary" style="white-space:nowrap">
+              <i class="fas fa-paper-plane"></i> Submit
+            </button>
           </div>
-          <div class="form-group">
-            <label class="form-label">Start Date</label>
-            <input type="date" name="start_date" class="form-control" required>
+          <div id="pDurPreview" style="display:none;margin-top:10px;padding:8px 12px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;font-size:12.5px;color:#6D28D9;font-weight:600">
+            <i class="fas fa-clock"></i> Duration: <span id="pDurText">—</span>
+            <span style="color:#64748b;font-weight:400;margin-left:6px">· Deducts <span id="pDurDays">—</span> from Annual Leave</span>
           </div>
-          <div class="form-group">
-            <label class="form-label">End Date</label>
-            <input type="date" name="end_date" class="form-control" required>
-          </div>
-          <div class="form-group" style="flex:1;min-width:150px">
-            <label class="form-label">Reason</label>
-            <input type="text" name="reason" class="form-control" placeholder="Optional reason">
-          </div>
-          <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit</button>
         </form>
       </div>
 
@@ -499,9 +515,43 @@ function rejectLeave(id) {
   document.getElementById('rejectForm').action = '/hr/leave/' + id + '/reject';
 }
 
+function profileToggleLeave(val) {
+  var isHourly = val === 'Hourly Permission';
+  var pStart = document.getElementById('pStartDateInput');
+  if (pStart) { pStart.required = true; pStart.disabled = false; }
+
+  var pEnd = document.getElementById('pEndDate');
+  if (pEnd) {
+    pEnd.style.display = isHourly ? 'none' : '';
+    var inp = pEnd.querySelector('input');
+    if (inp) { inp.required = !isHourly; inp.disabled = isHourly; }
+  }
+  ['pFromTime','pToTime'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.style.display = isHourly ? '' : 'none';
+      var inp = el.querySelector('input');
+      if (inp) { inp.required = isHourly; inp.disabled = !isHourly; }
+    }
+  });
+  document.getElementById('pDurPreview').style.display = isHourly ? '' : 'none';
+}
+
+function profileCalcDur() {
+  var ft = document.getElementById('pFromTimeInput').value;
+  var tt = document.getElementById('pToTimeInput').value;
+  if (!ft || !tt) return;
+  var diff = (new Date('2000-01-01T' + tt) - new Date('2000-01-01T' + ft)) / 3600000;
+  if (diff <= 0) return;
+  diff = Math.round(diff * 4) / 4;
+  document.getElementById('pDurText').textContent = diff + ' hour' + (diff !== 1 ? 's' : '');
+  document.getElementById('pDurDays').textContent = (diff / 8).toFixed(3) + ' day';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   var saved = localStorage.getItem('hrProfileTab_{{ emp.id }}') || 'leave';
   switchTab(saved);
+  profileToggleLeave(document.getElementById('profileLeaveType').value);
 });
 </script>
 {% endblock %}

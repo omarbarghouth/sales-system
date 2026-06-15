@@ -3917,6 +3917,37 @@ def init_hr_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS hr_notifications (
+            id            SERIAL PRIMARY KEY,
+            user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            message       TEXT NOT NULL,
+            type          TEXT NOT NULL DEFAULT 'info',
+            is_read       BOOLEAN NOT NULL DEFAULT FALSE,
+            related_id    INTEGER,
+            related_table TEXT NOT NULL DEFAULT '',
+            created_at    TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    """)
+
+    # Safe column migrations — each in its own savepoint so one failure doesn't abort the rest
+    _migrations = [
+        "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS from_time       TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS to_time         TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS duration_hours  REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS approval_notes  TEXT NOT NULL DEFAULT ''",
+        # Allow fractional days in balances (hourly permission = duration/8)
+        "ALTER TABLE leave_balances ALTER COLUMN used_days  TYPE REAL USING used_days::REAL",
+        "ALTER TABLE leave_balances ALTER COLUMN total_days TYPE REAL USING total_days::REAL",
+    ]
+    for _msql in _migrations:
+        try:
+            cur.execute("SAVEPOINT _mig")
+            cur.execute(_msql)
+            cur.execute("RELEASE SAVEPOINT _mig")
+        except Exception:
+            cur.execute("ROLLBACK TO SAVEPOINT _mig")
+
     db.commit()
     cur.close()
     db.close()
@@ -6295,11 +6326,14 @@ ALLOWED_PHOTO_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 ALLOWED_DOC_EXT   = {'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'xls', 'xlsx'}
 
 _HR_LEAVE_DEFAULTS = {
-    'Annual Leave':    21,
-    'Sick Leave':      10,
-    'Unpaid Leave':     0,
-    'Emergency Leave':  3,
+    'Annual Leave':      14,   # 14 days per year per policy
+    'Sick Leave':         7,
+    'Emergency Leave':    3,
+    'Unpaid Leave':       0,
+    'Hourly Permission':  0,   # tracked in hours; balance = duration_hours accumulated
 }
+
+_HR_LEAVE_TYPES = list(_HR_LEAVE_DEFAULTS.keys())
 
 def _hr_allowed(role=None):
     """Check if current user can access HR management."""
@@ -6328,6 +6362,49 @@ def _secure_filename_hr(filename):
     name, ext = os.path.splitext(filename)
     name = _re.sub(r'[^a-zA-Z0-9_\-]', '_', name)[:40]
     return name + ext.lower()
+
+def _get_my_employee():
+    """Return the employee record linked to the current session user, or None."""
+    if 'user_id' not in session:
+        return None
+    return query_db(
+        """SELECT e.*, m.full_name AS manager_name
+           FROM employees e
+           LEFT JOIN employees m ON m.id = e.manager_id
+           WHERE e.user_id = %s AND e.deleted = FALSE""",
+        [session['user_id']], one=True
+    )
+
+def _hr_admin_user_ids():
+    """Return IDs of all active admin/manager users for notifications."""
+    rows = query_db("SELECT id FROM users WHERE is_active=TRUE AND role IN ('admin','manager')")
+    return [r['id'] for r in rows]
+
+def _hr_notify(user_ids, message, ntype='info', related_id=None, related_table=''):
+    """Insert HR notifications for a list of user IDs (silently skip failures)."""
+    for uid in user_ids:
+        try:
+            execute_db("""
+                INSERT INTO hr_notifications (user_id, message, type, related_id, related_table)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (uid, message, ntype, related_id, related_table))
+        except Exception:
+            pass
+
+@app.context_processor
+def _inject_hr_globals():
+    """Inject HR notification badge count into every template context."""
+    count = 0
+    if session.get('user_id'):
+        try:
+            row = query_db(
+                "SELECT COUNT(*) AS c FROM hr_notifications WHERE user_id=%s AND is_read=FALSE",
+                [session['user_id']], one=True
+            )
+            count = (row or {}).get('c', 0)
+        except Exception:
+            pass
+    return {'hr_unread_count': count}
 
 
 # ── HR Dashboard ──────────────────────────────────────────────────────────────
@@ -6712,28 +6789,64 @@ def hr_leave_request():
     end_date   = f.get('end_date', '')
     reason     = f.get('reason', '').strip()
 
-    if not emp_id or not start_date or not end_date:
+    # Hourly Permission — uses from_time/to_time instead of date range
+    from_time      = f.get('from_time', '').strip()
+    to_time        = f.get('to_time', '').strip()
+    duration_hours = 0.0
+
+    if not emp_id or not start_date:
         flash('All fields required.', 'danger')
         return redirect(request.referrer or url_for('hr_leave'))
 
-    try:
-        sd = datetime.strptime(start_date, '%Y-%m-%d').date()
-        ed = datetime.strptime(end_date,   '%Y-%m-%d').date()
-        days = max(1, (ed - sd).days + 1)
-    except ValueError:
-        flash('Invalid dates.', 'danger')
-        return redirect(request.referrer or url_for('hr_leave'))
+    if leave_type == 'Hourly Permission':
+        if not from_time or not to_time:
+            flash('From time and to time are required for hourly permission.', 'danger')
+            return redirect(request.referrer or url_for('hr_leave'))
+        try:
+            ft = datetime.strptime(from_time, '%H:%M')
+            tt = datetime.strptime(to_time,   '%H:%M')
+            duration_hours = round(max(0.25, (tt - ft).seconds / 3600.0), 2)
+        except ValueError:
+            flash('Invalid time format.', 'danger')
+            return redirect(request.referrer or url_for('hr_leave'))
+        end_date = start_date
+        days = round(duration_hours / 8.0, 3)
+    else:
+        end_date = end_date or start_date
+        try:
+            sd = datetime.strptime(start_date, '%Y-%m-%d').date()
+            ed = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            days = max(1, (ed - sd).days + 1)
+        except ValueError:
+            flash('Invalid dates.', 'danger')
+            return redirect(request.referrer or url_for('hr_leave'))
 
     new_id = execute_db("""
-        INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days, reason)
-        VALUES (%s,%s,%s,%s,%s,%s) RETURNING id
-    """, (emp_id, leave_type, start_date, end_date, days, reason))
-    log_action('CREATE', 'leave_requests', new_id, f"Leave request: {leave_type} {days}d for emp#{emp_id}")
-    flash('Leave request submitted.', 'success')
+        INSERT INTO leave_requests
+          (employee_id, leave_type, start_date, end_date, days, reason, from_time, to_time, duration_hours)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+    """, (emp_id, leave_type, start_date, end_date, days, reason, from_time, to_time, duration_hours))
+
+    emp_row = query_db("SELECT e.full_name, u.id as uid FROM employees e LEFT JOIN users u ON u.id=e.user_id WHERE e.id=%s", [emp_id], one=True)
+    emp_name = (emp_row or {}).get('full_name', f'#{emp_id}')
+
+    if leave_type == 'Hourly Permission':
+        log_action('CREATE', 'leave_requests', new_id,
+                   f"Hourly permission: {duration_hours}h on {start_date} for {emp_name}")
+        msg = f"⏱ {emp_name} requested {duration_hours}h hourly permission on {start_date}"
+    else:
+        log_action('CREATE', 'leave_requests', new_id,
+                   f"Leave request: {leave_type} {days}d for {emp_name}")
+        msg = f"📋 {emp_name} submitted {leave_type} ({int(days)} day{'s' if days!=1 else ''}) — {start_date} to {end_date}"
+
+    _hr_notify(_hr_admin_user_ids(), msg, 'info', new_id, 'leave_requests')
+    flash('Request submitted successfully.', 'success')
 
     redirect_to = f.get('redirect_to', '')
     if redirect_to == 'profile':
         return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+    if redirect_to == 'me':
+        return redirect(url_for('hr_my_leave'))
     return redirect(url_for('hr_leave'))
 
 
@@ -6741,26 +6854,57 @@ def hr_leave_request():
 @app.route('/hr/leave/<int:leave_id>/approve', methods=['POST'])
 @finance_required
 def hr_approve_leave(leave_id):
-    lr = query_db("SELECT * FROM leave_requests WHERE id=%s", [leave_id], one=True)
+    lr = query_db("""
+        SELECT lr.*, e.full_name, e.user_id as emp_user_id
+        FROM leave_requests lr
+        JOIN employees e ON e.id = lr.employee_id
+        WHERE lr.id=%s
+    """, [leave_id], one=True)
     if not lr:
         flash('Leave request not found.', 'danger')
         return redirect(url_for('hr_leave'))
 
+    approval_notes = request.form.get('approval_notes', '').strip()
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     execute_db("""
-        UPDATE leave_requests SET status='Approved', approved_by=%s, approved_at=%s WHERE id=%s
-    """, (session.get('username', ''), now, leave_id))
+        UPDATE leave_requests
+        SET status='Approved', approved_by=%s, approved_at=%s, approval_notes=%s
+        WHERE id=%s
+    """, (session.get('username', ''), now, approval_notes, leave_id))
 
-    # Deduct from leave balance
+    # Deduct from balance — hourly permission deducts from Annual Leave
     year = lr['start_date'][:4]
-    execute_db("""
-        INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
-        VALUES (%s, %s, %s, 0, %s)
-        ON CONFLICT (employee_id, year, leave_type)
-        DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days
-    """, (lr['employee_id'], year, lr['leave_type'], lr['days']))
+    if lr['leave_type'] == 'Hourly Permission':
+        deduct_days = round(lr['duration_hours'] / 8.0, 3)
+        execute_db("""
+            INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+            VALUES (%s, %s, 'Annual Leave', 0, %s)
+            ON CONFLICT (employee_id, year, leave_type)
+            DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days
+        """, (lr['employee_id'], year, deduct_days))
+        execute_db("""
+            INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+            VALUES (%s, %s, 'Hourly Permission', 0, %s)
+            ON CONFLICT (employee_id, year, leave_type)
+            DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days
+        """, (lr['employee_id'], year, lr['duration_hours']))
+    else:
+        execute_db("""
+            INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+            VALUES (%s, %s, %s, 0, %s)
+            ON CONFLICT (employee_id, year, leave_type)
+            DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days
+        """, (lr['employee_id'], year, lr['leave_type'], lr['days']))
 
-    log_action('APPROVE', 'leave_requests', leave_id, f"Approved {lr['leave_type']} {lr['days']}d")
+    log_action('APPROVE', 'leave_requests', leave_id,
+               f"Approved {lr['leave_type']} for {lr['full_name']}")
+
+    if lr['emp_user_id']:
+        _hr_notify([lr['emp_user_id']],
+                   f"✅ Your {lr['leave_type']} request has been approved by {session.get('username','')}."
+                   + (f" Note: {approval_notes}" if approval_notes else ''),
+                   'success', leave_id, 'leave_requests')
+
     flash('Leave approved.', 'success')
     return redirect(request.referrer or url_for('hr_leave'))
 
@@ -6768,13 +6912,24 @@ def hr_approve_leave(leave_id):
 @app.route('/hr/leave/<int:leave_id>/reject', methods=['POST'])
 @finance_required
 def hr_reject_leave(leave_id):
+    lr = query_db("""
+        SELECT lr.*, e.full_name, e.user_id as emp_user_id
+        FROM leave_requests lr JOIN employees e ON e.id=lr.employee_id
+        WHERE lr.id=%s
+    """, [leave_id], one=True)
     reason = request.form.get('rejection_reason', '').strip()
     execute_db("""
         UPDATE leave_requests SET status='Rejected', rejection_reason=%s,
         approved_by=%s, approved_at=%s WHERE id=%s
     """, (reason, session.get('username', ''),
           datetime.now().strftime('%Y-%m-%d %H:%M'), leave_id))
-    log_action('REJECT', 'leave_requests', leave_id, f"Rejected. Reason: {reason}")
+    log_action('REJECT', 'leave_requests', leave_id,
+               f"Rejected {lr['leave_type'] if lr else ''} for {lr['full_name'] if lr else ''}")
+    if lr and lr['emp_user_id']:
+        _hr_notify([lr['emp_user_id']],
+                   f"❌ Your {lr['leave_type']} request was rejected by {session.get('username','')}."
+                   + (f" Reason: {reason}" if reason else ''),
+                   'danger', leave_id, 'leave_requests')
     flash('Leave rejected.', 'warning')
     return redirect(request.referrer or url_for('hr_leave'))
 
@@ -6860,6 +7015,202 @@ def hr_adjust_balance():
     log_action('UPDATE', 'leave_balances', None, f"Adjusted balance emp#{emp_id} {ltype} to {total}d")
     flash('Leave balance updated.', 'success')
     return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+
+
+# ── Employee Self-Service ─────────────────────────────────────────────────────
+@app.route('/hr/me')
+@login_required
+def hr_my_dashboard():
+    emp = _get_my_employee()
+    if not emp:
+        flash('No employee profile is linked to your account. Contact HR.', 'warning')
+        return redirect(url_for('dashboard'))
+    year     = date.today().year
+    balances = query_db(
+        "SELECT * FROM leave_balances WHERE employee_id=%s AND year=%s ORDER BY leave_type",
+        [emp['id'], year])
+    pending_count  = (query_db("SELECT COUNT(*) AS c FROM leave_requests WHERE employee_id=%s AND status='Pending'",
+                               [emp['id']], one=True) or {}).get('c', 0)
+    approved_count = (query_db("SELECT COUNT(*) AS c FROM leave_requests WHERE employee_id=%s AND status='Approved'",
+                               [emp['id']], one=True) or {}).get('c', 0)
+    recent_att = query_db(
+        "SELECT * FROM attendance WHERE employee_id=%s ORDER BY att_date DESC LIMIT 7",
+        [emp['id']])
+    recent_leaves = query_db(
+        "SELECT * FROM leave_requests WHERE employee_id=%s ORDER BY created_at DESC LIMIT 5",
+        [emp['id']])
+    return render_template('hr/self_service.html',
+        emp=emp, balances=balances, year=year,
+        pending_count=pending_count, approved_count=approved_count,
+        recent_att=recent_att, recent_leaves=recent_leaves,
+        leave_types=_HR_LEAVE_TYPES, today=str(date.today()),
+    )
+
+
+@app.route('/hr/me/leave')
+@login_required
+def hr_my_leave():
+    emp = _get_my_employee()
+    if not emp:
+        flash('No employee profile linked to your account.', 'warning')
+        return redirect(url_for('dashboard'))
+    year     = date.today().year
+    q_status = request.args.get('status', '')
+    where    = ['employee_id=%s']
+    params   = [emp['id']]
+    if q_status:
+        where.append("status=%s"); params.append(q_status)
+    leaves   = query_db(
+        f"SELECT * FROM leave_requests WHERE {' AND '.join(where)} ORDER BY created_at DESC",
+        params)
+    balances = query_db(
+        "SELECT * FROM leave_balances WHERE employee_id=%s AND year=%s ORDER BY leave_type",
+        [emp['id'], year])
+    return render_template('hr/self_service_leave.html',
+        emp=emp, leaves=leaves, balances=balances,
+        year=year, today=str(date.today()),
+        q_status=q_status, leave_types=_HR_LEAVE_TYPES,
+    )
+
+
+@app.route('/hr/me/attendance')
+@login_required
+def hr_my_attendance():
+    emp = _get_my_employee()
+    if not emp:
+        flash('No employee profile linked to your account.', 'warning')
+        return redirect(url_for('dashboard'))
+    q_month = request.args.get('month', str(date.today())[:7])
+    records = query_db(
+        "SELECT * FROM attendance WHERE employee_id=%s AND att_date LIKE %s ORDER BY att_date DESC",
+        [emp['id'], f'{q_month}%'])
+    total_hours = round(sum(r['hours_worked'] for r in records), 1)
+    total_late  = sum(r['late_minutes'] for r in records)
+    on_time     = sum(1 for r in records if r['late_minutes'] == 0 and r['check_in'])
+    return render_template('hr/self_service_attendance.html',
+        emp=emp, records=records, q_month=q_month,
+        total_hours=total_hours, total_late=total_late, on_time=on_time,
+    )
+
+
+@app.route('/hr/me/documents')
+@login_required
+def hr_my_documents():
+    emp = _get_my_employee()
+    if not emp:
+        flash('No employee profile linked to your account.', 'warning')
+        return redirect(url_for('dashboard'))
+    documents = query_db(
+        "SELECT * FROM employee_documents WHERE employee_id=%s ORDER BY uploaded_at DESC",
+        [emp['id']])
+    return render_template('hr/self_service_documents.html', emp=emp, documents=documents)
+
+
+# ── HR Notifications ──────────────────────────────────────────────────────────
+@app.route('/hr/notifications')
+@login_required
+def hr_notifications_page():
+    uid = session.get('user_id')
+    notifications = query_db(
+        "SELECT * FROM hr_notifications WHERE user_id=%s ORDER BY created_at DESC LIMIT 60",
+        [uid])
+    execute_db("UPDATE hr_notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE", [uid])
+    return render_template('hr/notifications.html', notifications=notifications)
+
+
+@app.route('/hr/notifications/mark-read', methods=['POST'])
+@login_required
+def hr_notifications_mark_read():
+    execute_db("UPDATE hr_notifications SET is_read=TRUE WHERE user_id=%s", [session.get('user_id')])
+    return ('', 204)
+
+
+# ── HR Excel Export ───────────────────────────────────────────────────────────
+@app.route('/hr/employees/export')
+@finance_required
+def hr_export_employees():
+    from flask import make_response as _mkr
+    employees = query_db("""
+        SELECT e.employee_id, e.full_name, e.department, e.position,
+               e.employment_status, e.email, e.phone, e.join_date,
+               e.date_of_birth, e.national_id, e.address,
+               m.full_name AS manager_name, u.username
+        FROM employees e
+        LEFT JOIN employees m ON m.id = e.manager_id
+        LEFT JOIN users u ON u.id = e.user_id
+        WHERE e.deleted=FALSE ORDER BY e.department, e.full_name
+    """)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Employees'
+    hdr_fill = PatternFill('solid', fgColor='1B3A6B')
+    hdr_font = Font(bold=True, color='FFFFFF', size=11)
+    headers = ['Employee ID','Full Name','Department','Position','Status',
+               'Email','Phone','Join Date','Date of Birth','National ID',
+               'Address','Manager','System User']
+    widths  = [12,22,14,18,10,24,14,12,14,16,20,20,14]
+    for ci, (h, w) in enumerate(zip(headers, widths), 1):
+        cell = ws.cell(1, ci, h)
+        cell.font = hdr_font; cell.fill = hdr_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
+    ws.row_dimensions[1].height = 20
+    for ri, e in enumerate(employees, 2):
+        row = [e['employee_id'], e['full_name'], e['department'], e['position'],
+               e['employment_status'], e['email'], e['phone'], e['join_date'],
+               e['date_of_birth'], e['national_id'], e['address'],
+               e['manager_name'] or '', e['username'] or '']
+        for ci, val in enumerate(row, 1):
+            ws.cell(ri, ci, val)
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    resp = _mkr(buf.read())
+    resp.headers['Content-Type']        = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = f'attachment; filename=employees_{date.today()}.xlsx'
+    return resp
+
+
+@app.route('/hr/leave/export')
+@finance_required
+def hr_export_leave():
+    from flask import make_response as _mkr
+    q_year = request.args.get('year', str(date.today().year))
+    rows = query_db("""
+        SELECT lr.id, e.employee_id, e.full_name, e.department,
+               lr.leave_type, lr.start_date, lr.end_date, lr.days,
+               lr.from_time, lr.to_time, lr.duration_hours,
+               lr.status, lr.approved_by, lr.approved_at, lr.reason, lr.rejection_reason
+        FROM leave_requests lr
+        JOIN employees e ON e.id = lr.employee_id
+        WHERE lr.start_date LIKE %s
+        ORDER BY lr.created_at DESC
+    """, [f'{q_year}%'])
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f'Leave {q_year}'
+    hdr_fill = PatternFill('solid', fgColor='1B3A6B')
+    hdr_font = Font(bold=True, color='FFFFFF', size=11)
+    headers = ['#','Emp ID','Employee','Dept','Type','From','To','Days',
+               'From Time','To Time','Duration (hrs)','Status','Approved By','Approved At','Reason','Rejection']
+    widths  = [6,10,22,12,16,12,12,6,10,10,13,10,16,16,24,24]
+    for ci, (h, w) in enumerate(zip(headers, widths), 1):
+        cell = ws.cell(1, ci, h)
+        cell.font = hdr_font; cell.fill = hdr_fill
+        cell.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
+    for ri, r in enumerate(rows, 2):
+        vals = [r['id'], r['employee_id'], r['full_name'], r['department'],
+                r['leave_type'], r['start_date'], r['end_date'], r['days'],
+                r['from_time'], r['to_time'], r['duration_hours'],
+                r['status'], r['approved_by'], r['approved_at'], r['reason'], r['rejection_reason']]
+        for ci, v in enumerate(vals, 1):
+            ws.cell(ri, ci, v)
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    resp = _mkr(buf.read())
+    resp.headers['Content-Type']        = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = f'attachment; filename=leave_{q_year}.xlsx'
+    return resp
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

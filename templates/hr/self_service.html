@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}My HR — {{ emp.full_name }} — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-user-circle" style="color:var(--navy)"></i> My HR Portal</h1>
+    <p>{{ emp.employee_id }} · {{ emp.position }} · {{ emp.department }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_my_leave') }}" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Request</a>
+  </div>
+</div>
+
+{# ── Profile + KPI row ── #}
+<div style="display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;margin-bottom:20px">
+
+  {# Profile card #}
+  <div class="card" style="padding:0;overflow:hidden;text-align:center">
+    <div style="height:4px;background:linear-gradient(90deg,#1B3A6B,#C8A84B)"></div>
+    <div style="padding:24px 20px 20px">
+      {% if emp.photo_path %}
+        <img src="{{ url_for('static', filename=emp.photo_path) }}"
+             style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--border);margin-bottom:12px">
+      {% else %}
+        <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;font-weight:800;color:#fff">
+          {{ emp.full_name[0]|upper }}
+        </div>
+      {% endif %}
+      <div style="font-size:17px;font-weight:800;color:var(--navy)">{{ emp.full_name }}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">{{ emp.position }}</div>
+      <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <span style="background:#eef4ff;color:#1B3A6B;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">{{ emp.department }}</span>
+        <span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">{{ emp.employment_status }}</span>
+      </div>
+      <div style="margin-top:10px;font-family:monospace;font-size:11px;color:var(--muted);background:#f8fafc;border-radius:6px;padding:3px 8px;display:inline-block">{{ emp.employee_id }}</div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding:14px 18px;display:flex;flex-direction:column;gap:7px;text-align:left">
+      {% for icon, label, val in [
+        ('envelope','Email', emp.email),
+        ('phone','Phone', emp.phone),
+        ('calendar-plus','Join Date', emp.join_date),
+        ('user-tie','Manager', emp.manager_name)
+      ] %}
+      {% if val %}
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px">
+        <i class="fas fa-{{ icon }}" style="color:#94a3b8;width:14px"></i>
+        <span style="color:var(--muted)">{{ label }}:</span>
+        <span style="font-weight:600;color:var(--text)">{{ val }}</span>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {# KPI + balances #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    {# KPI row #}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      {% for val, label, sub, color, bg, icon in [
+        (pending_count, 'Pending', 'Requests awaiting approval', '#92400e', '#fef3c7', 'hourglass-half'),
+        (approved_count, 'Approved', 'Requests approved this year', '#065f46', '#d1fae5', 'check-circle'),
+        (recent_att|length, 'Days Tracked', 'Recent attendance records', '#1B3A6B', '#eef4ff', 'clock'),
+      ] %}
+      <div class="card" style="padding:18px 20px;border-top:3px solid {{ color }}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:28px;font-weight:900;color:{{ color }}">{{ val }}</div>
+            <div style="font-size:12px;font-weight:700;color:{{ color }}">{{ label }}</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:2px">{{ sub }}</div>
+          </div>
+          <div style="width:38px;height:38px;border-radius:10px;background:{{ bg }};display:flex;align-items:center;justify-content:center">
+            <i class="fas fa-{{ icon }}" style="color:{{ color }};font-size:16px"></i>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Leave balances #}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
+        <strong style="font-size:13px;color:var(--navy)"><i class="fas fa-chart-bar" style="margin-right:6px;color:#C8A84B"></i>Leave Balance — {{ year }}</strong>
+        <a href="{{ url_for('hr_my_leave') }}" style="font-size:12px;color:var(--navy);text-decoration:none;font-weight:600">Submit Request →</a>
+      </div>
+      <div style="padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+        {% for b in balances %}
+        {% set remaining = [b.total_days - b.used_days, 0]|max %}
+        {% set pct = [(b.used_days / b.total_days * 100)|int, 100]|min if b.total_days else 0 %}
+        {% set is_hourly = b.leave_type == 'Hourly Permission' %}
+        <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #e2e8f0">
+          <div style="font-size:11.5px;font-weight:700;color:var(--navy);margin-bottom:8px">{{ b.leave_type }}</div>
+          {% if is_hourly %}
+          <div style="font-size:20px;font-weight:900;color:#6D28D9">{{ "%.1f"|format(b.used_days|float) }}<span style="font-size:12px;font-weight:600"> hrs</span></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Hours used this year</div>
+          {% else %}
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+            <span>Used: <strong style="color:var(--text)">{{ "%.1f"|format(b.used_days|float) }}</strong></span>
+            <span>Left: <strong style="color:{% if remaining > 3 %}#1E7B34{% elif remaining > 0 %}#D97706{% else %}#dc2626{% endif %}">{{ "%.1f"|format(remaining|float) }}</strong></span>
+          </div>
+          <div style="background:#e2e8f0;border-radius:20px;height:7px;overflow:hidden">
+            <div style="height:7px;border-radius:20px;background:{% if pct < 70 %}#1E7B34{% elif pct < 90 %}#D97706{% else %}#dc2626{% endif %};width:{{ pct }}%"></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px;text-align:right">{{ b.total_days|int }} days total</div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div style="color:var(--muted);font-size:13px;padding:12px">No balance records for {{ year }}.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Recent requests + recent attendance ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  {# Recent requests #}
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
+      <strong style="font-size:13px;color:var(--navy)"><i class="fas fa-list" style="margin-right:6px;color:#C8A84B"></i>My Recent Requests</strong>
+      <a href="{{ url_for('hr_my_leave') }}" style="font-size:12px;color:var(--navy);text-decoration:none;font-weight:600">View all →</a>
+    </div>
+    {% if recent_leaves %}
+    <div>
+      {% for lr in recent_leaves %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-bottom:1px solid #f1f5f9">
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">{{ lr.leave_type }}</div>
+          <div style="font-size:11px;color:var(--muted)">
+            {% if lr.leave_type == 'Hourly Permission' %}
+              {{ lr.start_date }} · {{ lr.from_time }} – {{ lr.to_time }} ({{ lr.duration_hours }}h)
+            {% else %}
+              {{ lr.start_date }}{% if lr.end_date != lr.start_date %} → {{ lr.end_date }}{% endif %} · {{ lr.days }} day{{ 's' if lr.days != 1 }}
+            {% endif %}
+          </div>
+        </div>
+        <span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;
+          {% if lr.status=='Approved' %}background:#d1fae5;color:#065f46
+          {% elif lr.status=='Rejected' %}background:#fee2e2;color:#991b1b
+          {% elif lr.status=='Cancelled' %}background:#f1f5f9;color:#64748b
+          {% else %}background:#fef3c7;color:#92400e{% endif %}">
+          {{ lr.status }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No requests yet.</div>
+    {% endif %}
+  </div>
+
+  {# Recent attendance #}
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
+      <strong style="font-size:13px;color:var(--navy)"><i class="fas fa-clock" style="margin-right:6px;color:#C8A84B"></i>My Recent Attendance</strong>
+      <a href="{{ url_for('hr_my_attendance') }}" style="font-size:12px;color:var(--navy);text-decoration:none;font-weight:600">View all →</a>
+    </div>
+    {% if recent_att %}
+    <div>
+      {% for a in recent_att %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-bottom:1px solid #f1f5f9">
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">{{ a.att_date }}</div>
+          <div style="font-size:11px;color:var(--muted)">
+            {{ a.check_in or '—' }} → {{ a.check_out or '—' }}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:800;color:{% if a.hours_worked >= 8 %}#1E7B34{% elif a.hours_worked >= 6 %}#D97706{% else %}#dc2626{% endif %}">
+            {{ "%.1f"|format(a.hours_worked) }}h
+          </div>
+          {% if a.late_minutes > 0 %}
+          <div style="font-size:10px;color:#dc2626">+{{ a.late_minutes }}m late</div>
+          {% else %}
+          <div style="font-size:10px;color:#1E7B34">On time</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No attendance records yet.</div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

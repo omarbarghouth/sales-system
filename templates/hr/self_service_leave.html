@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}My Requests — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-calendar-alt" style="color:var(--navy)"></i> My Requests</h1>
+    <p>{{ emp.full_name }} · {{ emp.employee_id }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_my_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+{# ── Leave Balances ── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+  {% for b in balances %}
+  {% set remaining = [b.total_days - b.used_days, 0]|max %}
+  {% set pct = [(b.used_days / b.total_days * 100)|int, 100]|min if b.total_days else 0 %}
+  {% set is_hourly = b.leave_type == 'Hourly Permission' %}
+  <div class="card" style="padding:14px 16px;border-top:3px solid {% if is_hourly %}#6D28D9{% elif remaining > 5 %}#1E7B34{% elif remaining > 0 %}#D97706{% else %}#dc2626{% endif %}">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">{{ b.leave_type }}</div>
+    {% if is_hourly %}
+    <div style="font-size:22px;font-weight:900;color:#6D28D9">{{ "%.1f"|format(b.used_days|float) }}<span style="font-size:11px"> hrs</span></div>
+    <div style="font-size:10px;color:var(--muted)">Used this year</div>
+    {% else %}
+    <div style="font-size:22px;font-weight:900;color:{% if remaining > 3 %}#1E7B34{% elif remaining > 0 %}#D97706{% else %}#dc2626{% endif %}">
+      {{ "%.1f"|format(remaining|float) }}<span style="font-size:11px"> days</span>
+    </div>
+    <div style="font-size:10px;color:var(--muted)">Remaining of {{ b.total_days|int }}</div>
+    <div style="background:#e2e8f0;border-radius:10px;height:5px;margin-top:6px;overflow:hidden">
+      <div style="height:5px;border-radius:10px;background:{% if pct < 70 %}#1E7B34{% elif pct < 90 %}#D97706{% else %}#dc2626{% endif %};width:{{ pct }}%"></div>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Submit Request Form ── #}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+  <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+    <i class="fas fa-paper-plane" style="color:var(--navy)"></i>
+    <strong style="color:var(--navy);font-size:13px">Submit New Request</strong>
+  </div>
+  <div style="padding:20px">
+    <form method="post" action="{{ url_for('hr_leave_request') }}" id="leaveForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="employee_id" value="{{ emp.id }}">
+      <input type="hidden" name="redirect_to" value="me">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:end">
+        <div class="form-group">
+          <label class="form-label required">Request Type</label>
+          <select name="leave_type" id="leaveType" class="form-control" onchange="toggleLeaveType(this.value)" required>
+            {% for lt in leave_types %}
+            <option value="{{ lt }}">{{ lt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Regular leave date fields #}
+        <div class="form-group" id="dateField">
+          <label class="form-label required">Start Date</label>
+          <input type="date" name="start_date" id="startDate" class="form-control" value="{{ today }}" required>
+        </div>
+        <div class="form-group" id="endDateField">
+          <label class="form-label required">End Date</label>
+          <input type="date" name="end_date" id="endDate" class="form-control" value="{{ today }}" required>
+        </div>
+
+        {# Hourly permission fields (hidden by default) #}
+        <div class="form-group" id="hourlyDateField" style="display:none">
+          <label class="form-label required">Date</label>
+          <input type="date" name="start_date" id="hourlyDate" class="form-control" value="{{ today }}">
+        </div>
+        <div class="form-group" id="fromTimeField" style="display:none">
+          <label class="form-label required">From Time</label>
+          <input type="time" name="from_time" id="fromTime" class="form-control" onchange="calcDuration()">
+        </div>
+        <div class="form-group" id="toTimeField" style="display:none">
+          <label class="form-label required">To Time</label>
+          <input type="time" name="to_time" id="toTime" class="form-control" onchange="calcDuration()">
+        </div>
+
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Reason</label>
+          <input type="text" name="reason" class="form-control" placeholder="Optional reason…">
+        </div>
+
+        {# Duration preview for hourly #}
+        <div id="durationPreview" style="display:none;grid-column:1/-1;padding:10px 14px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;color:#065f46;font-weight:600">
+          <i class="fas fa-clock"></i> Duration: <span id="durationText">—</span>
+          <span style="color:#64748b;font-weight:400;margin-left:8px">· Deducts <span id="daysEquiv">—</span> from Annual Leave balance</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary" style="padding:10px 28px">
+          <i class="fas fa-paper-plane"></i> Submit Request
+        </button>
+        <button type="reset" class="btn btn-outline" style="padding:10px 20px">Clear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Status filter tabs ── #}
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <a href="{{ url_for('hr_my_leave') }}" style="padding:6px 16px;border-radius:20px;font-size:12.5px;font-weight:700;text-decoration:none;{% if not q_status %}background:var(--navy);color:#fff{% else %}background:#f1f5f9;color:#475569{% endif %}">All</a>
+  {% for s, color, bg in [('Pending','#92400e','#fef3c7'),('Approved','#065f46','#d1fae5'),('Rejected','#991b1b','#fee2e2'),('Cancelled','#475569','#f1f5f9')] %}
+  <a href="{{ url_for('hr_my_leave', status=s) }}" style="padding:6px 16px;border-radius:20px;font-size:12.5px;font-weight:700;text-decoration:none;{% if q_status==s %}background:{{ color }};color:#fff{% else %}background:{{ bg }};color:{{ color }}{% endif %}">{{ s }}</a>
+  {% endfor %}
+</div>
+
+{# ── Requests table ── #}
+{% if leaves %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead><tr>
+      <th>Type</th><th>Date(s)</th><th>Duration</th><th>Reason</th><th>Status</th><th>Decision By</th><th>Notes</th>
+    </tr></thead>
+    <tbody>
+      {% for lr in leaves %}
+      <tr>
+        <td>
+          {% set lt_colors = {'Annual Leave':'#1B3A6B,#eef4ff','Sick Leave':'#1E7B34,#f0fdf4','Unpaid Leave':'#64748b,#f1f5f9','Emergency Leave':'#dc2626,#fee2e2','Hourly Permission':'#6D28D9,#f5f3ff'} %}
+          {% set lc = lt_colors.get(lr.leave_type, '#64748b,#f1f5f9').split(',') %}
+          <span style="background:{{ lc[1] }};color:{{ lc[0] }};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">
+            {{ lr.leave_type }}
+          </span>
+        </td>
+        <td style="white-space:nowrap;font-size:13px">
+          {% if lr.leave_type == 'Hourly Permission' %}
+            {{ lr.start_date }}<br>
+            <span style="font-size:11px;color:var(--muted)">{{ lr.from_time }} – {{ lr.to_time }}</span>
+          {% else %}
+            {{ lr.start_date }}
+            {% if lr.end_date and lr.end_date != lr.start_date %}→ {{ lr.end_date }}{% endif %}
+          {% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if lr.leave_type == 'Hourly Permission' %}
+            <span style="font-weight:800;color:#6D28D9">{{ lr.duration_hours }}h</span>
+          {% else %}
+            <span style="font-weight:800;color:var(--navy)">{{ lr.days }} day{{ 's' if lr.days != 1 }}</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ lr.reason or '—' }}</td>
+        <td>
+          <span style="padding:3px 12px;border-radius:20px;font-size:11.5px;font-weight:700;
+            {% if lr.status=='Approved' %}background:#d1fae5;color:#065f46
+            {% elif lr.status=='Rejected' %}background:#fee2e2;color:#991b1b
+            {% elif lr.status=='Cancelled' %}background:#f1f5f9;color:#64748b
+            {% else %}background:#fef3c7;color:#92400e{% endif %}">
+            {% if lr.status=='Approved' %}✓ {% elif lr.status=='Rejected' %}✕ {% elif lr.status=='Pending' %}⏳ {% endif %}{{ lr.status }}
+          </span>
+        </td>
+        <td style="font-size:12px;color:var(--muted)">
+          {{ lr.approved_by or '—' }}
+          {% if lr.approved_at %}<br><span style="font-size:10.5px">{{ lr.approved_at[:10] }}</span>{% endif %}
+        </td>
+        <td style="font-size:11.5px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {% if lr.approval_notes %}
+            <span style="color:#1E7B34"><i class="fas fa-check-circle"></i> {{ lr.approval_notes }}</span>
+          {% elif lr.rejection_reason %}
+            <span style="color:#dc2626"><i class="fas fa-times-circle"></i> {{ lr.rejection_reason }}</span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <i class="fas fa-calendar-check" style="font-size:40px;color:#e2e8f0;margin-bottom:14px"></i>
+  <div style="font-size:15px;font-weight:700;color:var(--muted)">No requests found</div>
+  <div style="font-size:13px;color:var(--muted);margin-top:6px">Use the form above to submit your first request.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleLeaveType(val) {
+  var isHourly = val === 'Hourly Permission';
+  var regStart  = document.getElementById('startDate');
+  var hourlyDate = document.getElementById('hourlyDate');
+
+  // Disable hidden inputs so they don't pollute POST data
+  regStart.disabled  = isHourly;
+  hourlyDate.disabled = !isHourly;
+  if (isHourly && !hourlyDate.value) hourlyDate.value = regStart.value;
+
+  ['dateField','endDateField'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.style.display = isHourly ? 'none' : '';
+      var inp = el.querySelector('input');
+      if (inp) { inp.required = !isHourly; inp.disabled = isHourly; }
+    }
+  });
+  ['hourlyDateField','fromTimeField','toTimeField'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.style.display = isHourly ? '' : 'none';
+      var inp = el.querySelector('input');
+      if (inp) { inp.required = isHourly; inp.disabled = !isHourly; }
+    }
+  });
+  document.getElementById('durationPreview').style.display = isHourly ? '' : 'none';
+}
+
+function calcDuration() {
+  var ft = document.getElementById('fromTime').value;
+  var tt = document.getElementById('toTime').value;
+  if (!ft || !tt) return;
+  var diff = (new Date('2000-01-01T' + tt) - new Date('2000-01-01T' + ft)) / 3600000;
+  if (diff <= 0) { document.getElementById('durationText').textContent = 'Invalid'; return; }
+  diff = Math.round(diff * 4) / 4;
+  document.getElementById('durationText').textContent = diff + ' hour' + (diff !== 1 ? 's' : '');
+  document.getElementById('daysEquiv').textContent = (diff / 8).toFixed(3) + ' day';
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', function() {
+  toggleLeaveType(document.getElementById('leaveType').value);
+});
+</script>
+{% endblock %}
