@@ -3830,6 +3830,108 @@ except Exception as _dc_err:
     logger.error(f"Direct-customer column migration error: {_dc_err}")
 
 
+# ── HR Module DB init ─────────────────────────────────────────────────────────
+def init_hr_db():
+    """Create HR tables if they don't exist. Safe to call on every startup."""
+    db = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    cur = db.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS employees (
+            id               SERIAL PRIMARY KEY,
+            employee_id      TEXT UNIQUE NOT NULL,
+            user_id          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            full_name        TEXT NOT NULL DEFAULT '',
+            position         TEXT NOT NULL DEFAULT '',
+            department       TEXT NOT NULL DEFAULT 'Sales',
+            email            TEXT NOT NULL DEFAULT '',
+            phone            TEXT NOT NULL DEFAULT '',
+            address          TEXT NOT NULL DEFAULT '',
+            national_id      TEXT NOT NULL DEFAULT '',
+            date_of_birth    TEXT NOT NULL DEFAULT '',
+            join_date        TEXT NOT NULL DEFAULT '',
+            employment_status TEXT NOT NULL DEFAULT 'Active',
+            manager_id       INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+            notes            TEXT NOT NULL DEFAULT '',
+            photo_path       TEXT NOT NULL DEFAULT '',
+            created_by       TEXT NOT NULL DEFAULT '',
+            created_at       TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+            deleted          BOOLEAN NOT NULL DEFAULT FALSE
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS employee_documents (
+            id            SERIAL PRIMARY KEY,
+            employee_id   INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            doc_type      TEXT NOT NULL DEFAULT 'Other',
+            filename      TEXT NOT NULL,
+            original_name TEXT NOT NULL DEFAULT '',
+            file_size     INTEGER NOT NULL DEFAULT 0,
+            uploaded_by   TEXT NOT NULL DEFAULT '',
+            uploaded_at   TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS leave_requests (
+            id               SERIAL PRIMARY KEY,
+            employee_id      INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            leave_type       TEXT NOT NULL DEFAULT 'Annual Leave',
+            start_date       TEXT NOT NULL,
+            end_date         TEXT NOT NULL,
+            days             INTEGER NOT NULL DEFAULT 1,
+            reason           TEXT NOT NULL DEFAULT '',
+            status           TEXT NOT NULL DEFAULT 'Pending',
+            approved_by      TEXT NOT NULL DEFAULT '',
+            approved_at      TEXT NOT NULL DEFAULT '',
+            rejection_reason TEXT NOT NULL DEFAULT '',
+            created_at       TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS leave_balances (
+            id           SERIAL PRIMARY KEY,
+            employee_id  INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            year         INTEGER NOT NULL,
+            leave_type   TEXT NOT NULL,
+            total_days   INTEGER NOT NULL DEFAULT 0,
+            used_days    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(employee_id, year, leave_type)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS attendance (
+            id           SERIAL PRIMARY KEY,
+            employee_id  INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            att_date     TEXT NOT NULL,
+            check_in     TEXT NOT NULL DEFAULT '',
+            check_out    TEXT NOT NULL DEFAULT '',
+            hours_worked REAL NOT NULL DEFAULT 0,
+            late_minutes INTEGER NOT NULL DEFAULT 0,
+            notes        TEXT NOT NULL DEFAULT '',
+            created_at   TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+            UNIQUE(employee_id, att_date)
+        )
+    """)
+
+    db.commit()
+    cur.close()
+    db.close()
+
+
+try:
+    init_hr_db()
+    # Ensure HR upload directories exist
+    os.makedirs(os.path.join('static', 'uploads', 'hr', 'photos'), exist_ok=True)
+    os.makedirs(os.path.join('static', 'uploads', 'hr', 'docs'),   exist_ok=True)
+    logger.info("HR DB and upload dirs initialised OK")
+except Exception as _hr_err:
+    logger.error(f"HR DB init error: {_hr_err}")
+
+
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_txn_number() -> str:
     """
@@ -6183,6 +6285,537 @@ def view_contract(sale_id):
         pass
     return render_template('contract_view.html', sale=sale, passengers=passengers, tours=tours,
                            today=str(date.today()))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HR MODULE
+# ══════════════════════════════════════════════════════════════════════════════
+
+ALLOWED_PHOTO_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_DOC_EXT   = {'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'xls', 'xlsx'}
+
+_HR_LEAVE_DEFAULTS = {
+    'Annual Leave':    21,
+    'Sick Leave':      10,
+    'Unpaid Leave':     0,
+    'Emergency Leave':  3,
+}
+
+def _hr_allowed(role=None):
+    """Check if current user can access HR management."""
+    return session.get('user_role') in ('admin', 'manager')
+
+def _seed_leave_balances(emp_id, year=None):
+    """Create default leave balance rows for a new employee."""
+    y = year or date.today().year
+    for ltype, days in _HR_LEAVE_DEFAULTS.items():
+        try:
+            execute_db("""
+                INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+                VALUES (%s, %s, %s, %s, 0)
+                ON CONFLICT (employee_id, year, leave_type) DO NOTHING
+            """, (emp_id, y, ltype, days))
+        except Exception:
+            pass
+
+def _next_employee_id():
+    row = query_db("SELECT MAX(CAST(SUBSTRING(employee_id FROM 5) AS INTEGER)) AS mx FROM employees WHERE employee_id LIKE 'EMP-%'", one=True)
+    nxt = (row['mx'] or 0) + 1 if row else 1
+    return f"EMP-{nxt:04d}"
+
+def _secure_filename_hr(filename):
+    import re as _re
+    name, ext = os.path.splitext(filename)
+    name = _re.sub(r'[^a-zA-Z0-9_\-]', '_', name)[:40]
+    return name + ext.lower()
+
+
+# ── HR Dashboard ──────────────────────────────────────────────────────────────
+@app.route('/hr/')
+@app.route('/hr/dashboard')
+@finance_required
+def hr_dashboard():
+    total_employees = (query_db("SELECT COUNT(*) as c FROM employees WHERE deleted=FALSE", one=True) or {}).get('c', 0)
+    active_employees = (query_db("SELECT COUNT(*) as c FROM employees WHERE deleted=FALSE AND employment_status='Active'", one=True) or {}).get('c', 0)
+    pending_leaves   = (query_db("SELECT COUNT(*) as c FROM leave_requests WHERE status='Pending'", one=True) or {}).get('c', 0)
+    today_str = str(date.today())
+    present_today = (query_db("SELECT COUNT(*) as c FROM attendance WHERE att_date=%s", [today_str], one=True) or {}).get('c', 0)
+
+    dept_counts = query_db("""
+        SELECT department, COUNT(*) as cnt FROM employees
+        WHERE deleted=FALSE AND employment_status='Active'
+        GROUP BY department ORDER BY cnt DESC
+    """)
+
+    recent_leaves = query_db("""
+        SELECT lr.*, e.full_name, e.position
+        FROM leave_requests lr
+        JOIN employees e ON e.id = lr.employee_id
+        WHERE lr.status = 'Pending'
+        ORDER BY lr.created_at DESC LIMIT 8
+    """)
+
+    recent_employees = query_db("""
+        SELECT * FROM employees WHERE deleted=FALSE
+        ORDER BY created_at DESC LIMIT 6
+    """)
+
+    return render_template('hr/dashboard.html',
+        total_employees=total_employees,
+        active_employees=active_employees,
+        pending_leaves=pending_leaves,
+        present_today=present_today,
+        dept_counts=dept_counts,
+        recent_leaves=recent_leaves,
+        recent_employees=recent_employees,
+        today=today_str,
+    )
+
+
+# ── Employee List ─────────────────────────────────────────────────────────────
+@app.route('/hr/employees')
+@finance_required
+def hr_employees():
+    q_dept   = request.args.get('dept', '')
+    q_status = request.args.get('status', '')
+    q_search = request.args.get('q', '').strip()
+    page     = int(request.args.get('page', 1))
+
+    where = ["e.deleted=FALSE"]
+    params = []
+    if q_dept:
+        where.append("e.department=%s"); params.append(q_dept)
+    if q_status:
+        where.append("e.employment_status=%s"); params.append(q_status)
+    if q_search:
+        where.append("(e.full_name ILIKE %s OR e.employee_id ILIKE %s OR e.email ILIKE %s)")
+        params += [f'%{q_search}%', f'%{q_search}%', f'%{q_search}%']
+
+    base_q = f"""
+        SELECT e.*, m.full_name AS manager_name, u.username
+        FROM employees e
+        LEFT JOIN employees m ON m.id = e.manager_id
+        LEFT JOIN users u ON u.id = e.user_id
+        WHERE {' AND '.join(where)}
+        ORDER BY e.full_name
+    """
+    employees, total, total_pages = paginate(base_q, params, page, 25)
+    return render_template('hr/employees.html',
+        employees=employees, total=total, total_pages=total_pages,
+        page=page, q_dept=q_dept, q_status=q_status, q_search=q_search,
+    )
+
+
+# ── Add Employee ──────────────────────────────────────────────────────────────
+@app.route('/hr/employees/add', methods=['GET', 'POST'])
+@finance_required
+def hr_add_employee():
+    users_list = query_db("SELECT id, username, full_name FROM users WHERE is_active=TRUE ORDER BY full_name")
+    managers   = query_db("SELECT id, full_name, position FROM employees WHERE deleted=FALSE AND employment_status='Active' ORDER BY full_name")
+
+    if request.method == 'POST':
+        f  = request.form
+        photo_path = ''
+
+        # Photo upload
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            ext = os.path.splitext(photo.filename)[1].lower().lstrip('.')
+            if ext in ALLOWED_PHOTO_EXT:
+                import uuid as _uuid
+                fname = f"{_uuid.uuid4().hex}{os.path.splitext(photo.filename)[1].lower()}"
+                save_path = os.path.join('static', 'uploads', 'hr', 'photos', fname)
+                photo.save(save_path)
+                photo_path = f"uploads/hr/photos/{fname}"
+
+        emp_id = _next_employee_id()
+        new_id = execute_db("""
+            INSERT INTO employees
+              (employee_id, user_id, full_name, position, department, email, phone,
+               address, national_id, date_of_birth, join_date, employment_status,
+               manager_id, notes, photo_path, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            emp_id,
+            f.get('user_id') or None,
+            f.get('full_name', '').strip(),
+            f.get('position', '').strip(),
+            f.get('department', 'Sales'),
+            f.get('email', '').strip(),
+            f.get('phone', '').strip(),
+            f.get('address', '').strip(),
+            f.get('national_id', '').strip(),
+            f.get('date_of_birth', ''),
+            f.get('join_date', str(date.today())),
+            f.get('employment_status', 'Active'),
+            f.get('manager_id') or None,
+            f.get('notes', '').strip(),
+            photo_path,
+            session.get('username', ''),
+        ))
+        _seed_leave_balances(new_id)
+        log_action('CREATE', 'employees', new_id, f"Added employee {emp_id} — {f.get('full_name','')}")
+        flash(f'Employee {emp_id} created successfully.', 'success')
+        return redirect(url_for('hr_employee_profile', emp_id=new_id))
+
+    return render_template('hr/employee_form.html',
+        employee=None, users_list=users_list, managers=managers,
+        today=str(date.today()),
+    )
+
+
+# ── Employee Profile ──────────────────────────────────────────────────────────
+@app.route('/hr/employees/<int:emp_id>')
+@finance_required
+def hr_employee_profile(emp_id):
+    emp = query_db("""
+        SELECT e.*, m.full_name AS manager_name, u.username, u.role AS user_role_val
+        FROM employees e
+        LEFT JOIN employees m ON m.id = e.manager_id
+        LEFT JOIN users u ON u.id = e.user_id
+        WHERE e.id=%s AND e.deleted=FALSE
+    """, [emp_id], one=True)
+    if not emp:
+        flash('Employee not found.', 'danger')
+        return redirect(url_for('hr_employees'))
+
+    documents = query_db("SELECT * FROM employee_documents WHERE employee_id=%s ORDER BY uploaded_at DESC", [emp_id])
+    leaves    = query_db("SELECT * FROM leave_requests WHERE employee_id=%s ORDER BY created_at DESC LIMIT 20", [emp_id])
+    attendance= query_db("SELECT * FROM attendance WHERE employee_id=%s ORDER BY att_date DESC LIMIT 30", [emp_id])
+    year      = date.today().year
+    balances  = query_db("SELECT * FROM leave_balances WHERE employee_id=%s AND year=%s ORDER BY leave_type", [emp_id, year])
+
+    # Employee sales stats
+    sales_stats = None
+    if emp['user_id']:
+        sales_stats = query_db("""
+            SELECT COUNT(*) as total_sales,
+                   COALESCE(SUM(sell),0) as total_revenue,
+                   COALESCE(SUM(sell - net),0) as total_profit
+            FROM sales WHERE created_by_user_id=%s AND deleted=FALSE
+        """, [emp['user_id']], one=True)
+
+    return render_template('hr/employee_profile.html',
+        emp=emp, documents=documents, leaves=leaves,
+        attendance=attendance, balances=balances,
+        sales_stats=sales_stats, year=year,
+    )
+
+
+# ── Edit Employee ─────────────────────────────────────────────────────────────
+@app.route('/hr/employees/<int:emp_id>/edit', methods=['GET', 'POST'])
+@finance_required
+def hr_edit_employee(emp_id):
+    emp = query_db("SELECT * FROM employees WHERE id=%s AND deleted=FALSE", [emp_id], one=True)
+    if not emp:
+        flash('Employee not found.', 'danger')
+        return redirect(url_for('hr_employees'))
+
+    users_list = query_db("SELECT id, username, full_name FROM users WHERE is_active=TRUE ORDER BY full_name")
+    managers   = query_db("SELECT id, full_name, position FROM employees WHERE deleted=FALSE AND employment_status='Active' AND id!=%s ORDER BY full_name", [emp_id])
+
+    if request.method == 'POST':
+        f = request.form
+        photo_path = emp['photo_path']
+
+        photo = request.files.get('photo')
+        if photo and photo.filename:
+            ext = os.path.splitext(photo.filename)[1].lower().lstrip('.')
+            if ext in ALLOWED_PHOTO_EXT:
+                import uuid as _uuid
+                fname = f"{_uuid.uuid4().hex}{os.path.splitext(photo.filename)[1].lower()}"
+                save_path = os.path.join('static', 'uploads', 'hr', 'photos', fname)
+                photo.save(save_path)
+                photo_path = f"uploads/hr/photos/{fname}"
+
+        execute_db("""
+            UPDATE employees SET
+              user_id=%s, full_name=%s, position=%s, department=%s, email=%s,
+              phone=%s, address=%s, national_id=%s, date_of_birth=%s, join_date=%s,
+              employment_status=%s, manager_id=%s, notes=%s, photo_path=%s
+            WHERE id=%s
+        """, (
+            f.get('user_id') or None,
+            f.get('full_name', '').strip(),
+            f.get('position', '').strip(),
+            f.get('department', 'Sales'),
+            f.get('email', '').strip(),
+            f.get('phone', '').strip(),
+            f.get('address', '').strip(),
+            f.get('national_id', '').strip(),
+            f.get('date_of_birth', ''),
+            f.get('join_date', ''),
+            f.get('employment_status', 'Active'),
+            f.get('manager_id') or None,
+            f.get('notes', '').strip(),
+            photo_path,
+            emp_id,
+        ))
+        log_action('UPDATE', 'employees', emp_id, f"Updated employee {emp['employee_id']}")
+        flash('Employee updated successfully.', 'success')
+        return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+
+    return render_template('hr/employee_form.html',
+        employee=emp, users_list=users_list, managers=managers,
+        today=str(date.today()),
+    )
+
+
+# ── Delete Employee (soft) ────────────────────────────────────────────────────
+@app.route('/hr/employees/<int:emp_id>/delete', methods=['POST'])
+@admin_required
+def hr_delete_employee(emp_id):
+    emp = query_db("SELECT employee_id, full_name FROM employees WHERE id=%s", [emp_id], one=True)
+    if emp:
+        execute_db("UPDATE employees SET deleted=TRUE WHERE id=%s", [emp_id])
+        log_action('DELETE', 'employees', emp_id, f"Soft-deleted {emp['employee_id']} {emp['full_name']}")
+        flash('Employee removed.', 'warning')
+    return redirect(url_for('hr_employees'))
+
+
+# ── Document Upload ───────────────────────────────────────────────────────────
+@app.route('/hr/employees/<int:emp_id>/upload', methods=['POST'])
+@finance_required
+def hr_upload_doc(emp_id):
+    emp = query_db("SELECT id FROM employees WHERE id=%s AND deleted=FALSE", [emp_id], one=True)
+    if not emp:
+        flash('Employee not found.', 'danger')
+        return redirect(url_for('hr_employees'))
+
+    doc_file = request.files.get('doc_file')
+    doc_type = request.form.get('doc_type', 'Other')
+    if not doc_file or not doc_file.filename:
+        flash('No file selected.', 'warning')
+        return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+
+    ext = os.path.splitext(doc_file.filename)[1].lower().lstrip('.')
+    if ext not in ALLOWED_DOC_EXT:
+        flash('File type not allowed.', 'danger')
+        return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+
+    import uuid as _uuid
+    fname = f"doc_{emp_id}_{_uuid.uuid4().hex[:8]}.{ext}"
+    save_path = os.path.join('static', 'uploads', 'hr', 'docs', fname)
+    doc_file.save(save_path)
+    size = os.path.getsize(save_path)
+
+    execute_db("""
+        INSERT INTO employee_documents (employee_id, doc_type, filename, original_name, file_size, uploaded_by)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (emp_id, doc_type, fname, doc_file.filename, size, session.get('username', '')))
+    log_action('UPLOAD', 'employee_documents', emp_id, f"Uploaded {doc_type}: {doc_file.filename}")
+    flash(f'{doc_type} uploaded successfully.', 'success')
+    return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+
+
+# ── Document Delete ───────────────────────────────────────────────────────────
+@app.route('/hr/documents/<int:doc_id>/delete', methods=['POST'])
+@finance_required
+def hr_delete_doc(doc_id):
+    doc = query_db("SELECT * FROM employee_documents WHERE id=%s", [doc_id], one=True)
+    if doc:
+        try:
+            os.remove(os.path.join('static', 'uploads', 'hr', 'docs', doc['filename']))
+        except OSError:
+            pass
+        execute_db("DELETE FROM employee_documents WHERE id=%s", [doc_id])
+        log_action('DELETE', 'employee_documents', doc_id, f"Deleted {doc['doc_type']}: {doc['original_name']}")
+        flash('Document deleted.', 'warning')
+    return redirect(url_for('hr_employee_profile', emp_id=doc['employee_id'] if doc else 0))
+
+
+# ── Leave Management List ─────────────────────────────────────────────────────
+@app.route('/hr/leave')
+@finance_required
+def hr_leave():
+    q_status = request.args.get('status', '')
+    q_type   = request.args.get('type', '')
+    q_emp    = request.args.get('emp', '').strip()
+    page     = int(request.args.get('page', 1))
+
+    where  = ['1=1']
+    params = []
+    if q_status:
+        where.append("lr.status=%s"); params.append(q_status)
+    if q_type:
+        where.append("lr.leave_type=%s"); params.append(q_type)
+    if q_emp:
+        where.append("e.full_name ILIKE %s"); params.append(f'%{q_emp}%')
+
+    base_q = f"""
+        SELECT lr.*, e.full_name, e.position, e.department, e.photo_path
+        FROM leave_requests lr
+        JOIN employees e ON e.id = lr.employee_id
+        WHERE {' AND '.join(where)}
+        ORDER BY lr.created_at DESC
+    """
+    leaves, total, total_pages = paginate(base_q, params, page, 30)
+    return render_template('hr/leave.html',
+        leaves=leaves, total=total, total_pages=total_pages, page=page,
+        q_status=q_status, q_type=q_type, q_emp=q_emp,
+    )
+
+
+# ── Submit Leave Request (employee self-service or HR on behalf) ──────────────
+@app.route('/hr/leave/request', methods=['POST'])
+@login_required
+def hr_leave_request():
+    f          = request.form
+    emp_id     = f.get('employee_id')
+    leave_type = f.get('leave_type', 'Annual Leave')
+    start_date = f.get('start_date', '')
+    end_date   = f.get('end_date', '')
+    reason     = f.get('reason', '').strip()
+
+    if not emp_id or not start_date or not end_date:
+        flash('All fields required.', 'danger')
+        return redirect(request.referrer or url_for('hr_leave'))
+
+    try:
+        sd = datetime.strptime(start_date, '%Y-%m-%d').date()
+        ed = datetime.strptime(end_date,   '%Y-%m-%d').date()
+        days = max(1, (ed - sd).days + 1)
+    except ValueError:
+        flash('Invalid dates.', 'danger')
+        return redirect(request.referrer or url_for('hr_leave'))
+
+    new_id = execute_db("""
+        INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, days, reason)
+        VALUES (%s,%s,%s,%s,%s,%s) RETURNING id
+    """, (emp_id, leave_type, start_date, end_date, days, reason))
+    log_action('CREATE', 'leave_requests', new_id, f"Leave request: {leave_type} {days}d for emp#{emp_id}")
+    flash('Leave request submitted.', 'success')
+
+    redirect_to = f.get('redirect_to', '')
+    if redirect_to == 'profile':
+        return redirect(url_for('hr_employee_profile', emp_id=emp_id))
+    return redirect(url_for('hr_leave'))
+
+
+# ── Approve / Reject Leave ────────────────────────────────────────────────────
+@app.route('/hr/leave/<int:leave_id>/approve', methods=['POST'])
+@finance_required
+def hr_approve_leave(leave_id):
+    lr = query_db("SELECT * FROM leave_requests WHERE id=%s", [leave_id], one=True)
+    if not lr:
+        flash('Leave request not found.', 'danger')
+        return redirect(url_for('hr_leave'))
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    execute_db("""
+        UPDATE leave_requests SET status='Approved', approved_by=%s, approved_at=%s WHERE id=%s
+    """, (session.get('username', ''), now, leave_id))
+
+    # Deduct from leave balance
+    year = lr['start_date'][:4]
+    execute_db("""
+        INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+        VALUES (%s, %s, %s, 0, %s)
+        ON CONFLICT (employee_id, year, leave_type)
+        DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days
+    """, (lr['employee_id'], year, lr['leave_type'], lr['days']))
+
+    log_action('APPROVE', 'leave_requests', leave_id, f"Approved {lr['leave_type']} {lr['days']}d")
+    flash('Leave approved.', 'success')
+    return redirect(request.referrer or url_for('hr_leave'))
+
+
+@app.route('/hr/leave/<int:leave_id>/reject', methods=['POST'])
+@finance_required
+def hr_reject_leave(leave_id):
+    reason = request.form.get('rejection_reason', '').strip()
+    execute_db("""
+        UPDATE leave_requests SET status='Rejected', rejection_reason=%s,
+        approved_by=%s, approved_at=%s WHERE id=%s
+    """, (reason, session.get('username', ''),
+          datetime.now().strftime('%Y-%m-%d %H:%M'), leave_id))
+    log_action('REJECT', 'leave_requests', leave_id, f"Rejected. Reason: {reason}")
+    flash('Leave rejected.', 'warning')
+    return redirect(request.referrer or url_for('hr_leave'))
+
+
+# ── Attendance ────────────────────────────────────────────────────────────────
+@app.route('/hr/attendance')
+@finance_required
+def hr_attendance():
+    q_date = request.args.get('date', str(date.today()))
+    q_emp  = request.args.get('emp', '').strip()
+    page   = int(request.args.get('page', 1))
+
+    where  = ['1=1']
+    params = []
+    if q_date:
+        where.append("a.att_date=%s"); params.append(q_date)
+    if q_emp:
+        where.append("e.full_name ILIKE %s"); params.append(f'%{q_emp}%')
+
+    base_q = f"""
+        SELECT a.*, e.full_name, e.position, e.department, e.photo_path
+        FROM attendance a
+        JOIN employees e ON e.id = a.employee_id
+        WHERE {' AND '.join(where)}
+        ORDER BY a.att_date DESC, e.full_name
+    """
+    records, total, total_pages = paginate(base_q, params, page, 30)
+    employees = query_db("SELECT id, full_name, position FROM employees WHERE deleted=FALSE AND employment_status='Active' ORDER BY full_name")
+    return render_template('hr/attendance.html',
+        records=records, total=total, total_pages=total_pages, page=page,
+        q_date=q_date, q_emp=q_emp, employees=employees,
+    )
+
+
+@app.route('/hr/attendance/save', methods=['POST'])
+@finance_required
+def hr_save_attendance():
+    f          = request.form
+    emp_id     = f.get('employee_id')
+    att_date   = f.get('att_date', str(date.today()))
+    check_in   = f.get('check_in', '')
+    check_out  = f.get('check_out', '')
+    late_min   = int(f.get('late_minutes', 0) or 0)
+    notes      = f.get('notes', '').strip()
+
+    hours = 0.0
+    if check_in and check_out:
+        try:
+            ci = datetime.strptime(check_in, '%H:%M')
+            co = datetime.strptime(check_out, '%H:%M')
+            hours = round(max(0, (co - ci).seconds / 3600), 2)
+        except ValueError:
+            pass
+
+    execute_db("""
+        INSERT INTO attendance (employee_id, att_date, check_in, check_out, hours_worked, late_minutes, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (employee_id, att_date)
+        DO UPDATE SET check_in=EXCLUDED.check_in, check_out=EXCLUDED.check_out,
+                      hours_worked=EXCLUDED.hours_worked, late_minutes=EXCLUDED.late_minutes,
+                      notes=EXCLUDED.notes
+    """, (emp_id, att_date, check_in, check_out, hours, late_min, notes))
+    log_action('UPSERT', 'attendance', None, f"Attendance emp#{emp_id} {att_date}")
+    flash('Attendance saved.', 'success')
+    return redirect(url_for('hr_attendance', date=att_date))
+
+
+# ── Leave Balance Adjust ──────────────────────────────────────────────────────
+@app.route('/hr/leave-balance/adjust', methods=['POST'])
+@admin_required
+def hr_adjust_balance():
+    f       = request.form
+    emp_id  = f.get('employee_id')
+    year    = int(f.get('year', date.today().year))
+    ltype   = f.get('leave_type', 'Annual Leave')
+    total   = int(f.get('total_days', 0))
+    execute_db("""
+        INSERT INTO leave_balances (employee_id, year, leave_type, total_days, used_days)
+        VALUES (%s, %s, %s, %s, 0)
+        ON CONFLICT (employee_id, year, leave_type)
+        DO UPDATE SET total_days = EXCLUDED.total_days
+    """, (emp_id, year, ltype, total))
+    log_action('UPDATE', 'leave_balances', None, f"Adjusted balance emp#{emp_id} {ltype} to {total}d")
+    flash('Leave balance updated.', 'success')
+    return redirect(url_for('hr_employee_profile', emp_id=emp_id))
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
