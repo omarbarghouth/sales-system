@@ -133,14 +133,13 @@
 </div>
 
 {# ══════════════════════════════════════════════════════════════════
-   TRANSACTIONS TABLE — MERGED 10-COLUMN LAYOUT
+   TRANSACTIONS TABLE — 13-column layout (admin) / 11-column (non-admin)
    ──────────────────────────────────────────────────────────────────
-   Merges applied (no sidebar change, no scrollbar):
-     Col 1 : TXN # + Type       (was 2 cols: 80+68 = 148px → 92px)
-     Col 5 : Route + Supplier   (was 2 cols: 122+148 = 270px → 175px)
-     Col 8 : Sell + Profit      (was 3 cols: 80+92+80 = 252px → 110px)
-              Net cost hidden in cell tooltip
-   Saved: ~283px → table fits 100% on 1366px+ desktop with no scroll.
+   Merges still applied (no sidebar change, no scrollbar):
+     Col 1 : TXN # + Type     (was 2 cols → 1, saves ~56px)
+     Col 5 : Route + Supplier (was 2 cols → 1, saves ~95px)
+   Financial columns are SEPARATE: NET | SELL | PROFIT (3 cols)
+   All widths are % → table is always 100% wide with no scroll.
    ══════════════════════════════════════════════════════════════════ #}
 <style>
 /* ─── Table shell ──────────────────────────────────────────────── */
@@ -152,11 +151,11 @@
 
 /* ─── Header ─────────────────────────────────────────────────── */
 .txn-table th {
-  padding: 9px 8px;
+  padding: 9px 7px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .6px;
+  letter-spacing: .55px;
   white-space: nowrap;
   vertical-align: middle;
   background: var(--navy-dk);
@@ -169,7 +168,7 @@
 
 /* ─── Body rows ─────────────────────────────────────────────── */
 .txn-table td {
-  padding: 7px 8px;
+  padding: 7px 7px;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-lt);
   font-size: 12px;
@@ -185,6 +184,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ─── Monetary columns (right-aligned, tabular nums) ─────── */
+.txn-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+  padding-right: 10px !important;
+  font-size: 12px;
+}
+
+/* Gold left-border separates financial group from rest ─────── */
+.txn-money-start {
+  border-left: 2px solid rgba(200,168,75,.25) !important;
+}
+.txn-table thead th.txn-money-start { background: #0d2040; }
 
 /* ─── Col 1: TXN # + Type ──────────────────────────────────── */
 .txn-id-num {
@@ -204,7 +219,7 @@
   white-space: nowrap;
 }
 
-/* ─── Col 5: Route + Supplier (merged) ─────────────────────── */
+/* ─── Col 5: Route + Supplier ───────────────────────────────── */
 .txn-route-row {
   display: flex;
   align-items: center;
@@ -244,37 +259,8 @@
 }
 
 /* ─── Col 7: Travel date ───────────────────────────────────── */
-.txn-td-out  { display: block; font-size: 11.5px; font-weight: 600; color: var(--navy-dk); white-space: nowrap; }
-.txn-td-ret  { display: block; font-size: 10px;   color: var(--gold-dk,#b8860b); white-space: nowrap; margin-top: 2px; opacity: .85; }
-
-/* ─── Col 8: Sell + Profit (merged) ────────────────────────── */
-.txn-sell-val {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--navy-dk);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  white-space: nowrap;
-}
-.txn-profit-val {
-  display: block;
-  font-size: 10.5px;
-  color: var(--green,#1e7b34);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  white-space: nowrap;
-  margin-top: 2px;
-}
-.txn-table th.txn-financial,
-.txn-table td.txn-financial {
-  text-align: right;
-  padding-right: 12px !important;
-  border-left: 2px solid rgba(200,168,75,.2);
-}
-.txn-table thead th.txn-financial { background: #0e2244; }
+.txn-td-out { display: block; font-size: 11.5px; font-weight: 600; color: var(--navy-dk); white-space: nowrap; }
+.txn-td-ret { display: block; font-size: 10px; color: var(--gold-dk,#b8860b); white-space: nowrap; margin-top: 2px; opacity: .85; }
 
 /* ─── Agent pill ───────────────────────────────────────────── */
 .agent-pill {
@@ -301,7 +287,7 @@
 
 /* ─── Footer ───────────────────────────────────────────────── */
 .txn-table tfoot td {
-  padding: 9px 8px;
+  padding: 9px 7px;
   font-size: 12px; font-weight: 700;
   background: var(--navy-dk);
   color: rgba(255,255,255,.5);
@@ -311,23 +297,23 @@
 </style>
 
 <div class="table-wrap">
-  {# 10 admin cols / 8 non-admin cols — fits 100% width, no scroll #}
+  {# Admin: 13 cols · Non-admin: 11 cols · All % widths → no horizontal scroll #}
   <table class="txn-table">
     <colgroup>
-      <col style="width:8%">    {# 1. TXN # + Type #}
-      <col style="width:7%">    {# 2. Date #}
-      <col style="width:11%">   {# 3. Company #}
-      <col style="width:13%">   {# 4. Customer #}
-      <col style="width:19%">   {# 5. Route + Supplier #}
-      <col style="width:3%">    {# 6. Tix #}
-      <col style="width:8%">    {# 7. Travel Date #}
-      <col style="width:10%">   {# 8. Sell + Profit #}
-      <col style="width:6%">    {# 9. Status #}
+      <col style="width:8%">    {# 1.  TXN # + Type       #}
+      <col style="width:6%">    {# 2.  Date               #}
+      <col style="width:9%">    {# 3.  Company            #}
+      <col style="width:11%">   {# 4.  Customer           #}
+      <col style="width:16%">   {# 5.  Route + Supplier   #}
+      <col style="width:3%">    {# 6.  Tix                #}
+      <col style="width:7%">    {# 7.  Travel Date        #}
+      <col style="width:7%">    {# 8.  NET (JOD)          #}
+      <col style="width:7%">    {# 9.  SELL (JOD)         #}
+      <col style="width:6%">    {# 10. PROFIT             #}
+      <col style="width:6%">    {# 11. Status             #}
       {% if is_admin %}
-      <col style="width:8%">    {# 10. Agent #}
-      <col style="width:7%">    {# 11. Actions #}
-      {% else %}
-      {# redistribute agent+actions width to content cols when non-admin #}
+      <col style="width:7%">    {# 12. Agent              #}
+      <col style="width:7%">    {# 13. Actions            #}
       {% endif %}
     </colgroup>
     <thead>
@@ -339,26 +325,22 @@
         <th>Route &amp; Supplier</th>
         <th style="text-align:center">Tix</th>
         <th>Travel</th>
-        <th class="txn-financial">
-          <span style="color:var(--gold)">Sell</span>
-          <span style="color:rgba(255,255,255,.35);font-size:9px;margin:0 2px">/</span>
-          <span style="color:#6dd58a">Profit <small style="font-size:8px;opacity:.7">(JOD)</small></span>
-        </th>
+        <th class="txn-num txn-money-start" style="color:rgba(255,255,255,.5)">Net (JOD)</th>
+        <th class="txn-num" style="color:var(--gold)">Sell (JOD)</th>
+        <th class="txn-num" style="color:#6dd58a">Profit</th>
         <th>Status</th>
         {% if is_admin %}
         <th style="color:rgba(200,168,75,.85)"><i class="fas fa-user-tie" style="font-size:9px"></i> Agent</th>
-        <th style="text-align:center;color:rgba(255,255,255,.65)">Actions</th>
+        <th style="text-align:center">Actions</th>
         {% endif %}
       </tr>
     </thead>
     <tbody>
       {% for s in sales %}
       {% set st = (s.service_type or 'FLIGHT') %}
-      {# Tooltip: ticket numbers + net cost #}
       {% set tkt_tip = '' %}
       {% if s.ticket_number|default('') %}{% set tkt_tip = tkt_tip + '🎫 ' + s.ticket_number %}{% endif %}
       {% if s.return_ticket_number|default('') %}{% set tkt_tip = tkt_tip + (' | ' if tkt_tip else '') + '↩ ' + s.return_ticket_number %}{% endif %}
-      {% set fin_tip = 'Sell: JOD ' + "%.3f"|format((s.sell or 0)|float) + ' | Net cost: JOD ' + "%.3f"|format((s.net or 0)|float) + ' | Profit: JOD ' + "%.3f"|format((s.profit or 0)|float) %}
       <tr>
 
         {# ── 1. TXN # + Type ── #}
@@ -377,7 +359,7 @@
         {# ── 3. Company ── #}
         <td class="txn-clip" title="{{ s.company }}">
           <a href="{{ url_for('statement', company=s.company) }}"
-             style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:12.5px">
+             style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:12px">
             {{ s.company }}
           </a>
         </td>
@@ -387,7 +369,7 @@
           {{ s.customer }}
         </td>
 
-        {# ── 5. Route + Supplier (merged) ── #}
+        {# ── 5. Route + Supplier ── #}
         <td title="{{ s.from_loc }} → {{ s.to_loc }}{% if s.via %} via {{ s.via }}{% endif %}{% if tkt_tip %} | {{ tkt_tip }}{% endif %}">
           <div class="txn-route-row">
             <span class="txn-route-loc">{{ s.from_loc }}</span>
@@ -395,7 +377,6 @@
             <span class="txn-route-loc">{{ s.to_loc }}</span>
           </div>
           {% if s.via %}<span class="txn-via-row">via {{ s.via }}</span>{% endif %}
-          {# Suppliers on secondary lines — dimmer, icon-prefixed #}
           {% if s.buy_from %}
           <div class="txn-supp-row" title="{{ s.buy_from }}">
             <i class="fas fa-plane-departure" style="font-size:8px;color:var(--navy);flex-shrink:0"></i>
@@ -422,24 +403,33 @@
         {# ── 6. Tickets ── #}
         <td style="text-align:center;font-weight:700;color:var(--navy-dk)">{{ s.tickets }}</td>
 
-        {# ── 7. Travel Date (outbound + return stacked) ── #}
+        {# ── 7. Travel Date ── #}
         <td>
           {% if s.travel_date %}<span class="txn-td-out">{{ s.travel_date }}</span>{% endif %}
           {% if s.return_date  %}<span class="txn-td-ret">↩ {{ s.return_date }}</span>{% endif %}
           {% if not s.travel_date and not s.return_date %}<span style="color:var(--muted-lt)">—</span>{% endif %}
         </td>
 
-        {# ── 8. Sell + Profit stacked (Net cost in tooltip) ── #}
-        <td class="txn-financial" title="{{ fin_tip }}">
-          <span class="txn-sell-val">{{ "%.3f"|format((s.sell or 0)|float) }}</span>
-          <span class="txn-profit-val">+{{ "%.3f"|format((s.profit or 0)|float) }}</span>
+        {# ── 8. NET ── #}
+        <td class="txn-num txn-money-start" style="color:var(--muted)">
+          {{ "%.3f"|format((s.net or 0)|float) }}
         </td>
 
-        {# ── 9. Status ── #}
+        {# ── 9. SELL ── #}
+        <td class="txn-num" style="font-weight:700;color:var(--navy-dk)">
+          {{ "%.3f"|format((s.sell or 0)|float) }}
+        </td>
+
+        {# ── 10. PROFIT ── #}
+        <td class="txn-num" style="color:var(--green,#1e7b34);font-weight:600">
+          {{ "%.3f"|format((s.profit or 0)|float) }}
+        </td>
+
+        {# ── 11. Status ── #}
         <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
 
         {% if is_admin %}
-        {# ── 10. Agent ── #}
+        {# ── 12. Agent ── #}
         <td>
           {% set agent = s.agent_display or s.agent_name or '' %}
           {% if agent and agent != '—' %}
@@ -452,7 +442,7 @@
           <span style="color:var(--muted-lt);font-size:11px">—</span>
           {% endif %}
         </td>
-        {# ── 11. Actions ── #}
+        {# ── 13. Actions ── #}
         <td>
           <div style="display:flex;gap:3px;align-items:center;justify-content:center;flex-wrap:nowrap">
             <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit">
@@ -482,7 +472,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="{{ 11 if is_admin else 9 }}" class="text-center" style="padding:48px;color:var(--muted)">
+        <td colspan="{{ 13 if is_admin else 11 }}" class="text-center" style="padding:48px;color:var(--muted)">
           <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
           No transactions found.
           {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to or filters.get('customer') %}
@@ -502,9 +492,14 @@
           TOTALS — {{ totals.count }} transaction{{ 's' if totals.count != 1 else '' }}
           {% if filters.agent_id %} · {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}{% endif %}
         </td>
-        <td class="txn-financial" title="Net cost: JOD {{ '%.3f'|format((totals.net or 0)|float) }}">
-          <span class="txn-sell-val" style="color:var(--gold);font-size:13px">{{ "%.3f"|format((totals.sell or 0)|float) }}</span>
-          <span class="txn-profit-val" style="color:#86efac;font-size:11px">+{{ "%.3f"|format((totals.profit or 0)|float) }}</span>
+        <td class="txn-num txn-money-start" style="color:rgba(255,255,255,.45)">
+          {{ "%.3f"|format((totals.net or 0)|float) }}
+        </td>
+        <td class="txn-num" style="color:var(--gold);font-size:13px">
+          {{ "%.3f"|format((totals.sell or 0)|float) }}
+        </td>
+        <td class="txn-num" style="color:#86efac;font-size:13px">
+          {{ "%.3f"|format((totals.profit or 0)|float) }}
         </td>
         <td colspan="{{ 3 if is_admin else 1 }}"></td>
       </tr>
