@@ -436,12 +436,17 @@ function waSyncRm() {
 }
 
 function waSend() {
-  var errEl  = document.getElementById('wa-err');
+  console.log('[WA] waSend called');
+  var errEl   = document.getElementById('wa-err');
   var sendBtn = document.getElementById('wa-send');
+  if (!errEl || !sendBtn) { console.error('[WA] missing elements'); return; }
   errEl.style.display = 'none';
 
-  /* collect + validate numbers */
-  var inputs  = document.getElementById('wa-rows').querySelectorAll('input');
+  /* ── 1. collect + validate numbers ──────────────────────────── */
+  var rowsEl = document.getElementById('wa-rows');
+  if (!rowsEl) { waShowErr('Internal error: number list not found.'); return; }
+
+  var inputs  = rowsEl.querySelectorAll('input');
   var numbers = [], bad = [];
   inputs.forEach(function(inp) {
     var v = inp.value.trim();
@@ -450,48 +455,87 @@ function waSend() {
     else { bad.push(v); inp.style.borderColor = '#dc2626'; }
   });
   if (bad.length) {
-    waShowErr('Invalid number format — must start with + and country code.\nInvalid: ' + bad.join(', '));
+    waShowErr('Invalid format — numbers must start with + followed by country code and digits.\nInvalid: ' + bad.join(', '));
     return;
   }
   if (!numbers.length) { waShowErr('Please enter at least one WhatsApp number.'); return; }
+  console.log('[WA] sending to', numbers);
 
-  /* build form data from hidden span values */
-  function g(id) { var el=document.getElementById(id); return el ? el.textContent.trim() : ''; }
+  /* ── 2. build FormData ──────────────────────────────────────── */
+  /* CSRF token from the <meta> tag already in base.html */
+  var csrfMeta  = document.querySelector('meta[name="csrf-token"]');
+  var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+  function spanVal(id) {
+    var el = document.getElementById(id);
+    return el ? el.textContent.trim() : '';
+  }
+
   var fd = new FormData();
-  fd.append('csrf_token',  g('wa-csrf'));
-  fd.append('view_date',   g('wa-view-date'));
-  fd.append('date_from',   g('wa-date-from'));
-  fd.append('date_to',     g('wa-date-to'));
-  fd.append('company',     g('wa-company'));
-  fd.append('supplier',    g('wa-supplier'));
-  fd.append('passenger',   g('wa-passenger'));
-  fd.append('status',      g('wa-status'));
-  fd.append('agent_id',    g('wa-agent-id'));
+  fd.append('csrf_token', csrfToken);
+  fd.append('view_date',  spanVal('wa-view-date'));
+  fd.append('date_from',  spanVal('wa-date-from'));
+  fd.append('date_to',    spanVal('wa-date-to'));
+  fd.append('company',    spanVal('wa-company'));
+  fd.append('supplier',   spanVal('wa-supplier'));
+  fd.append('passenger',  spanVal('wa-passenger'));
+  fd.append('status',     spanVal('wa-status'));
+  fd.append('agent_id',   spanVal('wa-agent-id'));
   numbers.forEach(function(n) { fd.append('wa_number', n); });
 
+  /* ── 3. show loading state ──────────────────────────────────── */
   sendBtn.disabled = true;
   sendBtn.innerHTML = '<span class="spinner-ring"></span> Sending…';
 
-  fetch('{{ url_for("send_whatsapp_deliver") }}', {
-    method: 'POST', body: fd,
-    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  /* ── 4. POST to Flask endpoint ──────────────────────────────── */
+  var url = '{{ url_for("send_whatsapp_deliver") }}';
+  console.log('[WA] POST', url);
+
+  fetch(url, {
+    method: 'POST',
+    body: fd,
+    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
   })
-  .then(function(r) { return r.json(); })
-  .then(function(d) {
+  .then(function(r) {
+    console.log('[WA] response status', r.status);
+    /* always try to parse JSON; fall back to text so we never throw blindly */
+    return r.text().then(function(txt) {
+      try { return { status: r.status, data: JSON.parse(txt) }; }
+      catch(e) { return { status: r.status, data: null, raw: txt }; }
+    });
+  })
+  .then(function(res) {
     sendBtn.disabled = false;
     sendBtn.innerHTML = '<i class="fab fa-whatsapp"></i> Send Report';
-    if (d.ok) {
+    console.log('[WA] parsed response', res);
+
+    if (res.data && res.data.ok) {
       document.getElementById('wa-overlay').style.display = 'none';
-      waToast(d.message, true);
-    } else {
-      waShowErr(d.error || 'Send failed. Please try again.');
+      waToast(res.data.message, true);
+      return;
     }
+
+    /* show the clearest possible error */
+    var msg;
+    if (res.data && res.data.error) {
+      msg = res.data.error;
+    } else if (res.status === 403) {
+      msg = 'Session expired — please refresh the page and try again.';
+    } else if (res.status === 400) {
+      msg = (res.data && res.data.error) || 'Bad request. Check phone numbers and try again.';
+    } else if (res.status >= 500) {
+      msg = 'Server error (HTTP ' + res.status + '). Check server logs.\n'
+          + (res.raw ? res.raw.substring(0, 200) : '');
+    } else {
+      msg = 'Unexpected response (HTTP ' + res.status + ').';
+    }
+    waShowErr(msg);
   })
   .catch(function(e) {
     sendBtn.disabled = false;
     sendBtn.innerHTML = '<i class="fab fa-whatsapp"></i> Send Report';
-    waShowErr('Network error — please try again.');
-    console.error('WA error:', e);
+    console.error('[WA] fetch error', e);
+    waShowErr('Network error — the request could not be sent. Check your connection and try again.');
   });
 }
 
