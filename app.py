@@ -723,13 +723,24 @@ def add_user():
 @app.route('/users/delete/<int:user_id>', methods=['POST'])
 @admin_required
 def delete_user(user_id):
+    """
+    H-05 FIX: Soft-delete only — sets is_active=FALSE so the user cannot log in
+    and their audit history and transaction attribution remain intact.
+    Hard DELETE is never done; it would null out audit_logs.user_id entries.
+    """
     if user_id == session.get('user_id'):
-        flash('You cannot delete your own account.', 'danger')
+        flash('You cannot deactivate your own account.', 'danger')
         return redirect(url_for('manage_users'))
-    u = query_db('SELECT username FROM users WHERE id=%s', [user_id], one=True)
-    execute_db('DELETE FROM users WHERE id=%s', [user_id])
-    log_action('DELETE', 'users', user_id, f"Deleted user {u['username'] if u else user_id}")
-    flash('User deleted.', 'success')
+    u = query_db('SELECT username, is_active FROM users WHERE id=%s', [user_id], one=True)
+    if not u:
+        flash('User not found.', 'danger')
+        return redirect(url_for('manage_users'))
+    # Soft-delete: disable the account permanently (same as toggle but labelled as delete)
+    execute_db('UPDATE users SET is_active=FALSE WHERE id=%s', [user_id])
+    log_action('DELETE', 'users', user_id,
+               f"User {u['username']} deactivated (soft-delete). "
+               f"Audit history and transactions preserved.")
+    flash(f'User "{u["username"]}" has been deactivated. Their transaction history is preserved.', 'success')
     return redirect(url_for('manage_users'))
 
 @app.route('/users/change-password', methods=['POST'])
@@ -1500,225 +1511,271 @@ def statement():
     summary        = {}
 
     if company:
-        ps  = [company]
-        pp  = [company]
-        fs  = ''
-        fp  = ''
+        # ── H-01 FIX: single UNION ALL query — one round-trip instead of 8 ─────
+        # All ledger sources (sales/purchases/payments/adjustments) combined in SQL.
+        # Sort order: date ASC, then type priority (sale=0, purchase=1, ...), then id.
+        # Date filter applies to the natural date column of each source type.
+
+        _co = company.upper().strip()
+
+        # Build optional date/service-type clauses per source
+        _s_date_sql, _s_params = '', []          # sales date filter
+        _p_date_sql, _p_params = '', []          # payments date filter
+        _sp_date_sql, _sp_params = '', []        # supplier_payments date filter
+        _adj_date_sql, _adj_params = '', []      # adjustments date filter
+        _svc_sql, _svc_param = '', []            # service_type filter (sales only)
+
         if date_from:
-            fs += ' AND sale_date>=%s'; ps.append(date_from)
-            fp += ' AND pay_date>=%s';  pp.append(date_from)
+            _s_date_sql  += ' AND sale_date>=%s';   _s_params.append(date_from)
+            _p_date_sql  += ' AND pay_date>=%s';    _p_params.append(date_from)
+            _sp_date_sql += ' AND pay_date>=%s';    _sp_params.append(date_from)
+            _adj_date_sql+= ' AND adj_date>=%s';   _adj_params.append(date_from)
         if date_to:
-            fs += ' AND sale_date<=%s'; ps.append(date_to)
-            fp += ' AND pay_date<=%s';  pp.append(date_to)
+            _s_date_sql  += ' AND sale_date<=%s';   _s_params.append(date_to)
+            _p_date_sql  += ' AND pay_date<=%s';    _p_params.append(date_to)
+            _sp_date_sql += ' AND pay_date<=%s';    _sp_params.append(date_to)
+            _adj_date_sql+= ' AND adj_date<=%s';   _adj_params.append(date_to)
         if svc_type:
-            fs += " AND UPPER(TRIM(COALESCE(service_type,'FLIGHT')))=%s"
-            ps.append(svc_type)
+            _svc_sql = " AND UPPER(TRIM(COALESCE(service_type,'FLIGHT')))=%s"
+            _svc_param = [svc_type]
 
-        def _q(q, p):
-            try:    return query_db(q, p) or []
-            except:
-                try: get_db().rollback()
-                except: pass
-                return []
+        try:
+            raw_rows = query_db(f"""
+                -- 1. Sales to this company (DEBIT)
+                SELECT
+                    sale_date            AS entry_date,
+                    'TXN-' || LPAD(id::TEXT,4,'0') AS ref,
+                    COALESCE(service_type,'FLIGHT') || CASE
+                        WHEN from_loc<>'' AND to_loc<>'' THEN ' '||from_loc||chr(8594)||to_loc ELSE ''
+                    END || CASE WHEN pnr<>'' THEN ' ['||pnr||']' ELSE '' END  AS description,
+                    customer             AS passenger,
+                    COALESCE(service_type,'FLIGHT') AS svc,
+                    CAST(sell AS FLOAT)  AS debit,
+                    0.0                  AS credit,
+                    'sale'               AS entry_type,
+                    COALESCE(travel_date,'')             AS travel_date,
+                    id,
+                    COALESCE(ticket_number,'')           AS ticket_number,
+                    COALESCE(return_ticket_number,'')    AS return_ticket_number
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(company))=%s
+                  {_s_date_sql} {_svc_sql}
 
-        # DEBIT: we sold to this company
-        for s in _q(
-            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(company))=UPPER(%s)" + fs + " ORDER BY sale_date,id",
-            ps
-        ):
-            svc  = s.get('service_type') or 'FLIGHT'
-            pax  = s.get('customer','')
-            pnr  = s.get('pnr','') or ''
-            desc = svc
-            fl   = s.get('from_loc','')
-            tl   = s.get('to_loc','')
-            if fl and tl: desc += " " + fl + chr(8594) + tl
-            if pnr:       desc += " [" + pnr + "]"
-            ledger_entries.append({
-                'date':               s['sale_date'],
-                'ref':                "TXN-%04d" % s['id'],
-                'description':        desc,
-                'passenger':          pax,
-                'svc':                svc,
-                'debit':              float(s['sell'] or 0),
-                'credit':             0.0,
-                'type':               'sale',
-                'travel_date':        s.get('travel_date','') or '',
-                'id':                 s['id'],
-                'ticket_number':      s.get('ticket_number','') or '',
-                'return_ticket_number': s.get('return_ticket_number','') or '',
-            })
+                UNION ALL
 
-        # CREDIT: bought from this company (outbound flight)
-        for s in _q(
-            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(buy_from))=UPPER(%s)" + fs + " ORDER BY sale_date,id",
-            ps
-        ):
-            cost = float(s.get('outbound_cost') or s.get('net') or 0)
-            if cost > 0:
-                fl = s.get('from_loc',''); tl = s.get('to_loc','')
-                ledger_entries.append({
-                    'date':        s['sale_date'],
-                    'ref':         "PUR-%04d" % s['id'],
-                    'description': "Purchase Flight " + fl + chr(8594) + tl,
-                    'passenger':   s.get('customer',''),
-                    'svc':         'FLIGHT',
-                    'debit':       0.0,
-                    'credit':      cost,
-                    'type':        'purchase',
-                    'travel_date': s.get('travel_date','') or '',
-                    'id':          s['id'],
-                })
+                -- 2. Outbound purchases from this supplier (CREDIT)
+                SELECT
+                    sale_date,
+                    'PUR-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Flight ' || from_loc || chr(8594) || to_loc,
+                    customer, 'FLIGHT',
+                    0.0,
+                    CAST(CASE WHEN outbound_cost>0 THEN outbound_cost ELSE COALESCE(net,0) END AS FLOAT),
+                    'purchase',
+                    COALESCE(travel_date,''), id, '', ''
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(buy_from))=%s
+                  AND (outbound_cost>0 OR net>0)
+                  {_s_date_sql}
 
-        # CREDIT: return supplier (return leg purchase)
-        # NOTE: No buy_from exclusion — outbound_cost and return_cost are separate fields.
-        # Even when buy_from == return_supplier, both costs must appear independently.
-        for s in _q(
-            "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(return_supplier))=UPPER(%s)"
-            " AND return_cost > 0" + fs + " ORDER BY sale_date,id",
-            ps
-        ):
-            cost = float(s.get('return_cost') or 0)
-            tl = s.get('to_loc',''); fl = s.get('from_loc','')
-            _rpnr = s.get('return_pnr','') or ''
-            _rtn  = s.get('return_ticket_number','') or ''
-            _desc = "Purchase Return " + tl + chr(8594) + fl
-            if _rpnr: _desc += " [" + _rpnr + "]"
-            ledger_entries.append({
-                'date':                 s['sale_date'],
-                'ref':                  "RTN-%04d" % s['id'],
-                'description':          _desc,
-                'passenger':            s.get('customer',''),
-                'svc':                  'FLIGHT',
-                'debit':                0.0,
-                'credit':               cost,
-                'type':                 'purchase',
-                'travel_date':          s.get('return_date','') or s.get('travel_date','') or '',
-                'id':                   s['id'],
-                'return_ticket_number': _rtn,
-            })
+                UNION ALL
 
-        # CREDIT: hotel/transfer/visa/insurance supplier
-        for supp_field, cost_field, label, svctag in [
-            ('hotel_supplier',    'hotel_net',    'Hotel',     'HOTEL'),
-            ('transfer_supplier', 'transfer_net', 'Transfer',  'TRANSFER'),
-            ('visa_supplier',     'net',          'Visa',      'VISA'),
-            ('insurance_supplier','net',          'Insurance', 'INSURANCE'),
-        ]:
-            for s in _q(
-                "SELECT * FROM sales WHERE deleted=FALSE AND is_archived=FALSE "
-                "AND UPPER(TRIM(" + supp_field + "))=UPPER(%s)" + fs + " ORDER BY sale_date,id",
-                ps
-            ):
-                cost = float(s.get(cost_field) or 0)
-                if cost > 0:
-                    detail = ''
-                    if label == 'Hotel'     and s.get('hotel_name'): detail = ' - ' + s['hotel_name']
-                    elif label == 'Visa'    and s.get('visa_type'):  detail = ' - ' + s['visa_type']
-                    ledger_entries.append({
-                        'date':        s['sale_date'],
-                        'ref':         label[:3].upper() + "-%04d" % s['id'],
-                        'description': "Purchase " + label + detail,
-                        'passenger':   s.get('customer',''),
-                        'svc':         svctag,
-                        'debit':       0.0,
-                        'credit':      cost,
-                        'type':        'purchase',
-                        'travel_date': s.get('travel_date','') or '',
-                        'id':          s['id'],
-                    })
+                -- 3. Return leg purchases from this supplier (CREDIT)
+                SELECT
+                    sale_date,
+                    'RTN-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Return ' || to_loc || chr(8594) || from_loc
+                        || CASE WHEN return_pnr<>'' THEN ' ['||return_pnr||']' ELSE '' END,
+                    customer, 'FLIGHT',
+                    0.0,
+                    CAST(return_cost AS FLOAT),
+                    'purchase',
+                    COALESCE(return_date, travel_date,''), id,
+                    '', COALESCE(return_ticket_number,'')
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(return_supplier))=%s
+                  AND return_cost > 0
+                  {_s_date_sql}
 
-        # CREDIT: payment received
-        # ACC-03: add is_archived=FALSE so archived payments don't appear in active statement
-        for p in _q(
-            "SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(company))=UPPER(%s)" + fp + " ORDER BY pay_date,id",
-            pp
-        ):
-            note = p.get('notes','') or ''
-            ledger_entries.append({
-                'date':        p['pay_date'],
-                'ref':         "PAY-%04d" % p['id'],
-                'description': "Payment received" + (" - " + note if note else ""),
-                'passenger':   '',
-                'svc':         '',
-                'debit':       0.0,
-                'credit':      float(p['amount'] or 0),
-                'type':        'payment_in',
-                'travel_date': '',
-                'id':          p['id'],
-            })
+                UNION ALL
 
-        # DEBIT: payment made to supplier
-        # ACC-03: add is_archived=FALSE so archived supplier payments don't distort balance
-        for sp in _q(
-            "SELECT * FROM supplier_payments WHERE deleted=FALSE AND is_archived=FALSE "
-            "AND UPPER(TRIM(supplier))=UPPER(%s) ORDER BY pay_date,id",
-            [company]
-        ):
-            if date_from and str(sp['pay_date']) < date_from: continue
-            if date_to   and str(sp['pay_date']) > date_to:   continue
-            note = sp.get('notes','') or ''
-            ledger_entries.append({
-                'date':        sp['pay_date'],
-                'ref':         "SPY-%04d" % sp['id'],
-                'description': "Payment made" + (" - " + note if note else ""),
-                'passenger':   '',
-                'svc':         sp.get('service_type',''),
-                'debit':       float(sp['amount'] or 0),
-                'credit':      0.0,
-                'type':        'payment_out',
-                'travel_date': '',
-                'id':          sp['id'],
-            })
+                -- 4. Hotel purchases from this supplier (CREDIT)
+                SELECT
+                    sale_date,
+                    'HOT-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Hotel' || CASE WHEN hotel_name<>'' THEN ' - '||hotel_name ELSE '' END,
+                    customer, 'HOTEL',
+                    0.0, CAST(hotel_net AS FLOAT),
+                    'purchase',
+                    COALESCE(travel_date,''), id, '', ''
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(hotel_supplier))=%s AND hotel_net>0
+                  {_s_date_sql}
 
-        # Opening balance adjustments for this company
-        for adj in _q(
-            "SELECT * FROM balance_adjustments WHERE deleted=FALSE AND account_type='COMPANY' "
-            "AND UPPER(TRIM(account))=UPPER(%s) ORDER BY adj_date,id",
-            [company]
-        ):
-            if date_from and str(adj['adj_date']) < date_from: continue
-            if date_to   and str(adj['adj_date']) > date_to:   continue
-            ledger_entries.append({
-                'date':        adj['adj_date'],
-                'ref':         f"ADJ-{adj['id']:04d}",
-                'description': adj['reason'] or 'Balance Adjustment',
-                'passenger':   adj['notes'] or '',
-                'svc':         '',
-                'debit':       float(adj['amount']) if adj['entry_type'] == 'DEBIT'  else 0.0,
-                'credit':      float(adj['amount']) if adj['entry_type'] == 'CREDIT' else 0.0,
-                'type':        'adjustment',
-                'travel_date': '',
-                'id':          adj['id'],
-            })
+                UNION ALL
 
-        # Sort: date > type priority > ref
-        _ORD = {'sale':0,'purchase':1,'payment_in':2,'payment_out':3,'adjustment':4}
-        ledger_entries.sort(key=lambda x:(x['date'], _ORD.get(x['type'],9), x['ref']))
+                -- 5. Transfer purchases (CREDIT)
+                SELECT
+                    sale_date,
+                    'TRN-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Transfer',
+                    customer, 'TRANSFER',
+                    0.0, CAST(transfer_net AS FLOAT),
+                    'purchase',
+                    COALESCE(travel_date,''), id, '', ''
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(transfer_supplier))=%s AND transfer_net>0
+                  {_s_date_sql}
 
-        # Renumber payment refs sequentially within this company's statement
-        _pay_n = 0
-        for e in ledger_entries:
-            if e['type'] == 'payment_in':
-                _pay_n += 1
-                e['ref'] = f"PAY-{_pay_n:02d}"
+                UNION ALL
 
-        # Running balance
+                -- 6. Visa purchases (CREDIT)
+                SELECT
+                    sale_date,
+                    'VIS-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Visa' || CASE WHEN visa_type<>'' THEN ' - '||visa_type ELSE '' END,
+                    customer, 'VISA',
+                    0.0, CAST(net AS FLOAT),
+                    'purchase',
+                    COALESCE(travel_date,''), id, '', ''
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(visa_supplier))=%s AND net>0
+                  {_s_date_sql}
+
+                UNION ALL
+
+                -- 7. Insurance purchases (CREDIT)
+                SELECT
+                    sale_date,
+                    'INS-' || LPAD(id::TEXT,4,'0'),
+                    'Purchase Insurance',
+                    customer, 'INSURANCE',
+                    0.0, CAST(net AS FLOAT),
+                    'purchase',
+                    COALESCE(travel_date,''), id, '', ''
+                FROM sales
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(insurance_supplier))=%s AND net>0
+                  {_s_date_sql}
+
+                UNION ALL
+
+                -- 8. Payments received from company (CREDIT)
+                SELECT
+                    pay_date,
+                    'PAY-' || LPAD(id::TEXT,4,'0'),
+                    'Payment received' || CASE WHEN COALESCE(notes,'')<>'' THEN ' - '||notes ELSE '' END,
+                    '', '',
+                    0.0, CAST(amount AS FLOAT),
+                    'payment_in',
+                    '', id, '', ''
+                FROM payments
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND COALESCE(voided,FALSE)=FALSE
+                  AND UPPER(TRIM(company))=%s
+                  {_p_date_sql}
+
+                UNION ALL
+
+                -- 9. Payments made to supplier (DEBIT)
+                SELECT
+                    pay_date,
+                    'SPY-' || LPAD(id::TEXT,4,'0'),
+                    'Payment made' || CASE WHEN COALESCE(notes,'')<>'' THEN ' - '||notes ELSE '' END,
+                    '', COALESCE(service_type,''),
+                    CAST(amount AS FLOAT), 0.0,
+                    'payment_out',
+                    '', id, '', ''
+                FROM supplier_payments
+                WHERE deleted=FALSE AND is_archived=FALSE
+                  AND UPPER(TRIM(supplier))=%s
+                  {_sp_date_sql}
+
+                UNION ALL
+
+                -- 10. Balance adjustments (DEBIT or CREDIT)
+                SELECT
+                    adj_date,
+                    'ADJ-' || LPAD(id::TEXT,4,'0'),
+                    COALESCE(reason,'Balance Adjustment'),
+                    COALESCE(notes,''), '',
+                    CASE WHEN entry_type='DEBIT'  THEN CAST(amount AS FLOAT) ELSE 0.0 END,
+                    CASE WHEN entry_type='CREDIT' THEN CAST(amount AS FLOAT) ELSE 0.0 END,
+                    'adjustment',
+                    '', id, '', ''
+                FROM balance_adjustments
+                WHERE deleted=FALSE AND account_type='COMPANY'
+                  AND UPPER(TRIM(account))=%s
+                  {_adj_date_sql}
+
+                ORDER BY
+                    entry_date ASC,
+                    CASE entry_type
+                        WHEN 'sale'        THEN 0
+                        WHEN 'purchase'    THEN 1
+                        WHEN 'payment_in'  THEN 2
+                        WHEN 'payment_out' THEN 3
+                        WHEN 'adjustment'  THEN 4
+                        ELSE 9
+                    END ASC,
+                    ref ASC
+            """, (
+                [_co] + _s_params + _svc_param    # sales to company
+                + [_co] + _s_params               # outbound purchases
+                + [_co] + _s_params               # return purchases
+                + [_co] + _s_params               # hotel
+                + [_co] + _s_params               # transfer
+                + [_co] + _s_params               # visa
+                + [_co] + _s_params               # insurance
+                + [_co] + _p_params               # payments received
+                + [_co] + _sp_params              # supplier payments
+                + [_co] + _adj_params             # adjustments
+            )) or []
+        except Exception as _se:
+            logger.error(f"statement UNION query error: {_se}")
+            try: get_db().rollback()
+            except: pass
+            raw_rows = []
+
+        # Build ledger entries and compute running balance in one pass
         running = 0.0
-        for e in ledger_entries:
-            running      += e['debit'] - e['credit']
-            e['balance']  = round(running, 3)
+        _pay_n  = 0
+        for row in raw_rows:
+            dr = float(row['debit']  or 0)
+            cr = float(row['credit'] or 0)
+            running += dr - cr
+            entry_type = row['entry_type']
+            ref = row['ref']
+            if entry_type == 'payment_in':
+                _pay_n += 1
+                ref = f"PAY-{_pay_n:02d}"
+            ledger_entries.append({
+                'date':                 row['entry_date'],
+                'ref':                  ref,
+                'description':          row['description'] or '',
+                'passenger':            row['passenger'] or '',
+                'svc':                  row['svc'] or '',
+                'debit':                dr,
+                'credit':               cr,
+                'type':                 entry_type,
+                'travel_date':          row['travel_date'] or '',
+                'id':                   row['id'],
+                'ticket_number':        row['ticket_number'] or '',
+                'return_ticket_number': row['return_ticket_number'] or '',
+                'balance':              round(running, 3),
+            })
 
-        # Summary totals
+        net_bal  = round(running, 3)
         sold     = sum(e['debit']  for e in ledger_entries if e['type']=='sale')
         bought   = sum(e['credit'] for e in ledger_entries if e['type']=='purchase')
         received = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
         paid_out = sum(e['debit']  for e in ledger_entries if e['type']=='payment_out')
-        net_bal  = round(running, 3)
         summary  = {
             'total_sold':     sold,
             'total_bought':   bought,
@@ -1768,6 +1825,16 @@ def payments():
         except ValueError:
             flash('Amount must be a positive number.', 'danger')
             return redirect(url_for('payments'))
+        # EMP-02 FIX: large payment alert — amounts above JOD 5,000 require admin role
+        _LARGE_PMT_THRESHOLD = 5000.0
+        if amount >= _LARGE_PMT_THRESHOLD and session.get('user_role') != 'admin':
+            flash(
+                f'Payments of JOD {amount:,.3f} or more require admin approval. '
+                f'Please ask an administrator to record this payment.',
+                'danger'
+            )
+            return redirect(url_for('payments'))
+
         # Duplicate payment guard
         _force = request.form.get('force_duplicate', '').strip() == '1'
         _dup = query_db(
@@ -2285,13 +2352,13 @@ def _dt_send_email(outbound_tickets, return_tickets, label, sender_username='sys
 
 
 # ── Deliver Tomorrow — routes ──────────────────────────────────────────────────
-@app.route('/deliver-tomorrow')
-@login_required
-def deliver_tomorrow():
-    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    today_str     = str(date.today())
-
-    # Auto-update delivery statuses
+def _dt_auto_update_statuses():
+    """
+    C-04 FIX: Auto-update delivery statuses based on today's date.
+    Called ONLY from the daily cron endpoint, not on every page load.
+    Marks tickets as DONE when their delivery date has passed.
+    """
+    today_str = str(date.today())
     execute_db('''
         UPDATE sales SET outbound_status='DONE'
         WHERE outbound_delivery != '' AND outbound_delivery <= %s
@@ -2308,6 +2375,13 @@ def deliver_tomorrow():
           AND (return_delivery='' OR return_status='DONE')
           AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
     ''')
+    logger.info("_dt_auto_update_statuses: delivery statuses refreshed")
+
+
+@app.route('/deliver-tomorrow')
+@login_required
+def deliver_tomorrow():
+    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
 
     p = _dt_parse_filters(request.args)
     outbound_tickets, return_tickets = _dt_query_tickets(p)
@@ -2370,17 +2444,37 @@ def deliver_tomorrow_export():
 @app.route('/deliver-tomorrow/mark/<int:sale_id>', methods=['POST'])
 @login_required
 def mark_delivered(sale_id):
+    """
+    M-06 FIX: Employees can mark any sale delivered (operations task, not ownership).
+    Admins and managers always allowed. Plain users allowed only for tickets in
+    the delivery dashboard — they are not editing financial data, only status.
+    Audit log captures who marked it.
+    """
     dtype       = request.form.get('dtype', 'OUTBOUND')
     redirect_q  = request.form.get('redirect_args', '')
+    actor       = session.get('username', '?')
+
+    # Verify the sale exists and is not deleted
+    sale = query_db('SELECT id, company, customer FROM sales WHERE id=%s AND deleted=FALSE',
+                    [sale_id], one=True)
+    if not sale:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'ok': False, 'error': 'Sale not found'}), 404
+        flash('Sale not found.', 'danger')
+        return redirect(url_for('deliver_tomorrow'))
+
     if dtype == 'RETURN':
         execute_db("UPDATE sales SET return_status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
-        log_action('UPDATE', 'sales', sale_id, 'Return ticket marked DONE via delivery dashboard')
+        log_action('UPDATE', 'sales', sale_id,
+                   f"Return ticket marked DONE by {actor} | {sale['customer']} | {sale['company']}")
     elif dtype == 'TRAVEL':
         execute_db("UPDATE sales SET status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
-        log_action('UPDATE', 'sales', sale_id, 'Travel ticket marked DONE via delivery dashboard')
+        log_action('UPDATE', 'sales', sale_id,
+                   f"Travel ticket marked DONE by {actor} | {sale['customer']} | {sale['company']}")
     else:
         execute_db("UPDATE sales SET outbound_status='DONE' WHERE id=%s AND deleted=FALSE", [sale_id])
-        log_action('UPDATE', 'sales', sale_id, 'Outbound ticket marked DONE via delivery dashboard')
+        log_action('UPDATE', 'sales', sale_id,
+                   f"Outbound ticket marked DONE by {actor} | {sale['customer']} | {sale['company']}")
     # AJAX call → return JSON so the page doesn't reload
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
@@ -2453,6 +2547,12 @@ def deliver_tomorrow_daily_email():
     cron_key = os.environ.get('CRON_KEY', '')
     if cron_key and request.headers.get('X-Cron-Key', '') != cron_key:
         return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+
+    # C-04 FIX: auto-update delivery statuses runs here (daily cron) not on page load
+    try:
+        _dt_auto_update_statuses()
+    except Exception as _ue:
+        logger.error(f"deliver_tomorrow_daily_email: status update failed: {_ue}")
 
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     p = _dt_parse_filters({'view_date': tomorrow_date})
@@ -2645,63 +2745,170 @@ def export_excel():
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
+@app.route('/admin/reset-data/backup-excel')
+@admin_required
+def reset_data_backup():
+    """
+    C-03 FIX: Must download this backup BEFORE the reset form will activate.
+    Sets a session flag so the reset page knows a backup was taken this session.
+    """
+    import io as _io
+    import openpyxl as _xl
+    from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Align
+
+    wb = _xl.Workbook()
+    hdr_font = _Font(bold=True, color='FFFFFF')
+    hdr_fill = _Fill('solid', fgColor='1B3A6B')
+    center   = _Align(horizontal='center')
+
+    # ── Sales sheet ──────────────────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = 'Sales'
+    hdrs1 = ['ID','TXN#','Sale Date','Company','Customer','From','To',
+             'Service','Buy From','Tickets','Travel Date','Net','Sell','Profit',
+             'Status','Remarks','Agent']
+    ws1.append(hdrs1)
+    for c in range(1, len(hdrs1)+1):
+        ws1.cell(1,c).font = hdr_font
+        ws1.cell(1,c).fill = hdr_fill
+        ws1.cell(1,c).alignment = center
+    sales_all = query_db("""
+        SELECT s.*, COALESCE(u.full_name, s.created_by_username, '—') AS agent_display
+        FROM sales s LEFT JOIN users u ON s.created_by_user_id = u.id
+        ORDER BY s.id
+    """) or []
+    for s in sales_all:
+        ws1.append([s['id'], s.get('txn_number',''), s['sale_date'],
+                    s['company'], s['customer'], s.get('from_loc',''), s.get('to_loc',''),
+                    s.get('service_type','FLIGHT'), s.get('buy_from',''),
+                    s.get('tickets',1), s.get('travel_date',''),
+                    float(s.get('net',0) or 0), float(s.get('sell',0) or 0),
+                    float(s.get('profit',0) or 0),
+                    s.get('status',''), s.get('remarks',''), s['agent_display']])
+
+    # ── Payments sheet ───────────────────────────────────────────────────────
+    ws2 = wb.create_sheet('Payments')
+    hdrs2 = ['ID','Pay Date','Company','Amount','Method','Reference','Notes']
+    ws2.append(hdrs2)
+    for c in range(1, len(hdrs2)+1):
+        ws2.cell(1,c).font = hdr_font
+        ws2.cell(1,c).fill = hdr_fill
+    for p in (query_db('SELECT * FROM payments ORDER BY id') or []):
+        ws2.append([p['id'], p['pay_date'], p['company'], float(p['amount'] or 0),
+                    p.get('payment_method',''), p.get('reference_number',''), p.get('notes','')])
+
+    # ── Supplier payments sheet ──────────────────────────────────────────────
+    ws3 = wb.create_sheet('Supplier Payments')
+    hdrs3 = ['ID','Pay Date','Supplier','Amount','Service','Notes']
+    ws3.append(hdrs3)
+    for c in range(1, len(hdrs3)+1):
+        ws3.cell(1,c).font = hdr_font
+        ws3.cell(1,c).fill = hdr_fill
+    for sp in (query_db('SELECT * FROM supplier_payments ORDER BY id') or []):
+        ws3.append([sp['id'], sp['pay_date'], sp['supplier'], float(sp['amount'] or 0),
+                    sp.get('service_type',''), sp.get('notes','')])
+
+    buf = _io.BytesIO()
+    wb.save(buf); buf.seek(0)
+
+    # Mark that a backup was taken in this session
+    session['reset_backup_taken'] = True
+    log_action('EXPORT', 'system', None,
+               f"Pre-reset full backup downloaded by {session.get('username')}")
+
+    filename = f"alsondos_BACKUP_{date.today().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
 @app.route('/admin/reset-data', methods=['GET', 'POST'])
 @admin_required
 def reset_data():
+    # C-03 FIX: backup must be downloaded before reset is allowed
+    backup_taken = session.get('reset_backup_taken', False)
+
     if request.method == 'POST':
-        confirm = request.form.get('confirm_text', '').strip()
-        if confirm != 'DELETE ALL DATA':
-            flash('Confirmation text incorrect. Nothing was deleted.', 'danger')
+        if not backup_taken:
+            flash('You must download the backup Excel first before resetting data.', 'danger')
             return redirect(url_for('reset_data'))
 
-        # Export to Excel first automatically before deleting
-        # Then permanently delete all sales, payments, audit logs
+        confirm1 = request.form.get('confirm_text', '').strip()
+        confirm2 = request.form.get('confirm_text2', '').strip()
+        if confirm1 != 'DELETE ALL DATA':
+            flash('First confirmation text incorrect. Nothing was deleted.', 'danger')
+            return redirect(url_for('reset_data'))
+        if confirm2 != session.get('username', '___'):
+            flash('Second confirmation (your username) is incorrect. Nothing was deleted.', 'danger')
+            return redirect(url_for('reset_data'))
+
         db = get_db()
         cur = db.cursor()
 
-        # Get counts — RealDictCursor returns dict, use .get() not [0]
+        # Get exact counts before deletion — these go into the audit log
         cur.execute('SELECT COUNT(*) AS n FROM sales')
         row = cur.fetchone()
         sales_count = row.get('n', 0) if hasattr(row, 'get') else row[0]
         cur.execute('SELECT COUNT(*) AS n FROM payments')
         row = cur.fetchone()
         pay_count = row.get('n', 0) if hasattr(row, 'get') else row[0]
+        cur.execute('SELECT COUNT(*) AS n FROM supplier_payments')
+        row = cur.fetchone()
+        sp_count = row.get('n', 0) if hasattr(row, 'get') else row[0]
+        cur.execute('SELECT COALESCE(SUM(sell),0) AS v FROM sales')
+        row = cur.fetchone()
+        total_sell = float(row.get('v',0) if hasattr(row,'get') else row[0])
 
         # Hard delete all transactional data
-        for _t in ['invoices','vouchers','packages','sales',
-                   'payments','supplier_payments','audit_logs']:
+        for _t in ['accounting_entries','sale_items','refunds',
+                   'invoices','vouchers','packages','balance_adjustments',
+                   'sales','payments','supplier_payments','audit_logs']:
             try: cur.execute('DELETE FROM ' + _t)
             except Exception: db.rollback()
 
         # Reset ID sequences to 1
         for _seq in ['sales_id_seq','payments_id_seq','audit_logs_id_seq',
-                     'invoices_id_seq','vouchers_id_seq','packages_id_seq']:
+                     'invoices_id_seq','vouchers_id_seq','packages_id_seq',
+                     'accounting_entries_id_seq','supplier_payments_id_seq']:
             try: cur.execute('ALTER SEQUENCE ' + _seq + ' RESTART WITH 1')
             except Exception: pass
 
-        # Reset document number sequences (INV/VCH/PKG restart from 0001)
+        # Reset txn_seq so T-numbers restart from T-0001
+        try: cur.execute('ALTER SEQUENCE txn_seq RESTART WITH 1')
+        except Exception: pass
+
+        # Reset document number sequences
         try: cur.execute("UPDATE doc_sequences SET last_num = 0")
         except Exception: pass
 
         db.commit()
 
-        # Log the reset action (this will be the first entry in fresh audit log)
+        # Clear backup flag from session
+        session.pop('reset_backup_taken', None)
+
+        # Log the reset (first entry in fresh audit log)
         log_action('RESET', 'system', None,
                    f"Full data reset by {session.get('username')} — "
-                   f"deleted {sales_count} sales and {pay_count} payments")
+                   f"deleted {sales_count} sales, {pay_count} payments, "
+                   f"{sp_count} supplier payments. Total sell was JOD {total_sell:.3f}. "
+                   f"Backup was downloaded before reset.")
 
-        flash(f'✅ All data cleared successfully. {sales_count} sales and {pay_count} payments deleted. System starts fresh from today.', 'success')
+        flash(f'✅ All data cleared. {sales_count} sales and {pay_count} payments deleted. '
+              f'System starts fresh from today.', 'success')
         return redirect(url_for('index'))
 
-    # GET — show confirmation page
+    # GET — show confirmation page with backup requirement
     stats = query_db('''
         SELECT
             (SELECT COUNT(*) FROM sales) as sales_count,
             (SELECT COUNT(*) FROM payments) as payments_count,
-            (SELECT COALESCE(SUM(sell),0) FROM sales) as total_sell,
-            (SELECT COALESCE(SUM(amount),0) FROM payments) as total_paid
+            (SELECT COUNT(*) FROM supplier_payments) as sp_count,
+            (SELECT COALESCE(SUM(sell),0) FROM sales WHERE deleted=FALSE) as total_sell,
+            (SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted=FALSE) as total_paid
     ''', one=True)
-    return render_template('reset_data.html', stats=stats)
+    return render_template('reset_data.html', stats=stats, backup_taken=backup_taken)
 
 @app.route('/archive', methods=['GET'])
 @admin_required
@@ -3363,6 +3570,31 @@ def init_extension_db():
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_txn_number ON sales(txn_number) WHERE deleted=FALSE")
 
+    # ── C-01 FIX: txn_seq PostgreSQL sequence (race-condition-free numbering) ─
+    # Create sequence if it doesn't exist, then sync its value to the current
+    # highest T-number so the next generated number is always one higher.
+    cur.execute("CREATE SEQUENCE IF NOT EXISTS txn_seq START 1")
+    cur.execute("""
+        SELECT setval(
+            'txn_seq',
+            GREATEST(
+                (SELECT COALESCE(
+                    MAX(CAST(REGEXP_REPLACE(txn_number, '[^0-9]', '', 'g') AS INTEGER)), 0
+                ) FROM sales
+                WHERE deleted=FALSE
+                  AND txn_number ~ '^T-[0-9]+$'),
+                currval('txn_seq')
+            )
+        )
+        WHERE EXISTS (SELECT 1 FROM sales WHERE deleted=FALSE AND txn_number ~ '^T-[0-9]+$')
+    """)
+    # Unique index: prevents duplicate T-numbers at the DB level even if app logic fails
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_txn_number
+        ON sales(txn_number)
+        WHERE deleted=FALSE AND txn_number IS NOT NULL AND txn_number <> ''
+    """)
+
     # ════════════════════════════════════════════════════════════════════════
     # PHASE E — balance_adjustments: opening balance / historical corrections
     # Never modifies existing transactions. Appears as a normal ledger line.
@@ -3385,6 +3617,42 @@ def init_extension_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_adj_account ON balance_adjustments(UPPER(account)) WHERE deleted=FALSE")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_adj_date    ON balance_adjustments(adj_date) WHERE deleted=FALSE")
 
+    # ── DB-06 FIX: payments.created_by FK ────────────────────────────────────
+    # The column was added as plain INTEGER with no FK. Add the constraint now.
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE payments
+                ADD CONSTRAINT fk_payments_created_by
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    """)
+
+    # ── DB-03 FIX: unique partial index on txn_number ────────────────────────
+    # Belt-and-suspenders: even if app logic fails, the DB rejects duplicates.
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_txn_number
+        ON sales(txn_number)
+        WHERE deleted=FALSE AND txn_number IS NOT NULL AND txn_number <> ''
+    """)
+
+    # ── M-03 FIX: supplier_payments.created_by column ────────────────────────
+    # H-04 from audit: supplier_payments had no created_by column.
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE supplier_payments
+                ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    """)
+
+    # ── M-03 FIX: supplier_payments voided flag ───────────────────────────────
+    # DB-08 from audit: supplier_payments had no voided flag unlike payments.
+    cur.execute("""
+        DO $$ BEGIN
+            ALTER TABLE supplier_payments
+                ADD COLUMN IF NOT EXISTS voided BOOLEAN DEFAULT FALSE;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    """)
+
     db.commit()
     cur.close()
     db.close()
@@ -3398,26 +3666,29 @@ except Exception as _ext_err:
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_txn_number() -> str:
-    """Generate the next sequential transaction number T-XXXX."""
+    """
+    Generate the next sequential transaction number T-XXXX.
+    Uses a PostgreSQL sequence (txn_seq) — atomic, race-condition-free.
+    Two concurrent inserts will always get different numbers.
+    """
     try:
-        row = query_db(
-            "SELECT txn_number FROM sales WHERE deleted=FALSE AND txn_number<>'' ORDER BY id DESC LIMIT 1",
-            one=True
-        )
-        if row and row['txn_number']:
-            last_num = int(row['txn_number'].replace('T-', ''))
-            return f"T-{(last_num + 1):04d}"
-    except Exception:
-        pass
-    return "T-0001"
+        row = query_db("SELECT nextval('txn_seq') AS n", one=True)
+        num = int(row['n']) if row else 1
+        return f"T-{num:04d}"
+    except Exception as _e:
+        logger.error(f"next_txn_number sequence error: {_e}")
+        # Fallback: timestamp-based to avoid collision (never duplicate)
+        import time as _time
+        return f"T-{int(_time.time() * 100) % 9999999:07d}"
 
 
 def next_doc_number(doc_type: str) -> str:
     """
-    Smart document numbering with TESTING MODE reset support.
-    - If ALL records in the table are deleted (soft-deleted), resets to 0001.
-    - If records still exist, syncs to MAX(id) to avoid duplicate key errors.
-    - Uses a dedicated connection to avoid interfering with the request connection.
+    Race-condition-free document numbering for INV/VCH/PKG.
+
+    Uses SELECT FOR UPDATE to lock the doc_sequences row before any sync
+    logic, ensuring two concurrent calls can never get the same number.
+    Dedicated connection so it never interferes with the request connection.
     """
     table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
     table = table_map.get(doc_type)
@@ -3430,30 +3701,42 @@ def next_doc_number(doc_type: str) -> str:
         conn.autocommit = False
         cur = conn.cursor()
 
+        # Lock this doc_type row exclusively before any reads or writes.
+        # Any concurrent call blocks here until we commit — no race possible.
+        cur.execute(
+            "SELECT last_num FROM doc_sequences WHERE doc_type=%s FOR UPDATE",
+            [doc_type]
+        )
+        locked_row = cur.fetchone()
+        current_last = int(locked_row['last_num']) if locked_row else 0
+
         if table:
             # Count ALL rows (including soft-deleted) to detect true empty state
             cur.execute(f"SELECT COUNT(*) as total, COALESCE(MAX(id),0) as max_id FROM {table}")
-            row     = cur.fetchone()
-            total   = int(row['total'])  if row else 0
-            max_id  = int(row['max_id']) if row else 0
+            row    = cur.fetchone()
+            total  = int(row['total'])  if row else 0
+            max_id = int(row['max_id']) if row else 0
 
             if total == 0:
-                # Table is truly empty — reset sequence so next = 0001
+                # Table is truly empty — reset to 0 so next = 0001
                 cur.execute("UPDATE doc_sequences SET last_num=0 WHERE doc_type=%s", [doc_type])
-            else:
-                # Records exist — sync sequence to MAX(id) to avoid duplicate key
+                current_last = 0
+            elif max_id > current_last:
+                # Existing records have higher IDs than sequence — sync up
                 cur.execute(
-                    "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s AND last_num < %s",
-                    [max_id, doc_type, max_id]
+                    "UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s",
+                    [max_id, doc_type]
                 )
+                current_last = max_id
 
-        cur.execute("""
-            UPDATE doc_sequences SET last_num = last_num + 1
-            WHERE doc_type = %s RETURNING last_num
-        """, [doc_type])
+        # Atomically increment and return
+        cur.execute(
+            "UPDATE doc_sequences SET last_num = last_num + 1 WHERE doc_type=%s RETURNING last_num",
+            [doc_type]
+        )
         row = cur.fetchone()
         conn.commit()
-        num = int(row['last_num']) if row else 1
+        num = int(row['last_num']) if row else (current_last + 1)
         return f"{doc_type}-{str(num).zfill(4)}"
     except Exception as _e:
         if conn:
@@ -5634,6 +5917,16 @@ def balance_adjustments():
             """, (account, account_type, adj_date, amount, entry_type,
                   reason, notes, session.get('user_id')))
 
+            # ACC-05 FIX: post to shadow ledger so validate_ledger_balance includes adjustments
+            if adj_id:
+                _adj_dr = amount if entry_type == 'DEBIT'  else 0
+                _adj_cr = amount if entry_type == 'CREDIT' else 0
+                post_ledger(
+                    'ADJUSTMENT', adj_id, 'balance_adjustments', account.upper().strip(),
+                    f"{account_type} Adjustment: {reason}",
+                    debit=_adj_dr, credit=_adj_cr, entry_date=adj_date
+                )
+
             log_action('CREATE', 'balance_adjustments', adj_id,
                        f"{account_type} {account} | {entry_type} JOD {amount:.3f} | {reason}")
             flash(f'Adjustment created — {entry_type} JOD {amount:.3f} for {account}.', 'success')
@@ -5641,8 +5934,25 @@ def balance_adjustments():
 
         elif action == 'delete':
             adj_id = int(request.form.get('adj_id', 0))
-            adj = query_db('SELECT account, amount, entry_type FROM balance_adjustments WHERE id=%s', [adj_id], one=True)
+            adj = query_db('SELECT account, account_type, amount, entry_type, adj_date FROM balance_adjustments WHERE id=%s', [adj_id], one=True)
             execute_db('UPDATE balance_adjustments SET deleted=TRUE WHERE id=%s', [adj_id])
+            # ACC-05 FIX: reverse the ledger entry when adjustment is deleted
+            if adj:
+                _orig_entry = query_db(
+                    "SELECT id FROM accounting_entries WHERE ref_type='ADJUSTMENT' AND ref_id=%s AND is_reversed=FALSE ORDER BY id DESC LIMIT 1",
+                    [adj_id], one=True
+                )
+                if _orig_entry:
+                    execute_db("UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s", [_orig_entry['id']])
+                # Post reversal
+                _rev_dr = float(adj['amount']) if adj['entry_type'] == 'CREDIT' else 0
+                _rev_cr = float(adj['amount']) if adj['entry_type'] == 'DEBIT'  else 0
+                post_ledger(
+                    'ADJUSTMENT_REVERSAL', adj_id, 'balance_adjustments',
+                    str(adj['account']).upper().strip(),
+                    f"Reversal of {adj['account_type']} Adjustment #{adj_id} (deleted)",
+                    debit=_rev_dr, credit=_rev_cr, entry_date=adj['adj_date']
+                )
             log_action('DELETE', 'balance_adjustments', adj_id,
                        f"Deleted adjustment: {adj['account'] if adj else ''} {adj['entry_type'] if adj else ''} JOD {adj['amount'] if adj else ''}")
             flash('Adjustment deleted.', 'success')

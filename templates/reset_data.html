@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Reset Test Data — ALSONDOS{% endblock %}
+{% block title %}Reset All Data — ALSONDOS{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-trash-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Reset Test Data</h1>
-    <p>Development / Testing mode only — clears all transactional data and resets numbering</p>
+    <h1><i class="fas fa-trash-alt" style="color:var(--red);font-size:20px;vertical-align:middle;margin-right:6px"></i>Reset All Data</h1>
+    <p>Permanently deletes all transactional data and resets all numbering. Requires backup download first.</p>
   </div>
 </div>
 
-{# ── Current data stats ───────────────────────────────────────────────────── #}
+{# ── Current data stats ─────────────────────────────────────────────────── #}
 <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
   <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
@@ -17,25 +17,25 @@
     <div class="kpi-value navy">{{ stats.sales_count or 0 }}</div>
   </div>
   <div class="kpi-box">
-    <div class="kpi-icon"><i class="fas fa-file-invoice"></i></div>
-    <div class="kpi-label">Invoices</div>
-    <div class="kpi-value navy">{{ stats.inv_count or 0 }}</div>
-  </div>
-  <div class="kpi-box">
-    <div class="kpi-icon"><i class="fas fa-hotel"></i></div>
-    <div class="kpi-label">Vouchers</div>
-    <div class="kpi-value navy">{{ stats.vch_count or 0 }}</div>
-  </div>
-  <div class="kpi-box">
     <div class="kpi-icon"><i class="fas fa-money-bill-wave"></i></div>
     <div class="kpi-label">Payments</div>
     <div class="kpi-value navy">{{ stats.payments_count or 0 }}</div>
+  </div>
+  <div class="kpi-box">
+    <div class="kpi-icon"><i class="fas fa-truck"></i></div>
+    <div class="kpi-label">Supplier Payments</div>
+    <div class="kpi-value navy">{{ stats.sp_count or 0 }}</div>
+  </div>
+  <div class="kpi-box" style="border-left:4px solid var(--gold)">
+    <div class="kpi-icon"><i class="fas fa-coins"></i></div>
+    <div class="kpi-label">Total Revenue</div>
+    <div class="kpi-value gold">{{ "%.0f"|format(stats.total_sell or 0) }}</div>
   </div>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
 
-  {# ── What will be deleted ────────────────────────────────────────────────── #}
+  {# ── What will be deleted ─────────────────────────────────────────────── #}
   <div class="card">
     <div class="card-header" style="background:linear-gradient(90deg,#7f1d1d,var(--red))">
       <i class="fas fa-exclamation-triangle"></i> What Will Be Deleted
@@ -43,12 +43,12 @@
     <div class="card-body">
       <div style="font-size:13px;line-height:2.2;color:var(--text)">
         {% for item in [
-          ('Transactions (sales)', stats.sales_count or 0, 'fa-exchange-alt'),
-          ('Invoices',             stats.inv_count or 0,   'fa-file-invoice'),
-          ('Hotel Vouchers',       stats.vch_count or 0,   'fa-hotel'),
-          ('Payments',             stats.payments_count or 0,'fa-money-bill-wave'),
-          ('Supplier Payments',    stats.sp_count or 0,    'fa-truck'),
-          ('Audit Logs',           '—',                    'fa-clipboard-list'),
+          ('Transactions (sales)', stats.sales_count or 0,   'fa-exchange-alt'),
+          ('Payments',             stats.payments_count or 0, 'fa-money-bill-wave'),
+          ('Supplier Payments',    stats.sp_count or 0,      'fa-truck'),
+          ('Invoices & Vouchers',  '—',                      'fa-file-invoice'),
+          ('Accounting Entries',   '—',                      'fa-balance-scale'),
+          ('Audit Logs',           '—',                      'fa-clipboard-list'),
         ] %}
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-lt)">
           <span><i class="fas {{ item[2] }}" style="color:var(--red);width:18px;margin-right:8px"></i>{{ item[0] }}</span>
@@ -57,39 +57,80 @@
         {% endfor %}
       </div>
       <div style="margin-top:14px;padding:10px 14px;background:#fef2f2;border-radius:var(--radius-sm);border-left:3px solid var(--red);font-size:12.5px;color:#7f1d1d">
-        <strong>Also resets:</strong> INV/VCH/PKG numbering to 0001 · Companies/Suppliers master cache
+        <strong>Also resets:</strong> T-number sequence · INV/VCH/PKG numbering · All balances
       </div>
     </div>
   </div>
 
-  {# ── Confirmation form ───────────────────────────────────────────────────── #}
-  <div class="card">
-    <div class="card-header"><i class="fas fa-shield-alt"></i> Confirm Reset</div>
-    <div class="card-body">
-      <div style="padding:14px;background:var(--navy-lt);border-radius:var(--radius-sm);margin-bottom:18px;font-size:13px;color:var(--navy-dk);line-height:1.7">
-        <strong>⚠ This action cannot be undone.</strong><br>
-        All transactional data will be permanently deleted.<br>
-        The ERP structure, routes, and settings are preserved.
+  {# ── Step 1: Download backup ──────────────────────────────────────────── #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card" style="border:2px solid {{ 'var(--green)' if backup_taken else 'var(--gold)' }}">
+      <div class="card-header" style="background:{{ '#1E7B34' if backup_taken else '#8B6914' }}">
+        <i class="fas fa-{{ 'check-circle' if backup_taken else 'download' }}"></i>
+        Step 1 — Download Backup
+        {% if backup_taken %}<span style="margin-left:10px;font-size:11px;opacity:.8">(done this session)</span>{% endif %}
       </div>
-      <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-group" style="margin-bottom:18px">
-          <label>Type <strong style="color:var(--red)">DELETE ALL DATA</strong> to confirm</label>
-          <input type="text" name="confirm_text" required
-                 placeholder="DELETE ALL DATA"
-                 style="font-family:monospace;font-size:14px;font-weight:700;letter-spacing:.5px"
-                 autocomplete="off">
+      <div class="card-body">
+        {% if backup_taken %}
+        <div style="color:var(--green);font-weight:700;font-size:13px;margin-bottom:10px">
+          <i class="fas fa-check-circle"></i> Backup downloaded. Proceed to Step 2.
         </div>
-        <div style="display:flex;gap:10px">
-          <a href="{{ url_for('admin') }}" class="btn btn-outline" style="flex:1;text-align:center">
-            <i class="fas fa-times"></i> Cancel
-          </a>
-          <button type="submit" class="btn btn-red" style="flex:1"
-                  onclick="return confirm('FINAL WARNING: Delete all test data and reset sequences?')">
-            <i class="fas fa-trash-alt"></i> Reset All Data
-          </button>
+        {% else %}
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+          Download a full Excel backup of all sales, payments, and supplier payments
+          before any data is deleted. The reset form will unlock after download.
+        </p>
+        {% endif %}
+        <a href="{{ url_for('reset_data_backup') }}"
+           class="btn"
+           style="background:{{ '#1E7B34' if backup_taken else '#C8A84B' }};color:#fff;font-weight:700;width:100%;text-align:center;display:block">
+          <i class="fas fa-file-excel"></i>
+          {{ 'Download Backup Again' if backup_taken else 'Download Full Backup Excel' }}
+        </a>
+      </div>
+    </div>
+
+    {# ── Step 2: Confirmation form ─────────────────────────────────────── #}
+    <div class="card" style="border:2px solid {{ 'var(--red)' if backup_taken else 'var(--border)' }};opacity:{{ '1' if backup_taken else '.45' }}">
+      <div class="card-header"><i class="fas fa-shield-alt"></i> Step 2 — Confirm Reset</div>
+      <div class="card-body">
+        {% if not backup_taken %}
+        <div style="padding:14px;background:#fef2f2;border-radius:var(--radius-sm);font-size:13px;color:#7f1d1d;font-weight:700;text-align:center">
+          Download backup first (Step 1) to unlock this form.
         </div>
-      </form>
+        {% else %}
+        <div style="padding:12px 14px;background:var(--navy-lt);border-radius:var(--radius-sm);margin-bottom:16px;font-size:13px;color:var(--navy-dk);line-height:1.7">
+          <strong>⚠ This action cannot be undone.</strong><br>
+          All transactional data will be permanently deleted.
+        </div>
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Type <strong style="color:var(--red)">DELETE ALL DATA</strong> to confirm</label>
+            <input type="text" name="confirm_text" required
+                   placeholder="DELETE ALL DATA"
+                   style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px"
+                   autocomplete="off">
+          </div>
+          <div class="form-group" style="margin-bottom:18px">
+            <label>Type your <strong>username</strong> as second confirmation</label>
+            <input type="text" name="confirm_text2" required
+                   placeholder="{{ current_user.username if current_user else 'your username' }}"
+                   style="font-family:monospace;font-size:13px"
+                   autocomplete="off">
+          </div>
+          <div style="display:flex;gap:10px">
+            <a href="{{ url_for('admin') }}" class="btn btn-outline" style="flex:1;text-align:center">
+              <i class="fas fa-times"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-red" style="flex:1"
+                    onclick="return confirm('FINAL WARNING: This will permanently delete ALL data. Are you absolutely sure?')">
+              <i class="fas fa-trash-alt"></i> Delete All Data
+            </button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
 
