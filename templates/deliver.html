@@ -127,9 +127,8 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
                  style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;
                         border-radius:8px;font-size:13.5px;font-family:monospace"
                  oninput="waValidateInput(this)">
-          <button type="button" class="wa-rm" style="display:none"
-                  onclick="waRemoveRow(this)"
-                  style="background:#fee2e2;border:none;border-radius:6px;
+          <button type="button" class="wa-rm" onclick="waRemoveRow(this)"
+                  style="display:none;background:#fee2e2;border:none;border-radius:6px;
                          padding:7px 10px;color:#dc2626;cursor:pointer">
             <i class="fas fa-times"></i>
           </button>
@@ -393,39 +392,54 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
   });
 })();
 
-/* ── WhatsApp helpers — plain global functions, called from inline onclick ── */
+/* WhatsApp global helpers */
 
 function waOpen() {
   document.getElementById('wa-overlay').style.display = 'flex';
   document.getElementById('wa-err').style.display = 'none';
-  var first = document.getElementById('wa-num-0');
-  if (first) { first.value = ''; first.focus(); }
+  var f = document.getElementById('wa-num-0');
+  if (f) { f.value = ''; f.focus(); }
+}
+
+function waClose() {
+  document.getElementById('wa-overlay').style.display = 'none';
 }
 
 function waValidateInput(inp) {
-  var v = inp.value.trim();
-  inp.style.borderColor = (v === '' || /^\+\d{7,15}$/.test(v)) ? '#e2e8f0' : '#dc2626';
+  var ok = inp.value.trim() === '' || /^\+[0-9]{7,15}$/.test(inp.value.trim());
+  inp.style.borderColor = ok ? '#e2e8f0' : '#dc2626';
 }
 
 function waAddRow() {
-  var rows = document.getElementById('wa-rows');
-  var div  = document.createElement('div');
-  div.className = 'wa-row';
-  div.style.cssText = 'display:flex;gap:6px';
-  div.innerHTML = '<input type="tel" placeholder="+962791234567"'
-    + ' style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;'
-    + 'font-size:13.5px;font-family:monospace" oninput="waValidateInput(this)">'
-    + '<button type="button" class="wa-rm" onclick="waRemoveRow(this)"'
-    + ' style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;'
-    + 'color:#dc2626;cursor:pointer"><i class="fas fa-times"></i></button>';
-  rows.appendChild(div);
-  div.querySelector('input').focus();
+  var container = document.getElementById('wa-rows');
+  var row = document.createElement('div');
+  row.className = 'wa-row';
+  row.style.display = 'flex';
+  row.style.gap = '6px';
+
+  var inp = document.createElement('input');
+  inp.type = 'tel';
+  inp.placeholder = '+962791234567';
+  inp.setAttribute('oninput', 'waValidateInput(this)');
+  inp.style.cssText = 'flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:13.5px;font-family:monospace';
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'wa-rm';
+  btn.setAttribute('onclick', 'waRemoveRow(this)');
+  btn.style.cssText = 'background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;color:#dc2626;cursor:pointer';
+  btn.innerHTML = '<i class="fas fa-times"></i>';
+
+  row.appendChild(inp);
+  row.appendChild(btn);
+  container.appendChild(row);
+  inp.focus();
   waSyncRm();
 }
 
 function waRemoveRow(btn) {
-  var rows = document.getElementById('wa-rows');
-  if (rows.querySelectorAll('.wa-row').length > 1) {
+  var container = document.getElementById('wa-rows');
+  if (container.querySelectorAll('.wa-row').length > 1) {
     btn.closest('.wa-row').remove();
     waSyncRm();
   }
@@ -433,142 +447,160 @@ function waRemoveRow(btn) {
 
 function waSyncRm() {
   var rows = document.getElementById('wa-rows').querySelectorAll('.wa-row');
+  var show = rows.length > 1;
   rows.forEach(function(r) {
-    var rm = r.querySelector('.wa-rm');
-    if (rm) rm.style.display = rows.length > 1 ? '' : 'none';
+    var b = r.querySelector('.wa-rm');
+    if (b) { b.style.display = show ? 'inline-block' : 'none'; }
   });
+}
+
+function waShowErr(msg) {
+  var el = document.getElementById('wa-err');
+  if (!el) { return; }
+  el.style.display = 'block';
+  el.style.background = '#fee2e2';
+  el.style.borderLeft = '4px solid #dc2626';
+  el.style.padding = '10px 14px';
+  el.style.borderRadius = '8px';
+  el.style.fontSize = '13px';
+  el.style.color = '#7f1d1d';
+  el.style.marginTop = '12px';
+  el.textContent = msg;
+}
+
+function waToast(msg, success) {
+  var el = document.createElement('div');
+  el.style.position = 'fixed';
+  el.style.top = '18px';
+  el.style.right = '18px';
+  el.style.zIndex = '99999';
+  el.style.padding = '13px 20px';
+  el.style.borderRadius = '9px';
+  el.style.fontWeight = '600';
+  el.style.fontSize = '13.5px';
+  el.style.maxWidth = '400px';
+  el.style.lineHeight = '1.5';
+  el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+  if (success) {
+    el.style.background = '#d1fae5';
+    el.style.border = '1.5px solid #6ee7b7';
+    el.style.color = '#065f46';
+  } else {
+    el.style.background = '#fee2e2';
+    el.style.border = '1.5px solid #fca5a5';
+    el.style.color = '#7f1d1d';
+  }
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { if (el.parentNode) { el.parentNode.removeChild(el); } }, 7000);
 }
 
 function waSend() {
   console.log('[WA] waSend called');
-  var errEl   = document.getElementById('wa-err');
+  var errEl = document.getElementById('wa-err');
   var sendBtn = document.getElementById('wa-send');
-  if (!errEl || !sendBtn) { console.error('[WA] missing elements'); return; }
+  if (!errEl || !sendBtn) { console.error('[WA] elements missing'); return; }
   errEl.style.display = 'none';
 
-  /* ── 1. collect + validate numbers ──────────────────────────── */
   var rowsEl = document.getElementById('wa-rows');
-  if (!rowsEl) { waShowErr('Internal error: number list not found.'); return; }
+  if (!rowsEl) { waShowErr('Internal error: row container missing.'); return; }
 
-  var inputs  = rowsEl.querySelectorAll('input');
-  var numbers = [], bad = [];
+  var numbers = [];
+  var bad = [];
+  var inputs = rowsEl.querySelectorAll('input');
   inputs.forEach(function(inp) {
     var v = inp.value.trim();
-    if (!v) return;
-    if (/^\+\d{7,15}$/.test(v)) { numbers.push(v); inp.style.borderColor = '#e2e8f0'; }
-    else { bad.push(v); inp.style.borderColor = '#dc2626'; }
+    if (!v) { return; }
+    if (/^\+[0-9]{7,15}$/.test(v)) {
+      numbers.push(v);
+      inp.style.borderColor = '#e2e8f0';
+    } else {
+      bad.push(v);
+      inp.style.borderColor = '#dc2626';
+    }
   });
-  if (bad.length) {
-    waShowErr('Invalid format — numbers must start with + followed by country code and digits.\nInvalid: ' + bad.join(', '));
+
+  if (bad.length > 0) {
+    waShowErr('Invalid number(s): ' + bad.join(', ') + '. Use format +9627XXXXXXXX');
     return;
   }
-  if (!numbers.length) { waShowErr('Please enter at least one WhatsApp number.'); return; }
-  console.log('[WA] sending to', numbers);
-
-  /* ── 2. build FormData ──────────────────────────────────────── */
-  /* CSRF token from the <meta> tag already in base.html */
-  var csrfMeta  = document.querySelector('meta[name="csrf-token"]');
-  var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-
-  function spanVal(id) {
-    var el = document.getElementById(id);
-    return el ? el.textContent.trim() : '';
+  if (numbers.length === 0) {
+    waShowErr('Please enter at least one WhatsApp number.');
+    return;
   }
 
+  console.log('[WA] numbers:', numbers);
+
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var csrf = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+  function sv(id) { var e = document.getElementById(id); return e ? e.textContent.trim() : ''; }
+
   var fd = new FormData();
-  fd.append('csrf_token', csrfToken);
-  fd.append('view_date',  spanVal('wa-view-date'));
-  fd.append('date_from',  spanVal('wa-date-from'));
-  fd.append('date_to',    spanVal('wa-date-to'));
-  fd.append('company',    spanVal('wa-company'));
-  fd.append('supplier',   spanVal('wa-supplier'));
-  fd.append('passenger',  spanVal('wa-passenger'));
-  fd.append('status',     spanVal('wa-status'));
-  fd.append('agent_id',   spanVal('wa-agent-id'));
+  fd.append('csrf_token', csrf);
+  fd.append('view_date',  sv('wa-view-date'));
+  fd.append('date_from',  sv('wa-date-from'));
+  fd.append('date_to',    sv('wa-date-to'));
+  fd.append('company',    sv('wa-company'));
+  fd.append('supplier',   sv('wa-supplier'));
+  fd.append('passenger',  sv('wa-passenger'));
+  fd.append('status',     sv('wa-status'));
+  fd.append('agent_id',   sv('wa-agent-id'));
   numbers.forEach(function(n) { fd.append('wa_number', n); });
 
-  /* ── 3. show loading state ──────────────────────────────────── */
   sendBtn.disabled = true;
-  sendBtn.innerHTML = '<span class="spinner-ring"></span> Sending…';
+  sendBtn.textContent = 'Sending...';
 
-  /* ── 4. POST to Flask endpoint ──────────────────────────────── */
   var url = '{{ url_for("send_whatsapp_deliver") }}';
   console.log('[WA] POST', url);
 
   fetch(url, {
     method: 'POST',
     body: fd,
-    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf }
   })
-  .then(function(r) {
-    console.log('[WA] response status', r.status);
-    /* always try to parse JSON; fall back to text so we never throw blindly */
-    return r.text().then(function(txt) {
-      try { return { status: r.status, data: JSON.parse(txt) }; }
-      catch(e) { return { status: r.status, data: null, raw: txt }; }
+  .then(function(resp) {
+    console.log('[WA] status', resp.status);
+    var status = resp.status;
+    return resp.text().then(function(txt) {
+      var data = null;
+      try { data = JSON.parse(txt); } catch (ex) { data = null; }
+      return { status: status, data: data, raw: txt };
     });
   })
   .then(function(res) {
     sendBtn.disabled = false;
     sendBtn.innerHTML = '<i class="fab fa-whatsapp"></i> Send Report';
-    console.log('[WA] parsed response', res);
+    console.log('[WA] response', res);
 
     if (res.data && res.data.ok) {
-      document.getElementById('wa-overlay').style.display = 'none';
+      waClose();
       waToast(res.data.message, true);
       return;
     }
 
-    /* show the clearest possible error */
-    var msg;
+    var msg = 'Send failed.';
     if (res.data && res.data.error) {
       msg = res.data.error;
     } else if (res.status === 403) {
-      msg = 'Session expired — please refresh the page and try again.';
+      msg = 'Session expired. Please refresh the page and try again.';
     } else if (res.status === 400) {
-      msg = (res.data && res.data.error) || 'Bad request. Check phone numbers and try again.';
+      msg = 'Bad request (400). Check your inputs and try again.';
     } else if (res.status >= 500) {
-      msg = 'Server error (HTTP ' + res.status + '). Check server logs.\n'
-          + (res.raw ? res.raw.substring(0, 200) : '');
-    } else {
-      msg = 'Unexpected response (HTTP ' + res.status + ').';
+      msg = 'Server error (' + res.status + '). Check server logs.';
     }
     waShowErr(msg);
   })
-  .catch(function(e) {
+  .catch(function(err) {
     sendBtn.disabled = false;
     sendBtn.innerHTML = '<i class="fab fa-whatsapp"></i> Send Report';
-    console.error('[WA] fetch error', e);
-    waShowErr('Network error — the request could not be sent. Check your connection and try again.');
+    console.error('[WA] fetch failed', err);
+    waShowErr('Network error. Please check your connection and try again.');
   });
 }
 
-function waShowErr(msg) {
-  var el = document.getElementById('wa-err');
-  el.style.cssText = 'display:block;margin-top:12px;padding:10px 14px;border-radius:8px;'
-    + 'border-left:4px solid #dc2626;background:#fee2e2;font-size:13px;'
-    + 'color:#7f1d1d;white-space:pre-line';
-  el.textContent = msg;
-}
-
-function waToast(msg, ok) {
-  var el = document.createElement('div');
-  el.style.cssText = 'position:fixed;top:18px;right:18px;z-index:99999;padding:13px 20px;'
-    + 'border-radius:9px;font-weight:600;font-size:13.5px;max-width:400px;line-height:1.5;'
-    + (ok ? 'background:#d1fae5;border:1.5px solid #6ee7b7;color:#065f46'
-          : 'background:#fee2e2;border:1.5px solid #fca5a5;color:#7f1d1d')
-    + ';box-shadow:0 4px 20px rgba(0,0,0,.15)';
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(function() { el.remove(); }, 7000);
-}
-
-/* close on Escape */
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    var ov = document.getElementById('wa-overlay');
-    if (ov) ov.style.display = 'none';
-  }
+  if (e.key === 'Escape') { waClose(); }
 });
 </script>
 {% endblock %}
