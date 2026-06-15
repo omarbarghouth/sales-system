@@ -153,54 +153,118 @@
      same except no Agent/Actions
 ──────────────────────────────────────────────────────────────────── #}
 <style>
+/* ── Transactions Table ───────────────────────────────────────
+   Column budget @ 1920×1080 (sidebar 206px, padding ~32px):
+   usable ≈ 1682px — all 15 admin cols fit without scrolling.
+
+   Sticky: col-0 (Txn #) left:0, last col (Actions) right:0.
+   Money group: Net / Sell / Profit share a subtle left border.
+──────────────────────────────────────────────────────────────── */
+.txn-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-lt);
+  box-shadow: var(--sh-sm, 0 1px 4px rgba(0,0,0,.06));
+}
 .txn-table {
   table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
 }
+
+/* ── Header ── */
+.txn-table thead tr { background: var(--navy-dk); }
 .txn-table th {
-  padding: 9px 8px;
-  font-size: 11px;
+  padding: 10px 9px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .5px;
+  letter-spacing: .55px;
   white-space: nowrap;
   vertical-align: middle;
   background: var(--navy-dk);
-  color: rgba(255,255,255,.75);
-  border-bottom: 2px solid var(--border-lt);
+  color: rgba(255,255,255,.68);
+  border-bottom: 2px solid rgba(255,255,255,.08);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
+
+/* ── Body rows ── */
 .txn-table td {
-  padding: 8px 8px;
+  padding: 8px 9px;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-lt);
   font-size: 12.5px;
   overflow: hidden;
+  background: #fff;
 }
-.txn-table tbody tr:hover { background: var(--navy-lt,#f0f4ff); }
-/* Ellipsis cells */
-.txn-cell-clip {
+.txn-table tbody tr:nth-child(even) td { background: #fafbfd; }
+.txn-table tbody tr:hover td           { background: var(--navy-lt, #eef2fc); }
+
+/* ── Sticky: TXN # (left) ── */
+.txn-col-id {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+.txn-table thead .txn-col-id { z-index: 5; }
+.txn-table tbody tr:hover .txn-col-id { background: var(--navy-lt, #eef2fc); }
+/* Hair-line separator shadow on right edge */
+.txn-col-id::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(to right, rgba(0,0,0,.06), transparent);
+  pointer-events: none;
+}
+
+/* ── Sticky: Actions (right) ── */
+.txn-col-act {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+}
+.txn-table thead .txn-col-act { z-index: 5; }
+.txn-table tbody tr:hover .txn-col-act { background: var(--navy-lt, #eef2fc); }
+.txn-col-act::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(to left, rgba(0,0,0,.06), transparent);
+  pointer-events: none;
+}
+
+/* ── Clip cells with tooltip ── */
+.txn-clip {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Right-aligned numeric cells */
+
+/* ── Money group — left separator + subtle bg tint ── */
+.txn-money-start { border-left: 2px solid rgba(200,168,75,.25) !important; }
+.txn-table thead .txn-money-start { background: #0e2244; }
 .txn-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
   white-space: nowrap;
-  padding-right: 12px !important;
+  padding-right: 14px !important;
 }
-.txn-table th.txn-num { padding-right: 12px; }
-/* Transaction number badge */
+.txn-table th.txn-num { padding-right: 14px; }
+
+/* ── ID badge ── */
 .txn-id-badge {
-  display: inline-block;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  font-size: 12px;
-  font-weight: 700;
+  display: block;
+  font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace;
+  font-size: 12px; font-weight: 700;
   color: var(--navy-dk);
   letter-spacing: .3px;
+  white-space: nowrap;
 }
 .txn-db-id {
   display: block;
@@ -208,115 +272,117 @@
   color: var(--muted-lt);
   font-variant-numeric: tabular-nums;
   margin-top: 1px;
-}
-/* Route cell */
-.txn-route {
-  font-weight: 800;
-  color: var(--navy-dk);
-  font-size: 12.5px;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 3px;
 }
+
+/* ── Route ── */
+.txn-route {
+  display: flex; align-items: center; gap: 3px;
+  white-space: nowrap; overflow: hidden;
+}
+.txn-route-loc   { font-weight: 800; color: var(--navy-dk); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
 .txn-route-arrow { color: var(--gold); font-size: 10px; flex-shrink: 0; }
 .txn-via {
-  display: block;
-  font-size: 10px;
-  color: var(--muted-lt);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: block; font-size: 10px; color: var(--muted-lt);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   margin-top: 2px;
 }
-/* Supplier lines */
+
+/* ── Supplier lines ── */
 .supp-line {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--muted);
+  display: flex; align-items: center; gap: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; line-height: 1.65; color: var(--muted);
 }
 .supp-line-icon { flex-shrink: 0; font-size: 9px; }
-/* Travel date */
-.txn-date-main  { display: block; font-weight: 600; color: var(--navy-dk); font-size: 12px; white-space: nowrap; }
-.txn-date-ret   { display: block; font-size: 10.5px; color: var(--gold-dk,#b8860b); white-space: nowrap; margin-top: 1px; }
-/* Agent pill */
+.supp-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Travel dates ── */
+.txn-date-main { display: block; font-weight: 600; color: var(--navy-dk); font-size: 12px; white-space: nowrap; }
+.txn-date-ret  { display: block; font-size: 10px; color: var(--gold-dk,#b8860b); white-space: nowrap; margin-top: 2px; opacity: .8; }
+
+/* ── Agent pill ── */
 .agent-pill {
   display: inline-flex; align-items: center; gap: 4px;
   background: var(--purple-lt); color: var(--purple);
-  padding: 2px 8px; border-radius: 20px;
-  font-size: 10.5px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px;
+  font-size: 10px; font-weight: 700;
   border: 1px solid rgba(109,40,217,.15);
   text-decoration: none; white-space: nowrap;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis;
   transition: background .12s, color .12s;
 }
 .agent-pill:hover { background: var(--purple); color: #fff; }
-/* Filter chips */
+
+/* ── Filter chips ── */
 .txn-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px; border-radius: 20px;
-  font-size: 11px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
 }
-.chip-navy   { background: var(--navy-lt); color: var(--navy); }
-.chip-purple { background: var(--purple-lt); color: var(--purple); }
-.chip-orange { background: var(--orange-lt,#fff4e6); color: var(--orange); }
-.chip-blue   { background: var(--blue-lt,#e8f4fd); color: var(--blue,#2980b9); }
-/* Tfoot */
+.chip-navy   { background: var(--navy-lt);              color: var(--navy); }
+.chip-purple { background: var(--purple-lt);            color: var(--purple); }
+.chip-orange { background: var(--orange-lt,#fff4e6);    color: var(--orange); }
+.chip-blue   { background: var(--blue-lt,#e8f4fd);      color: var(--blue,#2980b9); }
+
+/* ── Footer ── */
 .txn-table tfoot td {
-  padding: 10px 8px;
-  font-size: 12px;
-  font-weight: 700;
+  padding: 10px 9px;
+  font-size: 12px; font-weight: 700;
   background: var(--navy-dk);
-  color: rgba(255,255,255,.55);
-  border-top: 2px solid rgba(255,255,255,.1);
+  color: rgba(255,255,255,.5);
+  border-top: 2px solid rgba(255,255,255,.08);
+  white-space: nowrap;
 }
+.txn-table tfoot .txn-col-id,
+.txn-table tfoot .txn-col-act { background: var(--navy-dk); }
 </style>
 
-<div class="table-wrap" style="overflow-x:auto">
-  <table class="txn-table" style="min-width:{% if is_admin %}1360px{% else %}1090px{% endif %}">
+{# ── Column budget (admin, 1920×1080 optimised):
+   T#:80  Type:68  Date:84  Company:138  Customer:180  Route:122
+   Supplier:148  Tix:36  Travel:104  Net:80  Sell:92  Profit:80
+   Status:66  Agent:82  Actions:96   → total ≈ 1456px
+   Non-admin (no Agent/Actions) → ≈ 1278px
+#}
+<div class="txn-wrap">
+  <table class="txn-table" style="min-width:{% if is_admin %}1456px{% else %}1278px{% endif %}">
     <colgroup>
-      <col style="width:72px">   {# T# #}
-      <col style="width:70px">   {# Type #}
-      <col style="width:86px">   {# Date #}
-      <col style="width:140px">  {# Company #}
-      <col style="width:158px">  {# Customer +18 #}
-      <col style="width:118px">  {# Route #}
-      <col style="width:126px">  {# Suppliers +18 #}
-      <col style="width:38px">   {# Tix #}
-      <col style="width:98px">   {# Travel +14 #}
-      <col style="width:84px">   {# Net #}
-      <col style="width:90px">   {# Sell #}
-      <col style="width:82px">   {# Profit #}
-      <col style="width:68px">   {# Status #}
+      <col style="width:80px">   {# T# sticky #}
+      <col style="width:68px">   {# Type #}
+      <col style="width:84px">   {# Date #}
+      <col style="width:138px">  {# Company #}
+      <col style="width:180px">  {# Customer ↑ #}
+      <col style="width:122px">  {# Route #}
+      <col style="width:148px">  {# Supplier ↑ #}
+      <col style="width:36px">   {# Tix #}
+      <col style="width:104px">  {# Travel ↑ #}
+      <col style="width:80px">   {# Net #}
+      <col style="width:92px">   {# Sell #}
+      <col style="width:80px">   {# Profit #}
+      <col style="width:66px">   {# Status #}
       {% if is_admin %}
-      <col style="width:80px">   {# Agent -8 #}
-      <col style="width:92px">   {# Actions #}
+      <col style="width:82px">   {# Agent #}
+      <col style="width:96px">   {# Actions sticky #}
       {% endif %}
     </colgroup>
     <thead>
       <tr>
-        <th>Txn #</th>
+        <th class="txn-col-id" style="color:#fff">Txn #</th>
         <th>Type</th>
         <th>Date</th>
         <th>Company</th>
         <th>Customer</th>
         <th>Route</th>
         <th>Supplier</th>
-        <th class="text-center" style="color:rgba(255,255,255,.75)">Tix</th>
-        <th>Travel</th>
-        <th class="txn-num" style="color:rgba(255,255,255,.75)">Net</th>
-        <th class="txn-num" style="color:var(--gold)">Sell (JOD)</th>
+        <th class="text-center">Tix</th>
+        <th>Travel Date</th>
+        {# Money group — shared gold-tinted header label spanning all 3 #}
+        <th class="txn-num txn-money-start" style="color:rgba(255,255,255,.5)">Net</th>
+        <th class="txn-num" style="color:var(--gold);font-size:11px">Sell (JOD)</th>
         <th class="txn-num" style="color:#6dd58a">Profit</th>
         <th>Status</th>
         {% if is_admin %}
-        <th style="color:var(--gold)"><i class="fas fa-user-tie" style="font-size:10px"></i> Agent</th>
-        <th>Actions</th>
+        <th style="color:rgba(200,168,75,.85)"><i class="fas fa-user-tie" style="font-size:9px"></i> Agent</th>
+        <th class="txn-col-act text-center" style="color:#fff">Actions</th>
         {% endif %}
       </tr>
     </thead>
@@ -328,8 +394,8 @@
       {% if s.return_ticket_number|default('') %}{% set tkt_tip = tkt_tip + (' | ' if tkt_tip else '') + '↩ ' + s.return_ticket_number %}{% endif %}
       <tr>
 
-        {# ── T# ── #}
-        <td title="DB id: {{ s.id }}">
+        {# ── T# — STICKY LEFT ── #}
+        <td class="txn-col-id" title="DB id: #{{ s.id }}">
           <span class="txn-id-badge">{{ s.txn_number or ('T-%04d'|format(s.id)) }}</span>
           <span class="txn-db-id">#{{ s.id }}</span>
         </td>
@@ -344,7 +410,7 @@
         <td style="font-size:12px;white-space:nowrap;color:var(--muted)">{{ s.sale_date }}</td>
 
         {# ── Company ── #}
-        <td class="txn-cell-clip" title="{{ s.company }}">
+        <td class="txn-clip" title="{{ s.company }}">
           <a href="{{ url_for('statement', company=s.company) }}"
              style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:13px">
             {{ s.company }}
@@ -352,23 +418,19 @@
         </td>
 
         {# ── Customer ── #}
-        <td class="txn-cell-clip" title="{{ s.customer }}" style="font-size:13px;color:var(--navy)">
+        <td class="txn-clip" title="{{ s.customer }}" style="font-size:13px;color:var(--navy)">
           {{ s.customer }}
         </td>
 
-        {# ── Route ── ticket numbers go to title tooltip only #}
-        <td title="{{ tkt_tip or (s.from_loc + ' → ' + s.to_loc) }}">
+        {# ── Route — ticket numbers in tooltip ── #}
+        <td title="{{ s.from_loc }} → {{ s.to_loc }}{% if s.via %} via {{ s.via }}{% endif %}{% if tkt_tip %} | {{ tkt_tip }}{% endif %}">
           <div class="txn-route">
-            <span style="font-weight:800;color:var(--navy-dk)">{{ s.from_loc }}</span>
+            <span class="txn-route-loc">{{ s.from_loc }}</span>
             <span class="txn-route-arrow">→</span>
-            <span style="font-weight:800;color:var(--navy-dk);overflow:hidden;text-overflow:ellipsis">{{ s.to_loc }}</span>
+            <span class="txn-route-loc">{{ s.to_loc }}</span>
           </div>
-          {% if s.via %}
-          <span class="txn-via">via {{ s.via }}</span>
-          {% endif %}
-          {% if tkt_tip %}
-          <span style="display:block;font-size:9.5px;color:var(--muted-lt);margin-top:2px;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎫 {{ tkt_tip }}</span>
-          {% endif %}
+          {% if s.via %}<span class="txn-via">via {{ s.via }}</span>{% endif %}
+          {% if tkt_tip %}<span class="txn-via" style="font-family:monospace;font-size:9.5px">🎫 {{ tkt_tip }}</span>{% endif %}
         </td>
 
         {# ── Suppliers ── #}
@@ -376,19 +438,19 @@
           {% if s.buy_from %}
           <span class="supp-line" title="{{ s.buy_from }}">
             <i class="fas fa-plane-departure supp-line-icon" style="color:var(--navy)"></i>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.buy_from }}</span>
+            <span>{{ s.buy_from }}</span>
           </span>
           {% endif %}
           {% if s.hotel_supplier %}
           <span class="supp-line" title="{{ s.hotel_supplier }}" style="color:var(--gold-dk,#b8860b)">
             <i class="fas fa-hotel supp-line-icon"></i>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.hotel_supplier }}</span>
+            <span>{{ s.hotel_supplier }}</span>
           </span>
           {% endif %}
           {% if s.return_supplier and s.return_supplier != s.buy_from %}
           <span class="supp-line" title="{{ s.return_supplier }}" style="color:var(--muted)">
             <i class="fas fa-plane-arrival supp-line-icon"></i>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.return_supplier }}</span>
+            <span>{{ s.return_supplier }}</span>
           </span>
           {% endif %}
           {% if not s.buy_from and not s.return_supplier and not s.hotel_supplier %}
@@ -401,19 +463,13 @@
 
         {# ── Travel Date ── #}
         <td>
-          {% if s.travel_date %}
-          <span class="txn-date-main">{{ s.travel_date }}</span>
-          {% endif %}
-          {% if s.return_date %}
-          <span class="txn-date-ret">↩ {{ s.return_date }}</span>
-          {% endif %}
-          {% if not s.travel_date and not s.return_date %}
-          <span style="color:var(--muted-lt)">—</span>
-          {% endif %}
+          {% if s.travel_date %}<span class="txn-date-main">{{ s.travel_date }}</span>{% endif %}
+          {% if s.return_date  %}<span class="txn-date-ret">↩ {{ s.return_date }}</span>{% endif %}
+          {% if not s.travel_date and not s.return_date %}<span style="color:var(--muted-lt)">—</span>{% endif %}
         </td>
 
-        {# ── Monetary ── #}
-        <td class="txn-num" style="color:var(--muted);font-size:12px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
+        {# ── Money group (Net / Sell / Profit) ── #}
+        <td class="txn-num txn-money-start" style="color:var(--muted);font-size:12px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
         <td class="txn-num" style="font-weight:700;color:var(--navy-dk);font-size:13px">{{ "%.3f"|format((s.sell or 0)|float) }}</td>
         <td class="txn-num text-green" style="font-size:12.5px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
 
@@ -428,15 +484,15 @@
           <a href="{{ url_for('sales_report', agent_id=s.created_by_user_id, company=filters.company, date_from=filters.date_from, date_to=filters.date_to) }}"
              class="agent-pill" title="Filter by {{ agent }}">
             <i class="fas fa-user-tie" style="font-size:9px;flex-shrink:0"></i>
-            <span style="overflow:hidden;text-overflow:ellipsis">{{ agent }}</span>
+            <span>{{ agent }}</span>
           </a>
           {% else %}
           <span style="color:var(--muted-lt);font-size:12px">—</span>
           {% endif %}
         </td>
-        {# ── Actions ── #}
-        <td>
-          <div style="display:flex;gap:4px;flex-wrap:nowrap">
+        {# ── Actions — STICKY RIGHT ── #}
+        <td class="txn-col-act">
+          <div style="display:flex;gap:4px;align-items:center;justify-content:center">
             <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit">
               <i class="fas fa-pencil-alt"></i>
             </a>
@@ -464,7 +520,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="{{ 15 if is_admin else 13 }}" class="text-center" style="padding:48px;color:var(--muted)">
+        <td class="txn-col-id" colspan="{{ 15 if is_admin else 13 }}" style="padding:48px;color:var(--muted);text-align:center">
           <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
           No transactions found.
           {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to %}
@@ -480,19 +536,23 @@
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="9" style="font-weight:700;color:rgba(255,255,255,.6);font-size:12px">
+        <td class="txn-col-id" colspan="9" style="color:rgba(255,255,255,.6);font-size:12px">
           TOTALS — {{ totals.count }} transaction{{ 's' if totals.count != 1 else '' }}
-          {% if filters.agent_id %} · Agent: {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}{% endif %}
+          {% if filters.agent_id %} · {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}{% endif %}
         </td>
-        <td class="txn-num" style="color:rgba(255,255,255,.45);font-size:12px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
+        <td class="txn-num txn-money-start" style="color:rgba(255,255,255,.4);font-size:12px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
         <td class="txn-num" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
         <td class="txn-num" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
-        <td colspan="{{ 3 if is_admin else 1 }}"></td>
+        <td style="color:rgba(255,255,255,.3)"></td>
+        {% if is_admin %}
+        <td style="color:rgba(255,255,255,.3)"></td>
+        <td class="txn-col-act"></td>
+        {% endif %}
       </tr>
     </tfoot>
     {% endif %}
   </table>
-</div>
+</div>{# /txn-wrap #}
 
 {% from 'pagination_macro.html' import render_pagination %}
 {{ render_pagination(page, total_pages, total_rows, 'sales_report', filters) }}
