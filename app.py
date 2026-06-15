@@ -1746,14 +1746,19 @@ def statement():
 @app.route('/payments', methods=['GET', 'POST'])
 @login_required
 def payments():
-    companies = get_companies_list()
+    companies  = get_companies_list()
+    today_str  = str(date.today())
+
     if request.method == 'POST':
-        if session.get('user_role') != 'admin':
+        if session.get('user_role') not in ('admin', 'manager'):
             flash('Admin access required to record payments.', 'danger')
             return redirect(url_for('payments'))
-        company_val = request.form.get('company','').upper().strip()
-        amount_val  = request.form.get('amount','').strip()
-        pay_date    = request.form.get('pay_date', str(date.today()))
+        company_val    = request.form.get('company','').upper().strip()
+        amount_val     = request.form.get('amount','').strip()
+        pay_date       = request.form.get('pay_date', today_str)
+        method_val     = request.form.get('method','').strip()
+        reference_val  = request.form.get('reference_number','').strip().upper()
+        notes_val      = request.form.get('notes','').strip()
         if not company_val:
             flash('Company is required.', 'danger')
             return redirect(url_for('payments'))
@@ -1763,63 +1768,141 @@ def payments():
         except ValueError:
             flash('Amount must be a positive number.', 'danger')
             return redirect(url_for('payments'))
-        # ACC-06: duplicate payment guard — warn if same company/amount/date exists
+        # Duplicate payment guard
         _force = request.form.get('force_duplicate', '').strip() == '1'
         _dup = query_db(
             """SELECT id FROM payments
                WHERE UPPER(TRIM(company))=UPPER(%s)
                  AND ABS(amount - %s) < 0.001
                  AND pay_date = %s
-                 AND deleted = FALSE
+                 AND deleted = FALSE AND voided = FALSE
                LIMIT 1""",
             [company_val, amount, pay_date], one=True
         )
         if _dup and not _force:
             flash(
-                f'⚠️ Warning: A payment of JOD {amount:.3f} for {company_val} on {pay_date} '
-                f'already exists (ID #{_dup["id"]}). If this is intentional, '
-                f'submit again to confirm.',
+                f'⚠️ Duplicate warning: A payment of JOD {amount:.3f} for {company_val} on {pay_date} '
+                f'already exists (ID #{_dup["id"]}). Submit again to confirm.',
                 'warning'
             )
-            # Re-render the payments page with force flag pre-set in a hidden field
-            page = max(1, int(request.args.get('page', 1)))
-            base_q = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC, id DESC'
-            all_payments, total_rows, total_pages = paginate(base_q, [], page)
-            total_paid = query_db(
-                'SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
-            )['t']
-            return render_template('payments.html',
-                payments=all_payments, companies=companies,
-                total_paid=total_paid, today=str(date.today()),
-                page=page, total_pages=total_pages, total_rows=total_rows,
-                dup_warn=True,
-                dup_company=company_val, dup_amount=amount,
-                dup_date=pay_date, dup_notes=request.form.get('notes','').strip(),
-            )
-        notes_val = request.form.get('notes','').strip()
+            return redirect(url_for('payments',
+                dup_warn='1', dup_company=company_val, dup_amount=amount_val,
+                dup_date=pay_date, dup_method=method_val, dup_ref=reference_val,
+                dup_notes=notes_val))
         new_id = execute_db(
-            'INSERT INTO payments (company, amount, pay_date, notes) VALUES (%s,%s,%s,%s) RETURNING id',
-            (company_val, amount, pay_date, notes_val)
+            '''INSERT INTO payments
+               (company, amount, pay_date, payment_method, reference_number, notes, created_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
+            (company_val, amount, pay_date, method_val, reference_val, notes_val,
+             session.get('user_id'))
         )
         log_action('CREATE', 'payments', new_id,
-                   f"{company_val} | Amount:{amount}" + (" [FORCE-DUPLICATE]" if _force else ""))
+                   f"{company_val} | JOD {amount} | {method_val or 'N/A'} | Ref:{reference_val or '-'}"
+                   + (" [FORCE-DUP]" if _force else ""))
         if new_id:
+            ldesc = f"Payment received — {method_val or ''}"
+            if reference_val: ldesc += f" [Ref:{reference_val}]"
+            if notes_val:     ldesc += f" | {notes_val}"
             post_ledger('PAYMENT', new_id, 'payments', company_val,
-                        f"Payment received — {notes_val or ''}",
-                        debit=0, credit=amount, entry_date=pay_date)
-        flash('Payment recorded successfully.', 'success')
+                        ldesc, debit=0, credit=amount, entry_date=pay_date)
+        flash(f'Payment of JOD {amount:.3f} recorded for {company_val}.', 'success')
         return redirect(url_for('payments'))
 
-    page = max(1, int(request.args.get('page', 1)))
-    base_q = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC, id DESC'
-    all_payments, total_rows, total_pages = paginate(base_q, [], page)
-    total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
-    )['t']
+    # ── GET: filters ─────────────────────────────────────────────
+    f_company   = request.args.get('company','').upper().strip()
+    f_method    = request.args.get('method','').strip()
+    f_date_from = request.args.get('date_from','').strip()
+    f_date_to   = request.args.get('date_to','').strip()
+    f_ref       = request.args.get('reference','').strip().upper()
+    f_amt_min   = request.args.get('amt_min','').strip()
+    f_amt_max   = request.args.get('amt_max','').strip()
+    f_created   = request.args.get('created_by','').strip()
+    page        = max(1, int(request.args.get('page', 1)))
+
+    where = ['p.deleted=FALSE', 'p.is_archived=FALSE', 'COALESCE(p.voided,FALSE)=FALSE']
+    params = []
+    if f_company:
+        where.append('UPPER(p.company) LIKE %s'); params.append('%'+f_company+'%')
+    if f_method:
+        where.append('p.payment_method=%s'); params.append(f_method)
+    if f_date_from:
+        where.append('p.pay_date >= %s'); params.append(f_date_from)
+    if f_date_to:
+        where.append('p.pay_date <= %s'); params.append(f_date_to)
+    if f_ref:
+        where.append('UPPER(p.reference_number) LIKE %s'); params.append('%'+f_ref+'%')
+    if f_amt_min:
+        try: where.append('p.amount >= %s'); params.append(float(f_amt_min))
+        except ValueError: pass
+    if f_amt_max:
+        try: where.append('p.amount <= %s'); params.append(float(f_amt_max))
+        except ValueError: pass
+    if f_created:
+        where.append('CAST(p.created_by AS TEXT)=%s'); params.append(f_created)
+
+    w_sql = ' AND '.join(where)
+    base_q = f"""
+        SELECT p.*,
+               u.username  AS created_by_name,
+               u.full_name AS created_by_full
+        FROM payments p
+        LEFT JOIN users u ON u.id = p.created_by
+        WHERE {w_sql}
+        ORDER BY p.pay_date DESC, p.id DESC
+    """
+    all_payments, total_rows, total_pages = paginate(base_q, params, page)
+
+    # KPIs
+    today_date = date.today()
+    month_start = today_date.replace(day=1)
+
+    kpi = query_db("""
+        SELECT
+          COALESCE(SUM(amount) FILTER (WHERE pay_date = %s),  0) AS today_total,
+          COALESCE(SUM(amount) FILTER (WHERE pay_date >= %s), 0) AS month_total,
+          COALESCE(SUM(amount) FILTER (WHERE payment_method='Cash'),           0) AS cash_total,
+          COALESCE(SUM(amount) FILTER (WHERE payment_method='Bank Transfer'),  0) AS bank_total,
+          COALESCE(SUM(amount) FILTER (WHERE payment_method='CliQ'),           0) AS cliq_total,
+          COALESCE(SUM(amount),                                                0) AS grand_total,
+          COUNT(*) AS count_all
+        FROM payments
+        WHERE deleted=FALSE AND is_archived=FALSE AND COALESCE(voided,FALSE)=FALSE
+    """, [str(today_date), str(month_start)], one=True)
+
+    # Outstanding receivables = total sell - total payments
+    outstanding = query_db("""
+        SELECT
+          COALESCE((SELECT SUM(sell) FROM sales WHERE deleted=FALSE AND is_archived=FALSE),0)
+          - COALESCE((SELECT SUM(amount) FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND COALESCE(voided,FALSE)=FALSE),0)
+          AS outstanding
+    """, one=True)
+
+    # Staff list for filter
+    staff_list = query_db(
+        "SELECT id, COALESCE(full_name, username) AS name FROM users ORDER BY full_name",
+        []
+    ) or []
+
+    # Duplicate warn pre-fill from redirect
+    dup_warn    = request.args.get('dup_warn') == '1'
+    dup_company = request.args.get('dup_company','')
+    dup_amount  = request.args.get('dup_amount','')
+    dup_date    = request.args.get('dup_date', today_str)
+    dup_method  = request.args.get('dup_method','')
+    dup_ref     = request.args.get('dup_ref','')
+    dup_notes   = request.args.get('dup_notes','')
+
     return render_template('payments.html',
         payments=all_payments, companies=companies,
-        total_paid=total_paid, today=str(date.today()),
-        page=page, total_pages=total_pages, total_rows=total_rows
+        total_paid=kpi['grand_total'], today=today_str,
+        page=page, total_pages=total_pages, total_rows=total_rows,
+        kpi=kpi, outstanding=float(outstanding['outstanding'] or 0),
+        staff_list=staff_list,
+        filters=dict(company=f_company, method=f_method, date_from=f_date_from,
+                     date_to=f_date_to, reference=f_ref,
+                     amt_min=f_amt_min, amt_max=f_amt_max, created_by=f_created),
+        dup_warn=dup_warn, dup_company=dup_company, dup_amount=dup_amount,
+        dup_date=dup_date, dup_method=dup_method, dup_ref=dup_ref, dup_notes=dup_notes,
     )
 
 @app.route('/payments/edit/<int:pay_id>', methods=['GET', 'POST'])
@@ -1840,6 +1923,8 @@ def edit_payment(pay_id):
                                    companies=companies, today=str(date.today()))
         new_company  = request.form.get('company','').upper().strip()
         new_pay_date = request.form.get('pay_date', str(date.today()))
+        new_method   = request.form.get('method','').strip()
+        new_ref      = request.form.get('reference_number','').strip().upper()
         new_notes    = request.form.get('notes','').strip()
         old_amount   = float(payment['amount'] or 0)
         old_company  = str(payment['company'] or '').upper().strip()
@@ -1866,8 +1951,9 @@ def edit_payment(pay_id):
 
         # Step 2 — update the payments row
         execute_db('''
-            UPDATE payments SET company=%s, amount=%s, pay_date=%s, notes=%s WHERE id=%s
-        ''', (new_company, amount, new_pay_date, new_notes, pay_id))
+            UPDATE payments SET company=%s, amount=%s, pay_date=%s,
+                   payment_method=%s, reference_number=%s, notes=%s WHERE id=%s
+        ''', (new_company, amount, new_pay_date, new_method, new_ref, new_notes, pay_id))
 
         # Step 3 — post corrective ledger entry with new values
         post_ledger('PAYMENT', pay_id, 'payments', new_company,
@@ -1903,6 +1989,32 @@ def delete_payment_page(pay_id):
     log_action('DELETE', 'payments', pay_id,
                f"{p['company'] if p else ''} | Amount:{p['amount'] if p else ''}")
     flash('Payment deleted.', 'success')
+    return redirect(url_for('payments'))
+
+@app.route('/payments/void/<int:pay_id>', methods=['POST'])
+@admin_required
+def void_payment(pay_id):
+    """Soft-void a payment: marks voided=TRUE, reverses ledger entry, never hard-deletes."""
+    p = query_db('SELECT company, amount, pay_date FROM payments WHERE id=%s AND deleted=FALSE', [pay_id], one=True)
+    if not p:
+        flash('Payment not found.', 'danger')
+        return redirect(url_for('payments'))
+    _orig = query_db(
+        """SELECT id FROM accounting_entries
+           WHERE ref_type='PAYMENT' AND ref_id=%s AND ref_table='payments'
+             AND is_reversed=FALSE
+           ORDER BY id DESC LIMIT 1""",
+        [pay_id], one=True
+    )
+    if _orig:
+        execute_db("UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s", [_orig['id']])
+    post_ledger('PAYMENT_REVERSAL', pay_id, 'payments', p['company'],
+                f"Void of PAY-{pay_id:04d}",
+                debit=float(p['amount']), credit=0, entry_date=p['pay_date'])
+    execute_db('UPDATE payments SET voided=TRUE WHERE id=%s', [pay_id])
+    log_action('VOID', 'payments', pay_id,
+               f"{p['company']} | Amount:{p['amount']} | VOIDED")
+    flash(f'Payment #{pay_id} voided. Ledger entry reversed.', 'warning')
     return redirect(url_for('payments'))
 
 # ── Deliver Tomorrow ──────────────────────────────────────────────────────────
@@ -3153,7 +3265,11 @@ def init_extension_db():
     for _col_sql in [
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS company_id  INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
         "ALTER TABLE sales ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES master_suppliers(id)  ON DELETE SET NULL",
-        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS company_id       INTEGER REFERENCES master_companies(id) ON DELETE SET NULL",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_method   TEXT DEFAULT ''",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference_number TEXT DEFAULT ''",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by       INTEGER",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided           BOOLEAN DEFAULT FALSE",
         "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS supplier_id       INTEGER REFERENCES master_suppliers(id) ON DELETE SET NULL",
         "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS payment_method   TEXT DEFAULT ''",
         "ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS reference_number TEXT DEFAULT ''",
@@ -4227,7 +4343,12 @@ def auto_generate_voucher(sale_id):
 @app.route('/payments/<int:pay_id>/receipt')
 @login_required
 def payment_receipt(pay_id):
-    pay = query_db('SELECT * FROM payments WHERE id=%s AND deleted=FALSE', [pay_id], one=True)
+    pay = query_db("""
+        SELECT p.*, u.username AS created_by_name, u.full_name AS created_by_full
+        FROM payments p
+        LEFT JOIN users u ON u.id = p.created_by
+        WHERE p.id=%s AND p.deleted=FALSE
+    """, [pay_id], one=True)
     if not pay:
         flash('Payment not found.', 'danger')
         return redirect(url_for('payments'))
@@ -4237,7 +4358,7 @@ def payment_receipt(pay_id):
         [pay['company']], one=True
     )
     total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND company=%s',
+        'SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE deleted=FALSE AND is_archived=FALSE AND COALESCE(voided,FALSE)=FALSE AND company=%s',
         [pay['company']], one=True
     )
     balance = float(total_sell['s'] or 0) - float(total_paid['s'] or 0)

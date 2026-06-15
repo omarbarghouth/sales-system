@@ -4,93 +4,207 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-money-bill-wave"></i> Payments</h1>
-    <p>Record and manage company payments — JOD {{ "%.3f"|format(total_paid or 0) }} total received</p>
+    <h1><i class="fas fa-money-bill-wave" style="color:var(--green)"></i> Accounts Receivable</h1>
+    <p>Payment center — JOD {{ "%.3f"|format(kpi.grand_total or 0) }} total received · {{ kpi.count_all or 0 }} records</p>
   </div>
-</div>
-
-<div class="grid-2 mb-6">
-
-  {# ── Add Payment Form ─────────────────────────────────── #}
   {% if is_admin %}
-  <div class="card" id="add-payment">
-    <div class="card-header"><i class="fas fa-plus-circle" style="color:var(--gold)"></i> Record New Payment</div>
-    <div class="card-body">
-      <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-grid" style="gap:14px;margin-bottom:14px">
-          <div class="form-group">
-            <label>Company <span style="color:var(--red)">*</span></label>
-            <input type="text" name="company" list="company-list-pay" required
-                   placeholder="Company name" style="text-transform:uppercase;font-weight:700">
-            <datalist id="company-list-pay">
-              {% for co in companies %}<option value="{{ co }}">{% endfor %}
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
-            <input type="number" name="amount" step="0.001" min="0.001" required
-                   placeholder="0.000" style="font-size:16px;font-weight:700">
-          </div>
-          <div class="form-group">
-            <label>Payment Date <span style="color:var(--red)">*</span></label>
-            <input type="date" name="pay_date" required value="{{ today }}">
-          </div>
-          <div class="form-group">
-            <label>Payment Method</label>
-            <select name="method">
-              <option value="">— Select method —</option>
-              <option value="Cash">💵 Cash</option>
-              <option value="Bank Transfer">🏦 Bank Transfer</option>
-              <option value="CliQ">📱 CliQ</option>
-              <option value="Credit Card">💳 Credit Card</option>
-              <option value="Cheque">📄 Cheque</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group" style="margin-bottom:14px">
-          <label>Notes (optional)</label>
-          <input type="text" name="notes" placeholder="Reference number, remarks…" maxlength="200">
-        </div>
-        <button type="submit" class="btn btn-red" style="width:100%">
-          <i class="fas fa-save"></i> Record Payment
-        </button>
-      </form>
-    </div>
+  <div class="page-header-actions">
+    <a href="#add-payment" class="btn btn-red"><i class="fas fa-plus"></i> New Payment</a>
   </div>
   {% endif %}
-
-  {# ── KPIs ──────────────────────────────────────────────── #}
-  <div style="display:flex;flex-direction:column;gap:14px">
-    <div class="kpi-box green" style="flex:1">
-      <div class="kpi-icon"><i class="fas fa-wallet"></i></div>
-      <div class="kpi-label">Total Payments Received</div>
-      <div class="kpi-value green" style="font-size:24px">JOD {{ "%.3f"|format(total_paid or 0) }}</div>
-      <div class="kpi-sub">{{ total_rows }} payment records</div>
-    </div>
-    <div style="background:linear-gradient(135deg,var(--navy-dk),var(--navy));border-radius:var(--radius);padding:16px 18px;color:#fff">
-      <div style="font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Payment Methods</div>
-      <div style="font-size:12.5px;opacity:.75;line-height:1.9">
-        💵 Cash · 🏦 Bank Transfer · 📱 CliQ · 💳 Credit Card · 📄 Cheque
-      </div>
-    </div>
-  </div>
 </div>
 
-{# ── Payments Table ───────────────────────────────────────── #}
+{# ── KPI Dashboard ────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px">
+
+  <div class="kpi-box green" style="padding:16px 18px">
+    <div class="kpi-label" style="font-size:10px">TODAY</div>
+    <div class="kpi-value green" style="font-size:20px">JOD {{ "%.3f"|format(kpi.today_total or 0) }}</div>
+    <div class="kpi-sub">Payments received today</div>
+  </div>
+
+  <div class="kpi-box" style="padding:16px 18px;background:linear-gradient(135deg,#0d1e3f,#1a2f52);color:#fff">
+    <div class="kpi-label" style="font-size:10px;color:rgba(255,255,255,.55)">THIS MONTH</div>
+    <div style="font-size:20px;font-weight:800;color:#C8A84B;font-family:var(--font-hd)">JOD {{ "%.3f"|format(kpi.month_total or 0) }}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:3px">Month-to-date</div>
+  </div>
+
+  <div class="kpi-box" style="padding:16px 18px;background:linear-gradient(135deg,#064e3b,#065f46);color:#fff">
+    <div class="kpi-label" style="font-size:10px;color:rgba(255,255,255,.55)">CASH</div>
+    <div style="font-size:20px;font-weight:800;color:#6ee7b7;font-family:var(--font-hd)">JOD {{ "%.3f"|format(kpi.cash_total or 0) }}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:3px">💵 Cash payments</div>
+  </div>
+
+  <div class="kpi-box" style="padding:16px 18px;background:linear-gradient(135deg,#1e3a5f,#1a4a7a);color:#fff">
+    <div class="kpi-label" style="font-size:10px;color:rgba(255,255,255,.55)">BANK / CLIQ</div>
+    <div style="font-size:20px;font-weight:800;color:#93c5fd;font-family:var(--font-hd)">JOD {{ "%.3f"|format((kpi.bank_total or 0) + (kpi.cliq_total or 0)) }}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:3px">🏦 Transfers + CliQ</div>
+  </div>
+
+  <div class="kpi-box" style="padding:16px 18px;background:{% if outstanding > 0.005 %}linear-gradient(135deg,#4c0519,#881337){% else %}linear-gradient(135deg,#052e16,#166534){% endif %};color:#fff">
+    <div class="kpi-label" style="font-size:10px;color:rgba(255,255,255,.55)">OUTSTANDING</div>
+    <div style="font-size:20px;font-weight:800;color:{% if outstanding > 0.005 %}#fca5a5{% else %}#86efac{% endif %};font-family:var(--font-hd)">
+      JOD {{ "%.3f"|format([outstanding, 0]|max) }}
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:3px">
+      {% if outstanding <= 0.005 %}✅ Fully settled{% else %}Receivables balance{% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Add Payment Form ─────────────────────────────────────────── #}
+{% if is_admin %}
+<div class="card mb-6" id="add-payment">
+  <div class="card-header">
+    <i class="fas fa-plus-circle" style="color:var(--gold)"></i> Record New Payment
+  </div>
+  <div class="card-body">
+    {% if dup_warn %}
+    <div class="alert alert-warning" style="margin-bottom:16px;padding:12px 16px;border-radius:8px;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;font-size:13px">
+      <i class="fas fa-exclamation-triangle"></i>
+      <strong>Duplicate Warning:</strong> A payment with the same company, amount, and date already exists.
+      Submitting again will force-record it.
+    </div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('payments') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if dup_warn %}<input type="hidden" name="force_duplicate" value="1">{% endif %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:14px">
+        <div class="form-group">
+          <label>Company <span class="req">*</span></label>
+          <input type="text" name="company" list="company-list-pay" required
+                 value="{{ dup_company }}"
+                 placeholder="Company name" style="text-transform:uppercase;font-weight:700">
+          <datalist id="company-list-pay">
+            {% for co in companies %}<option value="{{ co }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label>Amount (JOD) <span class="req">*</span></label>
+          <input type="number" name="amount" step="0.001" min="0.001" required
+                 value="{{ dup_amount }}"
+                 placeholder="0.000" style="font-size:15px;font-weight:700">
+        </div>
+        <div class="form-group">
+          <label>Payment Date <span class="req">*</span></label>
+          <input type="date" name="pay_date" required value="{{ dup_date or today }}">
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select name="method">
+            <option value="">— Select —</option>
+            <option value="Cash"          {% if dup_method=='Cash' %}selected{% endif %}>💵 Cash</option>
+            <option value="Bank Transfer" {% if dup_method=='Bank Transfer' %}selected{% endif %}>🏦 Bank Transfer</option>
+            <option value="CliQ"          {% if dup_method=='CliQ' %}selected{% endif %}>📱 CliQ</option>
+            <option value="Credit Card"   {% if dup_method=='Credit Card' %}selected{% endif %}>💳 Credit Card</option>
+            <option value="Cheque"        {% if dup_method=='Cheque' %}selected{% endif %}>📄 Cheque</option>
+            <option value="Online"        {% if dup_method=='Online' %}selected{% endif %}>🌐 Online</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reference No.</label>
+          <input type="text" name="reference_number" value="{{ dup_ref }}"
+                 placeholder="Cheque / transfer ref…" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" name="notes" value="{{ dup_notes }}"
+                 placeholder="Optional remarks…" maxlength="200">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-red" style="min-width:200px">
+        <i class="fas fa-save"></i> Record Payment
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{# ── Filters ──────────────────────────────────────────────────── #}
+<div class="filter-bar no-print mb-4">
+  <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
+    <div class="form-group" style="flex:2;min-width:140px">
+      <label>Company</label>
+      <input type="text" name="company" value="{{ filters.company }}"
+             placeholder="Filter company…" style="text-transform:uppercase">
+    </div>
+    <div class="form-group" style="min-width:150px">
+      <label>Method</label>
+      <select name="method">
+        <option value="">All Methods</option>
+        <option value="Cash"          {% if filters.method=='Cash' %}selected{% endif %}>💵 Cash</option>
+        <option value="Bank Transfer" {% if filters.method=='Bank Transfer' %}selected{% endif %}>🏦 Bank Transfer</option>
+        <option value="CliQ"          {% if filters.method=='CliQ' %}selected{% endif %}>📱 CliQ</option>
+        <option value="Credit Card"   {% if filters.method=='Credit Card' %}selected{% endif %}>💳 Credit Card</option>
+        <option value="Cheque"        {% if filters.method=='Cheque' %}selected{% endif %}>📄 Cheque</option>
+        <option value="Online"        {% if filters.method=='Online' %}selected{% endif %}>🌐 Online</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:130px">
+      <label>From</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="form-group" style="min-width:130px">
+      <label>To</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <div class="form-group" style="min-width:110px">
+      <label>Min Amount</label>
+      <input type="number" name="amt_min" value="{{ filters.amt_min }}" step="0.001" min="0" placeholder="0.000">
+    </div>
+    <div class="form-group" style="min-width:110px">
+      <label>Max Amount</label>
+      <input type="number" name="amt_max" value="{{ filters.amt_max }}" step="0.001" min="0" placeholder="0.000">
+    </div>
+    <div class="form-group" style="min-width:140px">
+      <label>Reference</label>
+      <input type="text" name="reference" value="{{ filters.reference }}" placeholder="Ref no…">
+    </div>
+    {% if staff_list %}
+    <div class="form-group" style="min-width:140px">
+      <label>Created By</label>
+      <select name="created_by">
+        <option value="">All Staff</option>
+        {% for s in staff_list %}
+        <option value="{{ s.id }}" {% if filters.created_by==s.id|string %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div style="align-self:flex-end;display:flex;gap:6px">
+      <button type="submit" class="btn btn-primary" style="padding:8px 16px"><i class="fas fa-search"></i></button>
+      {% if filters.company or filters.method or filters.date_from or filters.date_to or filters.reference or filters.amt_min or filters.amt_max or filters.created_by %}
+      <a href="{{ url_for('payments') }}" class="btn btn-outline" style="padding:8px 12px" title="Clear filters"><i class="fas fa-times"></i></a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{# ── Payments Table ───────────────────────────────────────────── #}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>ID</th><th>Pay Date</th><th>Company</th><th>Method</th>
-        <th class="text-right">Amount (JOD)</th><th>Notes</th>
-        {% if is_admin %}<th>Actions</th>{% endif %}
+        <th style="width:70px">Pay #</th>
+        <th style="width:100px">Date</th>
+        <th>Company</th>
+        <th style="width:120px">Method</th>
+        <th style="width:110px">Reference</th>
+        <th class="text-right" style="width:120px">Amount (JOD)</th>
+        <th style="width:110px">Created By</th>
+        <th>Notes</th>
+        <th style="width:120px">Actions</th>
       </tr>
     </thead>
     <tbody>
       {% for p in payments %}
-      <tr>
-        <td style="color:var(--muted);font-size:11.5px">{{ p.id }}</td>
+      {% set is_voided = p.voided %}
+      <tr {% if is_voided %}style="opacity:.45;text-decoration:line-through"{% endif %}>
+        <td style="font-size:11.5px;color:var(--muted)">
+          PAY-{{ '%04d'|format(p.id) }}
+          {% if is_voided %}<span class="badge badge-pending" style="font-size:9px">VOID</span>{% endif %}
+        </td>
         <td style="white-space:nowrap;font-size:12.5px">{{ p.pay_date }}</td>
         <td>
           <a href="{{ url_for('statement', company=p.company) }}"
@@ -99,41 +213,78 @@
           </a>
         </td>
         <td>
-          {% set m = p.notes %}
-          <span class="badge badge-navy">{{ p.notes.split('Method:')[1].strip() if 'Method:' in (p.notes or '') else 'Payment' }}</span>
+          {% set m = p.payment_method or '' %}
+          {% if m %}
+          <span class="badge badge-navy" style="font-size:11px">
+            {% if m=='Cash' %}💵{% elif m=='Bank Transfer' %}🏦{% elif m=='CliQ' %}📱
+            {% elif m=='Credit Card' %}💳{% elif m=='Cheque' %}📄{% elif m=='Online' %}🌐
+            {% else %}💰{% endif %} {{ m }}
+          </span>
+          {% else %}
+          <span style="color:var(--muted);font-size:11.5px">—</span>
+          {% endif %}
+        </td>
+        <td style="font-size:11.5px;color:var(--navy);font-weight:600">
+          {{ p.reference_number or '—' }}
         </td>
         <td class="text-right" style="color:var(--green);font-weight:700;font-size:14px">
-          JOD {{ "%.3f"|format(p.amount) }}
+          {{ "%.3f"|format(p.amount|float) }}
         </td>
-        <td class="text-muted" style="font-size:12.5px">{{ p.notes or '—' }}</td>
-        {% if is_admin %}
+        <td style="font-size:11.5px;color:var(--muted)">
+          {{ p.created_by_full or p.created_by_name or '—' }}
+        </td>
+        <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.notes or '' }}">
+          {{ p.notes or '—' }}
+        </td>
         <td>
-          <div style="display:flex;gap:5px">
-            <a href="{{ url_for('payment_receipt', pay_id=p.id) }}" class="btn btn-gold btn-xs" title="Print Receipt" style="padding:6px 10px"><i class="fas fa-receipt"></i></a>
-            <a href="{{ url_for('edit_payment', pay_id=p.id) }}" class="btn btn-edit">
+          {% if not is_voided %}
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <a href="{{ url_for('statement', company=p.company) }}"
+               class="btn btn-xs btn-outline" title="View Statement">
+              <i class="fas fa-file-alt"></i>
+            </a>
+            <a href="{{ url_for('payment_receipt', pay_id=p.id) }}"
+               class="btn btn-gold btn-xs" title="Print Receipt">
+              <i class="fas fa-receipt"></i>
+            </a>
+            {% if is_admin %}
+            <a href="{{ url_for('edit_payment', pay_id=p.id) }}"
+               class="btn btn-edit btn-xs" title="Edit">
               <i class="fas fa-pencil-alt"></i>
             </a>
-            <form method="POST" action="{{ url_for('delete_payment_page', pay_id=p.id) }}"
-                  onsubmit="return confirm('Delete this payment?')">
+            <form method="POST" action="{{ url_for('void_payment', pay_id=p.id) }}"
+                  onsubmit="return confirm('Void PAY-{{ '%04d'|format(p.id) }}? This will reverse the ledger entry and cannot be undone.')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i></button>
+              <button type="submit" class="btn btn-warning btn-xs" title="Void Payment">
+                <i class="fas fa-ban"></i>
+              </button>
             </form>
+            {% endif %}
           </div>
+          {% else %}
+          <span style="font-size:11px;color:var(--muted)">Voided</span>
+          {% endif %}
         </td>
-        {% endif %}
       </tr>
       {% else %}
-      <tr><td colspan="{% if is_admin %}7{% else %}6{% endif %}" class="text-center" style="padding:32px;color:var(--muted)">
-        No payments recorded yet.
-      </td></tr>
+      <tr>
+        <td colspan="9" class="text-center" style="padding:40px;color:var(--muted)">
+          No payments found.
+          {% if is_admin %}<a href="#add-payment" style="color:var(--red);font-weight:700">Record one →</a>{% endif %}
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
     {% if payments %}
     <tfoot>
       <tr>
-        <td colspan="{% if is_admin %}4{% else %}3{% endif %}">TOTAL RECEIVED</td>
-        <td class="text-right" style="color:#6dd58a;font-size:15px">JOD {{ "%.3f"|format(total_paid or 0) }}</td>
-        <td colspan="{% if is_admin %}2{% else %}1{% endif %}"></td>
+        <td colspan="5" style="font-size:12px;font-weight:700;color:var(--navy)">
+          TOTAL — {{ total_rows }} payment{{ 's' if total_rows != 1 else '' }}
+        </td>
+        <td class="text-right" style="color:#6dd58a;font-size:15px;font-weight:800">
+          {{ "%.3f"|format(total_paid or 0) }}
+        </td>
+        <td colspan="3"></td>
       </tr>
     </tfoot>
     {% endif %}

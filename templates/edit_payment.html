@@ -4,22 +4,22 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-pencil-alt"></i> Edit Payment #{{ payment.id }}</h1>
-    <p>Update payment details</p>
+    <h1><i class="fas fa-pencil-alt"></i> Edit Payment PAY-{{ '%04d'|format(payment.id) }}</h1>
+    <p>{{ payment.company }} &nbsp;·&nbsp; JOD {{ "%.3f"|format(payment.amount|float) }}</p>
   </div>
   <div class="page-header-actions">
     <a href="{{ url_for('payments') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
   </div>
 </div>
 
-<div class="card" style="max-width:600px">
+<div class="card" style="max-width:680px">
   <div class="card-header"><i class="fas fa-edit"></i> Edit Payment Details</div>
   <div class="card-body">
     <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="form-grid" style="gap:16px;margin-bottom:16px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px">
         <div class="form-group">
-          <label>Company <span style="color:var(--red)">*</span></label>
+          <label>Company <span class="req">*</span></label>
           <input type="text" name="company" list="company-list" required
                  value="{{ payment.company }}" style="text-transform:uppercase;font-weight:700">
           <datalist id="company-list">
@@ -27,18 +27,37 @@
           </datalist>
         </div>
         <div class="form-group">
-          <label>Amount (JOD) <span style="color:var(--red)">*</span></label>
+          <label>Amount (JOD) <span class="req">*</span></label>
           <input type="number" name="amount" step="0.001" min="0.001" required
-                 value="{{ payment.amount }}" style="font-size:16px;font-weight:700">
+                 value="{{ payment.amount }}" style="font-size:15px;font-weight:700">
         </div>
         <div class="form-group">
-          <label>Payment Date <span style="color:var(--red)">*</span></label>
+          <label>Payment Date <span class="req">*</span></label>
           <input type="date" name="pay_date" required value="{{ payment.pay_date }}">
         </div>
         <div class="form-group">
+          <label>Payment Method</label>
+          <select name="method">
+            <option value="">— Select —</option>
+            <option value="Cash"          {% if (payment.payment_method or '')=='Cash' %}selected{% endif %}>💵 Cash</option>
+            <option value="Bank Transfer" {% if (payment.payment_method or '')=='Bank Transfer' %}selected{% endif %}>🏦 Bank Transfer</option>
+            <option value="CliQ"          {% if (payment.payment_method or '')=='CliQ' %}selected{% endif %}>📱 CliQ</option>
+            <option value="Credit Card"   {% if (payment.payment_method or '')=='Credit Card' %}selected{% endif %}>💳 Credit Card</option>
+            <option value="Cheque"        {% if (payment.payment_method or '')=='Cheque' %}selected{% endif %}>📄 Cheque</option>
+            <option value="Online"        {% if (payment.payment_method or '')=='Online' %}selected{% endif %}>🌐 Online</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reference Number</label>
+          <input type="text" name="reference_number"
+                 value="{{ payment.reference_number or '' }}"
+                 placeholder="Cheque / transfer ref…" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
           <label>Notes</label>
-          <input type="text" name="notes" maxlength="200" value="{{ payment.notes or '' }}"
-                 placeholder="Reference, method, remarks…">
+          <input type="text" name="notes" maxlength="200"
+                 value="{{ payment.notes or '' }}"
+                 placeholder="Optional remarks…">
         </div>
       </div>
       <div style="display:flex;gap:12px;justify-content:flex-end">

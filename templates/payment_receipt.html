@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Receipt — {{ pay.company }} — ALSONDOS{% endblock %}
+{% block title %}Receipt PAY-{{ '%04d'|format(pay.id) }} — {{ pay.company }} — ALSONDOS{% endblock %}
 
 {% block content %}
 <div class="page-header no-print">
   <div class="page-header-left">
     <h1><i class="fas fa-receipt" style="color:var(--green);font-size:20px;vertical-align:middle;margin-right:6px"></i>Payment Receipt</h1>
-    <p>{{ pay.company }} &nbsp;·&nbsp; {{ pay.pay_date }}</p>
+    <p>PAY-{{ '%04d'|format(pay.id) }} &nbsp;·&nbsp; {{ pay.company }} &nbsp;·&nbsp; {{ pay.pay_date }}</p>
   </div>
   <div class="page-header-actions">
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Receipt</button>
@@ -26,23 +26,45 @@
       </div>
     </div>
     <div style="text-align:right">
-      <div style="font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:800;color:#fff;line-height:1">PAYMENT RECEIPT</div>
-      <div style="font-size:14px;font-weight:700;color:#C8A84B;margin-top:8px">#{{ pay.id }}</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:30px;font-weight:800;color:#fff;line-height:1">PAYMENT RECEIPT</div>
+      <div style="font-size:15px;font-weight:700;color:#C8A84B;margin-top:8px">PAY-{{ '%04d'|format(pay.id) }}</div>
       <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px">{{ pay.pay_date }}</div>
     </div>
   </div>
 
-  {# From / To #}
+  {# From / Payment Info #}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #e2e8f0">
     <div style="padding:20px 36px;border-right:1px solid #e2e8f0">
       <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Received From</div>
       <div style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:800;color:#0f1d35">{{ pay.company }}</div>
     </div>
     <div style="padding:20px 36px">
-      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Payment Info</div>
+      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Payment Details</div>
       <div style="font-size:13px;line-height:2;color:#374151">
-        <span style="color:#94a3b8">Date:</span> <strong>{{ pay.pay_date }}</strong><br>
-        {% if pay.notes %}<span style="color:#94a3b8">Notes:</span> <strong>{{ pay.notes }}</strong>{% endif %}
+        <span style="color:#94a3b8">Date:</span>
+        <strong>{{ pay.pay_date }}</strong><br>
+        {% if pay.payment_method %}
+        <span style="color:#94a3b8">Method:</span>
+        <strong>
+          {% set m = pay.payment_method %}
+          {% if m=='Cash' %}💵{% elif m=='Bank Transfer' %}🏦{% elif m=='CliQ' %}📱
+          {% elif m=='Credit Card' %}💳{% elif m=='Cheque' %}📄{% elif m=='Online' %}🌐
+          {% else %}💰{% endif %} {{ m }}
+        </strong><br>
+        {% endif %}
+        {% if pay.reference_number %}
+        <span style="color:#94a3b8">Reference:</span>
+        <strong>{{ pay.reference_number }}</strong><br>
+        {% endif %}
+        {% if pay.notes %}
+        <span style="color:#94a3b8">Notes:</span>
+        <strong>{{ pay.notes }}</strong><br>
+        {% endif %}
+        {% set received_by = pay.created_by_full or pay.created_by_name %}
+        {% if received_by %}
+        <span style="color:#94a3b8">Received By:</span>
+        <strong>{{ received_by }}</strong>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -76,8 +98,18 @@
 
   {# Signatures #}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:18px 36px;border-top:1px solid #e2e8f0">
-    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Authorized — Alsondos Travel</div></div>
-    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature</div></div>
+    <div>
+      <div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center">
+        Authorized — Alsondos Travel
+        {% set received_by = pay.created_by_full or pay.created_by_name %}
+        {% if received_by %}<br><strong style="color:#374151">{{ received_by }}</strong>{% endif %}
+      </div>
+    </div>
+    <div>
+      <div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature</div>
+    </div>
   </div>
 
   <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:10px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
@@ -90,7 +122,7 @@
 <script>
 (function(){
   var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var stamp='Generated: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' — '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   var el=document.getElementById('genStamp'); if(el) el.textContent=stamp;
 })();
 </script>
