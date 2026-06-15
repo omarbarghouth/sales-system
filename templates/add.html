@@ -45,13 +45,30 @@
 </div>
 
 {# ── BASIC INFO (always shown) ─────────────────────────────────── #}
+{% set cur_ctype = ((sale.customer_type|default('COMPANY')) if sale else ((form.customer_type if form and form.customer_type is defined else '') or 'COMPANY')) %}
 <div class="form-section">
   <div class="form-section-header"><i class="fas fa-info-circle"></i> Basic Information</div>
   <div class="form-section-body">
+
+    {# ── Customer Type toggle ── #}
+    <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+      <span style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">Customer Type:</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 16px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-weight:700;transition:all .15s" id="lbl-company">
+        <input type="radio" name="customer_type" value="COMPANY" {% if cur_ctype != 'DIRECT' %}checked{% endif %} onchange="setCtype(this.value)" style="display:none">
+        <i class="fas fa-building"></i> Company
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 16px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-weight:700;transition:all .15s" id="lbl-direct">
+        <input type="radio" name="customer_type" value="DIRECT" {% if cur_ctype == 'DIRECT' %}checked{% endif %} onchange="setCtype(this.value)" style="display:none">
+        <i class="fas fa-user"></i> Direct Customer
+      </label>
+    </div>
+
     <div class="form-grid form-grid-4">
-      <div class="form-group">
+
+      {# ── Company field (shown only for COMPANY type) ── #}
+      <div class="form-group" id="field-company">
         <label>Company <span class="req">*</span></label>
-        <input type="text" name="company" id="addCoInput" required list="coDatalist"
+        <input type="text" name="company" id="addCoInput" list="coDatalist"
                style="text-transform:uppercase;font-weight:700"
                value="{{ (sale.company|default('')) if sale else (form.company or '') }}"
                autocomplete="off" placeholder="Type to search…"
@@ -60,8 +77,9 @@
         <datalist id="coDatalist">{% for co in companies %}<option value="{{ co }}">{% endfor %}</datalist>
         <div id="addCoDrop" class="live-dropdown" style="display:none"></div>
       </div>
+
       <div class="form-group">
-        <label>Customer <span class="req">*</span></label>
+        <label>Customer Name <span class="req">*</span></label>
         <input type="text" name="customer" required style="text-transform:uppercase" value="{{ (sale.customer|default('')) if sale else (form.customer or '') }}">
       </div>
       <div class="form-group">
@@ -73,6 +91,33 @@
         <input type="number" name="tickets" min="1" max="99" value="{{ (sale.tickets|default('')) if sale else 1 }}" style="font-weight:800;font-size:18px;text-align:center">
       </div>
     </div>
+
+    {# ── Direct Customer extra fields (hidden for COMPANY type) ── #}
+    <div id="direct-fields" style="display:none;margin-top:12px">
+      <div class="form-grid form-grid-4">
+        <div class="form-group">
+          <label><i class="fas fa-phone" style="color:var(--green)"></i> Phone Number</label>
+          <input type="tel" name="direct_phone" placeholder="+962791234567"
+                 value="{{ (sale.direct_phone|default('')) if sale else '' }}" style="font-family:monospace">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-passport" style="color:var(--navy)"></i> Passport Number</label>
+          <input type="text" name="passport_number" placeholder="Optional"
+                 value="{{ (sale.passport_number|default('')) if sale else '' }}" style="text-transform:uppercase;font-weight:700">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-flag" style="color:var(--gold)"></i> Nationality</label>
+          <input type="text" name="direct_nationality" placeholder="e.g. Jordanian"
+                 value="{{ (sale.direct_nationality|default('')) if sale else '' }}">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-envelope" style="color:var(--red)"></i> Email</label>
+          <input type="email" name="direct_email" placeholder="customer@email.com"
+                 value="{{ (sale.direct_email|default('')) if sale else '' }}">
+        </div>
+      </div>
+    </div>
+
     <div class="form-group" style="margin-top:12px">
       <label>Remarks / Reference</label>
       <input type="text" name="remarks" placeholder="Optional notes, booking reference…" maxlength="250" value="{{ (sale.remarks|default('')) if sale else '' }}">
@@ -490,6 +535,11 @@
     <i class="fas fa-magic"></i> Generate Voucher
   </a>
   {% endif %}
+  {% if edit and sale %}
+  <a href="{{ url_for('view_contract', sale_id=sale.id) }}" class="btn btn-lg" style="background:var(--navy);color:#fff" target="_blank">
+    <i class="fas fa-file-contract"></i> Contract
+  </a>
+  {% endif %}
 </div>
 </form>
 {% endblock %}
@@ -600,9 +650,26 @@ function addTourRow() {
   document.getElementById('toursContainer').appendChild(row);
 }
 
+// ── Customer Type toggle ─────────────────────────────────────
+function setCtype(val) {
+  var isDir = (val === 'DIRECT');
+  var fCo   = document.getElementById('field-company');
+  var fDir  = document.getElementById('direct-fields');
+  var coInp = document.getElementById('addCoInput');
+  if (fCo)  fCo.style.display  = isDir ? 'none' : '';
+  if (fDir) fDir.style.display = isDir ? '' : 'none';
+  if (coInp) coInp.required    = !isDir;
+  // Style the radio labels
+  var lblCo  = document.getElementById('lbl-company');
+  var lblDir = document.getElementById('lbl-direct');
+  if (lblCo)  { lblCo.style.borderColor  = isDir ? 'var(--border)' : 'var(--navy)';  lblCo.style.background  = isDir ? '' : 'var(--navy-lt)';  lblCo.style.color  = isDir ? '' : 'var(--navy)'; }
+  if (lblDir) { lblDir.style.borderColor = isDir ? 'var(--green)'  : 'var(--border)'; lblDir.style.background = isDir ? 'var(--green-lt)' : ''; lblDir.style.color = isDir ? 'var(--green)' : ''; }
+}
+
 // Init on page load
 setType(currentType);
 calcProfit();
+setCtype('{{ ((sale.customer_type|default("COMPANY")) if sale else "COMPANY") }}');
 
 // ── Live search dropdown ─────────────────────────────────────
 var _lsT = {};

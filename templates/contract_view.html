@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Contract — {{ sale.txn_number or ('T-' ~ '%04d'|format(sale.id)) }} — ALSONDOS{% endblock %}
+
+{% block extra_css %}
+<style>
+.contract-wrap { max-width:820px;margin:0 auto;background:#fff;border-radius:var(--radius);box-shadow:0 4px 24px rgba(0,0,0,.08);overflow:hidden }
+.contract-header { background:linear-gradient(135deg,#0d1e3f,#1B3A6B);color:#fff;padding:32px 40px;display:flex;justify-content:space-between;align-items:flex-start }
+.contract-logo { font-size:22px;font-weight:900;letter-spacing:1px }
+.contract-logo span { color:var(--gold) }
+.contract-title { font-size:28px;font-weight:900;letter-spacing:2px;text-align:right;text-transform:uppercase }
+.contract-subtitle { font-size:12px;opacity:.7;text-align:right;margin-top:4px }
+.contract-body { padding:36px 40px }
+.contract-section { margin-bottom:28px }
+.contract-section-title { font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;margin-bottom:14px }
+.contract-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px 24px }
+.contract-grid-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 16px }
+.contract-field { display:flex;flex-direction:column;gap:2px }
+.contract-field label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted) }
+.contract-field span { font-size:13.5px;font-weight:600;color:var(--text);border-bottom:1px solid #e2e8f0;padding-bottom:3px;min-height:22px }
+.contract-amount-box { background:linear-gradient(135deg,#0d1e3f,#192e5a);color:#fff;border-radius:var(--radius-sm);padding:20px 28px;display:flex;justify-content:space-between;align-items:center;margin-top:4px }
+.contract-amount-label { font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:1px }
+.contract-amount-value { font-size:28px;font-weight:900;color:var(--gold) }
+.contract-terms { font-size:11.5px;color:var(--muted);line-height:1.8;background:#f8fafc;border-radius:var(--radius-sm);padding:16px 20px;border-left:3px solid var(--navy) }
+.contract-terms ol { margin:8px 0 0 16px;padding:0 }
+.contract-terms li { margin-bottom:4px }
+.sig-row { display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;padding-top:24px;border-top:2px solid var(--border) }
+.sig-block { display:flex;flex-direction:column;gap:6px }
+.sig-line { border-bottom:1.5px solid var(--navy);height:40px;margin-top:8px }
+.sig-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);text-align:center }
+.contract-stamp { text-align:center;margin-top:8px;font-size:10px;color:var(--muted) }
+@media print {
+  .no-print { display:none !important }
+  body { background:#fff !important }
+  .contract-wrap { box-shadow:none;border-radius:0 }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set is_direct = (sale.customer_type|default('COMPANY')) == 'DIRECT' %}
+{% set svc = (sale.service_type|default('FLIGHT'))|upper %}
+{% set ref = sale.txn_number or ('T-' ~ '%04d'|format(sale.id)) %}
+
+<div class="page-header no-print">
+  <div class="page-header-left">
+    <h1><i class="fas fa-file-contract" style="color:var(--navy)"></i> Service Contract</h1>
+    <p>{{ ref }} — {{ sale.customer }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print / Save PDF</button>
+    {% if not is_direct %}
+    <a href="{{ url_for('new_invoice') }}?sale_id={{ sale.id }}" class="btn" style="background:var(--navy);color:#fff">
+      <i class="fas fa-file-invoice"></i> Generate Invoice
+    </a>
+    {% else %}
+    <a href="{{ url_for('new_invoice') }}?sale_id={{ sale.id }}" class="btn" style="background:var(--navy);color:#fff">
+      <i class="fas fa-file-invoice"></i> Generate Invoice
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="contract-wrap">
+
+  {# ── Header ── #}
+  <div class="contract-header">
+    <div>
+      <div class="contract-logo">ALSO<span>NDOS</span> TRAVEL</div>
+      <div style="font-size:11px;opacity:.7;margin-top:4px">Professional Travel Services</div>
+      <div style="font-size:11px;opacity:.6;margin-top:8px;line-height:1.6">
+        Amman, Jordan<br>
+        +962 XX XXX XXXX
+      </div>
+    </div>
+    <div>
+      <div class="contract-title">Service Contract</div>
+      <div class="contract-subtitle">Ref: {{ ref }}</div>
+      <div class="contract-subtitle">Date: {{ today }}</div>
+      <div style="margin-top:12px;background:rgba(255,255,255,.12);border-radius:6px;padding:6px 14px;text-align:center;font-size:12px;font-weight:700;letter-spacing:1px">
+        {{ svc }} SERVICE
+      </div>
+    </div>
+  </div>
+
+  <div class="contract-body">
+
+    {# ── 1. Client Information ── #}
+    <div class="contract-section">
+      <div class="contract-section-title"><i class="fas fa-user-circle"></i> Client Information</div>
+      <div class="contract-grid">
+        <div class="contract-field">
+          <label>Client Name</label>
+          <span>{{ sale.customer }}</span>
+        </div>
+        {% if is_direct %}
+        <div class="contract-field">
+          <label>Phone Number</label>
+          <span>{{ sale.direct_phone or '—' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>Passport Number</label>
+          <span>{{ sale.passport_number or '—' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>Nationality</label>
+          <span>{{ sale.direct_nationality or '—' }}</span>
+        </div>
+        {% if sale.direct_email %}
+        <div class="contract-field">
+          <label>Email</label>
+          <span>{{ sale.direct_email }}</span>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="contract-field">
+          <label>Company</label>
+          <span>{{ sale.company }}</span>
+        </div>
+        {% endif %}
+        <div class="contract-field">
+          <label>Contract Date</label>
+          <span>{{ sale.sale_date }}</span>
+        </div>
+        <div class="contract-field">
+          <label>No. of Passengers</label>
+          <span>{{ sale.tickets }}</span>
+        </div>
+      </div>
+    </div>
+
+    {# ── 2. Passengers (if any listed) ── #}
+    {% if passengers %}
+    <div class="contract-section">
+      <div class="contract-section-title"><i class="fas fa-users"></i> Passengers</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead>
+          <tr style="background:var(--navy-lt)">
+            <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--navy)">#</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--navy)">Full Name</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--navy)">Passport</th>
+            <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--navy)">Nationality</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in passengers %}
+          <tr style="border-bottom:1px solid var(--border-lt)">
+            <td style="padding:6px 10px;color:var(--muted)">{{ loop.index }}</td>
+            <td style="padding:6px 10px;font-weight:600">{{ p.name }}</td>
+            <td style="padding:6px 10px;font-family:monospace">{{ p.passport or '—' }}</td>
+            <td style="padding:6px 10px">{{ p.nationality or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {# ── 3. Service Details ── #}
+    <div class="contract-section">
+      <div class="contract-section-title"><i class="fas fa-concierge-bell"></i> Service Details</div>
+
+      {% if svc in ('FLIGHT', 'PACKAGE') %}
+      <div class="contract-grid" style="margin-bottom:12px">
+        <div class="contract-field">
+          <label>Route</label>
+          <span>{{ sale.from_loc }} → {{ sale.to_loc }}{% if sale.via %} via {{ sale.via }}{% endif %}</span>
+        </div>
+        <div class="contract-field">
+          <label>Trip Type</label>
+          <span>{{ sale.trip_type or 'Return' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>Airline</label>
+          <span>{{ sale.airline or '—' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>PNR / Booking Ref</label>
+          <span style="font-family:monospace;font-weight:800">{{ sale.pnr or '—' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>Travel Date (Departure)</label>
+          <span style="font-weight:800;color:var(--navy)">{{ sale.travel_date or '—' }}</span>
+        </div>
+        <div class="contract-field">
+          <label>Return Date</label>
+          <span>{{ sale.return_date or '—' }}</span>
+        </div>
+        {% if sale.baggage %}
+        <div class="contract-field">
+          <label>Baggage Allowance</label>
+          <span>{{ sale.baggage }}</span>
+        </div>
+        {% endif %}
+        {% if sale.ticket_number %}
+        <div class="contract-field">
+          <label>Ticket Number</label>
+          <span style="font-family:monospace">{{ sale.ticket_number }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if svc in ('HOTEL', 'PACKAGE') and sale.hotel_name %}
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:14px 18px;margin-top:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);margin-bottom:10px"><i class="fas fa-hotel"></i> Hotel Details</div>
+        <div class="contract-grid">
+          <div class="contract-field"><label>Hotel Name</label><span style="font-weight:800">{{ sale.hotel_name }}</span></div>
+          <div class="contract-field"><label>Room Type</label><span>{{ sale.hotel_room or '—' }}</span></div>
+          <div class="contract-field"><label>Meal Plan</label><span>{{ sale.hotel_meal or '—' }}</span></div>
+          <div class="contract-field"><label>Nights</label><span>{{ sale.hotel_nights or '—' }}</span></div>
+          <div class="contract-field"><label>Check-In</label><span style="font-weight:800;color:var(--green)">{{ sale.hotel_checkin or '—' }}</span></div>
+          <div class="contract-field"><label>Check-Out</label><span style="font-weight:800;color:var(--red)">{{ sale.hotel_checkout or '—' }}</span></div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if svc == 'TRANSFER' %}
+      <div class="contract-grid">
+        <div class="contract-field"><label>Transfer Type</label><span>{{ sale.transfer_type or '—' }}</span></div>
+        <div class="contract-field"><label>Vehicle</label><span>{{ sale.transfer_vehicle or '—' }}</span></div>
+        <div class="contract-field"><label>Pickup</label><span>{{ sale.transfer_pickup or '—' }}</span></div>
+      </div>
+      {% endif %}
+
+      {% if svc == 'VISA' %}
+      <div class="contract-grid">
+        <div class="contract-field"><label>Visa Type</label><span>{{ sale.visa_type or '—' }}</span></div>
+        <div class="contract-field"><label>Passport Number</label><span style="font-family:monospace;font-weight:800">{{ sale.passport_number or '—' }}</span></div>
+        <div class="contract-field"><label>Status</label><span>{{ sale.visa_status or 'In Progress' }}</span></div>
+      </div>
+      {% endif %}
+
+      {% if svc == 'INSURANCE' %}
+      <div class="contract-grid">
+        <div class="contract-field"><label>Insurance Type</label><span>{{ sale.insurance_type or '—' }}</span></div>
+        <div class="contract-field"><label>Supplier</label><span>{{ sale.insurance_supplier or '—' }}</span></div>
+      </div>
+      {% endif %}
+
+      {% if tours %}
+      <div style="margin-top:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px"><i class="fas fa-map-marked-alt"></i> Included Tours / Activities</div>
+        {% for t in tours %}
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;background:{% if loop.odd %}var(--bg){% else %}#fff{% endif %};border-radius:4px;font-size:12.5px">
+          <span style="font-weight:600">{{ t.name }}</span>
+          <span style="color:var(--muted)">{{ t.date or '' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if sale.remarks %}
+      <div style="margin-top:12px;padding:10px 14px;background:#fffbeb;border-left:3px solid var(--gold);border-radius:4px;font-size:12.5px">
+        <strong>Notes:</strong> {{ sale.remarks }}
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── 4. Financial Summary ── #}
+    <div class="contract-section">
+      <div class="contract-section-title"><i class="fas fa-coins"></i> Financial Summary</div>
+      <div class="contract-amount-box">
+        <div>
+          <div class="contract-amount-label">Total Amount Due</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">{{ svc }} Service — {{ sale.tickets }} Pax</div>
+        </div>
+        <div style="text-align:right">
+          <div class="contract-amount-value">JOD {{ "%.3f"|format(sale.sell|float) }}</div>
+          <div style="font-size:10px;opacity:.6;margin-top:2px">Jordanian Dinar</div>
+        </div>
+      </div>
+    </div>
+
+    {# ── 5. Terms & Conditions ── #}
+    <div class="contract-section">
+      <div class="contract-section-title"><i class="fas fa-scroll"></i> Terms & Conditions</div>
+      <div class="contract-terms">
+        <ol>
+          <li>This contract is binding between ALSONDOS TRAVEL and the client upon signature by both parties.</li>
+          <li>The total amount due must be paid in full prior to the issuance of tickets, vouchers, or any travel documents.</li>
+          <li>Cancellation fees apply as per the supplier and airline policies. No refunds will be issued for no-shows.</li>
+          <li>ALSONDOS TRAVEL acts as an intermediary and is not responsible for changes or cancellations by airlines, hotels, or other service providers beyond our control.</li>
+          <li>Travel insurance is strongly recommended. ALSONDOS TRAVEL is not liable for medical emergencies, loss of baggage, or personal belongings.</li>
+          <li>Visa approval is subject to the decision of the relevant embassy or authority. ALSONDOS TRAVEL does not guarantee visa issuance.</li>
+          <li>Any changes to bookings after confirmation are subject to availability and may incur additional fees.</li>
+          <li>This contract is governed by the laws of the Hashemite Kingdom of Jordan.</li>
+        </ol>
+      </div>
+    </div>
+
+    {# ── 6. Signatures ── #}
+    <div class="sig-row">
+      <div class="sig-block">
+        <div style="font-size:12px;font-weight:700;color:var(--navy)">ALSONDOS TRAVEL</div>
+        <div style="font-size:11px;color:var(--muted)">Authorized Representative</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Signature & Company Stamp</div>
+      </div>
+      <div class="sig-block">
+        <div style="font-size:12px;font-weight:700;color:var(--navy)">CLIENT</div>
+        <div style="font-size:11px;color:var(--muted)">{{ sale.customer }}</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">Client Signature</div>
+      </div>
+    </div>
+
+    <div class="contract-stamp" style="margin-top:24px;padding-top:16px;border-top:1px dashed var(--border)">
+      Generated by ALSONDOS ERP &nbsp;·&nbsp; Ref: {{ ref }} &nbsp;·&nbsp; {{ today }}
+    </div>
+
+  </div>{# end contract-body #}
+</div>{# end contract-wrap #}
+{% endblock %}

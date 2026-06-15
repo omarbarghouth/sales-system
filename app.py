@@ -502,7 +502,8 @@ def validate_sale_form(form):
             errors.append('From location is required for flights.')
         if not form.get('to_loc','').strip():
             errors.append('To location is required for flights.')
-    if not form.get('company','').strip():
+    _ctype = form.get('customer_type', 'COMPANY').upper().strip()
+    if _ctype != 'DIRECT' and not form.get('company','').strip():
         errors.append('Company is required.')
     if not form.get('customer','').strip():
         errors.append('Customer name is required.')
@@ -1319,6 +1320,7 @@ def edit_sale(sale_id):
             _old_company = str(_old['company']   if _old else '').upper().strip()
             _old_date    = str(_old['sale_date'] if _old else str(date.today()))
 
+            _ctype_edit = request.form.get('customer_type', 'COMPANY').upper().strip() or 'COMPANY'
             execute_db("""
                 UPDATE sales SET
                     from_loc=%s, to_loc=%s, via=%s, trip_type=%s, buy_from=%s,
@@ -1333,7 +1335,8 @@ def edit_sale(sale_id):
                     tours_json=%s, visa_supplier=%s, visa_type=%s, passport_number=%s, visa_status=%s,
                     insurance_supplier=%s, insurance_type=%s, airline=%s, pnr=%s, baggage=%s,
                     passengers_json=%s, outbound_cost=%s, return_cost=%s,
-                    ticket_number=%s, return_ticket_number=%s, return_pnr=%s
+                    ticket_number=%s, return_ticket_number=%s, return_pnr=%s,
+                    customer_type=%s, direct_phone=%s, direct_nationality=%s, direct_email=%s
                 WHERE id=%s
             """, (
                 (request.form.get('from_loc', '').upper().strip() or '-'),
@@ -1358,6 +1361,10 @@ def edit_sale(sale_id):
                 ev['insurance_supplier'], ev['insurance_type'], ev['airline'], ev['pnr'], ev['baggage'],
                 ev['passengers_json'], ev['outbound_cost'], ev['return_cost'],
                 ev['ticket_number'], ev['return_ticket_number'], ev['return_pnr'],
+                _ctype_edit,
+                request.form.get('direct_phone', '').strip(),
+                request.form.get('direct_nationality', '').strip(),
+                request.form.get('direct_email', '').strip(),
                 sale_id,
             ))
 
@@ -1375,18 +1382,19 @@ def edit_sale(sale_id):
             _svc_label    = ev['service_type']
             _fl           = request.form.get('from_loc', '') or ''
             _tl           = request.form.get('to_loc',   '') or ''
+            _ledger_ent_edit = _new_customer if _ctype_edit == 'DIRECT' else _new_company
             if _orig_entry:
                 execute_db(
                     "UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s",
                     [_orig_entry['id']]
                 )
                 post_ledger(
-                    'SALE_REVERSAL', sale_id, 'sales', _old_company,
+                    'SALE_REVERSAL', sale_id, 'sales', _old_company or _new_customer,
                     f"Reversal of SALE-{sale_id:04d} (edit by {session.get('username','')})",
                     debit=0, credit=_old_sell, entry_date=_old_date
                 )
             post_ledger(
-                'SALE', sale_id, 'sales', _new_company,
+                'SALE', sale_id, 'sales', _ledger_ent_edit,
                 f"{_svc_label} {_fl}{'→'+_tl if _tl else ''} | {_new_customer} (corrected)",
                 debit=sell, credit=0, entry_date=_new_sale_date
             )
@@ -3784,6 +3792,15 @@ def init_extension_db():
         EXCEPTION WHEN duplicate_column THEN NULL; END $$;
     """)
 
+    # ── Direct Customer columns ────────────────────────────────────────────────
+    for _dc_sql in [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_type     TEXT DEFAULT 'COMPANY'",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_phone      TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_nationality TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_email      TEXT DEFAULT ''",
+    ]:
+        cur.execute(f"DO $$ BEGIN {_dc_sql}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
+
     db.commit()
     cur.close()
     db.close()
@@ -4227,6 +4244,10 @@ def add_sale_v2():
         _tkn  = request.form.get('ticket_number','').strip()
         _rtn  = request.form.get('return_ticket_number','').strip()
         _rpnr = request.form.get('return_pnr','').upper().strip()
+        _ctype_v2 = request.form.get('customer_type', 'COMPANY').upper().strip() or 'COMPANY'
+        _dphone   = request.form.get('direct_phone', '').strip()
+        _dnat     = request.form.get('direct_nationality', '').strip()
+        _demail   = request.form.get('direct_email', '').strip()
         new_id = execute_db("""
             INSERT INTO sales
             (from_loc,to_loc,via,trip_type,buy_from,company,tickets,
@@ -4238,7 +4259,8 @@ def add_sale_v2():
              transfer_supplier,transfer_type,transfer_pickup,transfer_vehicle,transfer_net,
              tours_json,visa_supplier,visa_type,passport_number,visa_status,
              insurance_supplier,insurance_type,airline,pnr,baggage,passengers_json,
-             outbound_cost,return_cost,ticket_number,return_ticket_number,return_pnr)
+             outbound_cost,return_cost,ticket_number,return_ticket_number,return_pnr,
+             customer_type,direct_phone,direct_nationality,direct_email)
             VALUES (
                 %s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
@@ -4249,7 +4271,8 @@ def add_sale_v2():
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s
             ) RETURNING id
         """, (
             (request.form.get('from_loc','').upper().strip() or '-'),  # 1  from_loc
@@ -4305,6 +4328,10 @@ def add_sale_v2():
             _tkn,                                                          # 51 ticket_number
             _rtn,                                                          # 52 return_ticket_number
             _rpnr,                                                         # 53 return_pnr
+            _ctype_v2,                                                     # 54 customer_type
+            _dphone,                                                       # 55 direct_phone
+            _dnat,                                                         # 56 direct_nationality
+            _demail,                                                       # 57 direct_email
         ))
         # Assign transaction number
         if new_id:
@@ -4326,7 +4353,8 @@ def add_sale_v2():
             _tl  = request.form.get('to_loc','')   or ''
             _cust= request.form.get('customer','')
             _dt  = request.form.get('sale_date', str(date.today()))
-            post_ledger('SALE', new_id, 'sales', _co,
+            _ledger_entity = _cust.upper().strip() if _ctype_v2 == 'DIRECT' else _co
+            post_ledger('SALE', new_id, 'sales', _ledger_entity,
                         f"{_svc} {_fl}{'→'+_tl if _tl else ''} | {_cust}",
                         debit=sell, credit=0, entry_date=_dt)
             post_sale_items(new_id, _svc,
@@ -4387,6 +4415,7 @@ def my_edit_sale(sale_id):
         _old2_company = str(_old2['company']   if _old2 else '').upper().strip()
         _old2_date    = str(_old2['sale_date'] if _old2 else str(date.today()))
 
+        _ctype_my = request.form.get('customer_type', 'COMPANY').upper().strip() or 'COMPANY'
         execute_db('''
             UPDATE sales SET
                 from_loc=%s,to_loc=%s,via=%s,trip_type=%s,buy_from=%s,
@@ -4400,7 +4429,8 @@ def my_edit_sale(sale_id):
                 transfer_supplier=%s,transfer_type=%s,transfer_pickup=%s,transfer_vehicle=%s,transfer_net=%s,
                 tours_json=%s,visa_supplier=%s,visa_type=%s,passport_number=%s,visa_status=%s,
                 insurance_supplier=%s,insurance_type=%s,airline=%s,pnr=%s,baggage=%s,passengers_json=%s,
-                ticket_number=%s,return_ticket_number=%s,return_pnr=%s
+                ticket_number=%s,return_ticket_number=%s,return_pnr=%s,
+                customer_type=%s,direct_phone=%s,direct_nationality=%s,direct_email=%s
             WHERE id=%s
         ''', (
             request.form.get('from_loc','').upper().strip(),request.form.get('to_loc','').upper().strip(),
@@ -4419,6 +4449,10 @@ def my_edit_sale(sale_id):
             request.form.get('ticket_number','').strip(),
             request.form.get('return_ticket_number','').strip(),
             ev['return_pnr'],
+            _ctype_my,
+            request.form.get('direct_phone','').strip(),
+            request.form.get('direct_nationality','').strip(),
+            request.form.get('direct_email','').strip(),
             sale_id
         ))
 
@@ -4435,18 +4469,19 @@ def my_edit_sale(sale_id):
         _new2_customer = request.form.get('customer', '').upper().strip()
         _fl2 = request.form.get('from_loc','') or ''
         _tl2 = request.form.get('to_loc','')   or ''
+        _ledger_ent_my = _new2_customer if _ctype_my == 'DIRECT' else _new2_company
         if _orig2:
             execute_db(
                 "UPDATE accounting_entries SET is_reversed=TRUE WHERE id=%s",
                 [_orig2['id']]
             )
             post_ledger(
-                'SALE_REVERSAL', sale_id, 'sales', _old2_company,
+                'SALE_REVERSAL', sale_id, 'sales', _old2_company or _new2_customer,
                 f"Reversal of SALE-{sale_id:04d} (edit by {session.get('username','')})",
                 debit=0, credit=_old2_sell, entry_date=_old2_date
             )
         post_ledger(
-            'SALE', sale_id, 'sales', _new2_company,
+            'SALE', sale_id, 'sales', _ledger_ent_my,
             f"{ev['service_type']} {_fl2}{'→'+_tl2 if _tl2 else ''} | {_new2_customer} (corrected)",
             debit=sell, credit=0, entry_date=_new2_date
         )
@@ -6107,6 +6142,29 @@ def balance_adjustments():
         suppliers=suppliers,
         today=str(date.today()),
     )
+
+
+# ── Contract generation ────────────────────────────────────────────────────────
+@app.route('/contract/<int:sale_id>')
+@login_required
+def view_contract(sale_id):
+    sale = query_db('SELECT * FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True)
+    if not sale:
+        flash('Transaction not found.', 'danger')
+        return redirect(url_for('sales_report'))
+    sale = safe_sale(sale)
+    passengers = []
+    try:
+        passengers = json.loads(sale.get('passengers_json') or '[]')
+    except Exception:
+        pass
+    tours = []
+    try:
+        tours = json.loads(sale.get('tours_json') or '[]')
+    except Exception:
+        pass
+    return render_template('contract_view.html', sale=sale, passengers=passengers, tours=tours,
+                           today=str(date.today()))
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
