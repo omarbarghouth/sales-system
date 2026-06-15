@@ -92,7 +92,7 @@
 
               {# Flight section — shown for any type with flight/route data #}
               {% if sale.from_loc or sale.airline or svc in ('FLIGHT','PACKAGE') %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1B3A6B;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8eef8">✈ FLIGHT DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   {% if sale.airline %}<div><span style="color:#94a3b8">Airline:</span> <strong>{{ sale.airline }}</strong></div>{% endif %}
@@ -109,7 +109,7 @@
 
               {# Hotel section — shown when hotel data exists #}
               {% if sale.hotel_name %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8B6914;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fff8e7">🏨 HOTEL DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   <div><span style="color:#94a3b8">Hotel:</span> <strong>{{ sale.hotel_name }}</strong></div>
@@ -124,7 +124,7 @@
               {# Transfer section — show for TRANSFER or PACKAGE, or when transfer data exists #}
               {% if svc in ('TRANSFER','PACKAGE') or sale.transfer_type %}
               {% if sale.transfer_type %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#D97706;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fffbf0">🚗 TRANSFER DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   <div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.transfer_type }}</strong></div>
@@ -138,7 +138,7 @@
 
               {# Tours section — show when tour data exists #}
               {% if tours %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">🗺 TOURS</div>
                 <table style="width:100%;font-size:12px;border:none;background:transparent">
                   <thead><tr style="background:#f5f3ff">
@@ -159,7 +159,7 @@
 
               {# Visa section — show for VISA type #}
               {% if svc == 'VISA' and (sale.visa_type or sale.passport_number) %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">📋 VISA DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   {% if sale.visa_type %}<div><span style="color:#94a3b8">Visa Type:</span> <strong>{{ sale.visa_type }}</strong></div>{% endif %}
@@ -172,7 +172,7 @@
 
               {# Insurance section — show for INSURANCE type #}
               {% if svc == 'INSURANCE' and sale.insurance_type %}
-              <div style="margin-bottom:12px">
+              <div class="svc-section" style="margin-bottom:12px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">🛡 INSURANCE DETAILS</div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
                   {% if sale.insurance_type %}<div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.insurance_type }}</strong></div>{% endif %}
@@ -184,7 +184,7 @@
 
               {# Passengers section #}
               {% if passengers %}
-              <div style="margin-bottom:4px">
+              <div class="svc-section" style="margin-bottom:4px">
                 <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">👥 PASSENGERS</div>
                 <table style="width:100%;font-size:12px;background:transparent;border:none">
                   <thead><tr>
@@ -229,7 +229,7 @@
     </table>
 
     {# ── TOTALS ─────────────────────────────────────────────────── #}
-    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+    <div class="totals-block" style="display:flex;justify-content:flex-end;margin-top:16px">
       <div style="min-width:270px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
         <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
           <span style="color:#64748b">Subtotal</span>
@@ -249,19 +249,19 @@
     </div>
 
     {% if inv.notes %}
-    <div style="margin-top:16px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1B3A6B;border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;color:#374151">
+    <div class="inv-notes" style="margin-top:16px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1B3A6B;border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;color:#374151">
       <strong style="color:#0f1d35">Notes:</strong> {{ inv.notes }}
     </div>
     {% endif %}
   </div>
 
   {# ── SIGNATURES ──────────────────────────────────────────────── #}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:20px 36px;border-top:1px solid #e2e8f0">
+  <div class="inv-signatures" style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:20px 36px;border-top:1px solid #e2e8f0">
     <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Authorized Signature — Alsondos Travel &amp; Tourism</div></div>
     <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature &amp; Stamp &nbsp;·&nbsp; Date: _______________</div></div>
   </div>
 
-  <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:11px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
+  <div class="inv-footer" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:11px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
     Alsondos Travel &amp; Tourism &nbsp;·&nbsp; Amman, Jordan &nbsp;·&nbsp; This invoice is computer-generated<br>
     Please retain a copy for your records &nbsp;·&nbsp; Payment due as specified above
   </div>
@@ -269,6 +269,51 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+@media print {
+  @page { size: A4; margin: 10mm 12mm; }
+  body, html { margin: 0; padding: 0; }
+  .no-print { display: none !important; }
+  .doc-print-wrap { box-shadow: none !important; border: none !important; }
+
+  /* Header: tighter */
+  .doc-print-wrap > div:first-child { padding: 14px 24px 12px !important; }
+  .doc-print-wrap > div:first-child img { height: 52px !important; margin-bottom: 5px !important; }
+
+  /* Billed-to / Invoice Details grid */
+  .doc-print-wrap > div:nth-child(2) > div { padding: 10px 24px !important; }
+
+  /* Main content wrapper */
+  .doc-print-wrap > div:nth-child(3) { padding: 12px 24px !important; }
+
+  /* Service table cells */
+  .doc-print-wrap td { padding: 10px 12px !important; }
+
+  /* Each service detail section: compact + no page break inside */
+  .svc-section {
+    margin-bottom: 7px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Totals block */
+  .totals-block {
+    margin-top: 8px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .totals-block > div { padding: 7px 14px !important; }
+
+  /* Notes */
+  .inv-notes { margin-top: 8px !important; padding: 7px 10px !important; page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* Signatures */
+  .inv-signatures { padding: 12px 24px !important; gap: 32px !important; }
+
+  /* Footer */
+  .inv-footer { padding: 7px 24px !important; }
+}
+</style>
 <script>
 (function(){
   var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
