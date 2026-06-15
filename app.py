@@ -6403,7 +6403,13 @@ def _inject_hr_globals():
             )
             count = (row or {}).get('c', 0)
         except Exception:
-            pass
+            # Must rollback — psycopg2 leaves the shared request connection in
+            # ABORTED state after any failed query, which would break all
+            # subsequent queries in this request.
+            try:
+                get_db().rollback()
+            except Exception:
+                pass
     return {'hr_unread_count': count}
 
 
