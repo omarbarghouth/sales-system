@@ -35,44 +35,111 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
 {% set grand = total_out + total_ret + total_old %}
 
 {% set qparts = [] %}
-{% if filters.travel_date %}{% set _ = qparts.append('travel_date=' ~ filters.travel_date) %}{% endif %}
-{% if filters.company %}{% set _ = qparts.append('company=' ~ filters.company) %}{% endif %}
-{% if filters.supplier %}{% set _ = qparts.append('supplier=' ~ filters.supplier) %}{% endif %}
+{% if filters.view_date %}{% set _ = qparts.append('view_date=' ~ filters.view_date) %}{% endif %}
+{% if filters.date_from %}{% set _ = qparts.append('date_from=' ~ filters.date_from) %}{% endif %}
+{% if filters.date_to   %}{% set _ = qparts.append('date_to='   ~ filters.date_to)   %}{% endif %}
+{% if filters.company   %}{% set _ = qparts.append('company='   ~ filters.company)   %}{% endif %}
+{% if filters.supplier  %}{% set _ = qparts.append('supplier='  ~ filters.supplier)  %}{% endif %}
 {% if filters.passenger %}{% set _ = qparts.append('passenger=' ~ filters.passenger) %}{% endif %}
-{% if filters.status %}{% set _ = qparts.append('status=' ~ filters.status) %}{% endif %}
-{% if filters.agent_id %}{% set _ = qparts.append('agent_id=' ~ filters.agent_id) %}{% endif %}
+{% if filters.status    %}{% set _ = qparts.append('status='    ~ filters.status)    %}{% endif %}
+{% if filters.agent_id  %}{% set _ = qparts.append('agent_id='  ~ filters.agent_id)  %}{% endif %}
 {% set filter_qs = qparts | join('&') %}
 
 <div class="page-header">
   <div class="page-header-left">
     <h1><i class="fas fa-satellite-dish" style="color:var(--red)"></i> Operations Control</h1>
-    <p>Delivery dashboard for <strong>{{ tomorrow }}</strong> &mdash; {{ grand }} ticket{{ 's' if grand != 1 else '' }}</p>
+    <p>Delivery dashboard for <strong>{{ tomorrow }}</strong>
+      {% if filters.company %}&nbsp;·&nbsp; <span style="color:var(--navy);font-weight:700">{{ filters.company }}</span>{% endif %}
+      {% if filters.date_from or filters.date_to %}&nbsp;·&nbsp; <span style="color:var(--gold)">{{ filters.date_from or '…' }} → {{ filters.date_to or '…' }}</span>{% endif %}
+      &mdash; {{ grand }} ticket{{ 's' if grand != 1 else '' }}
+    </p>
   </div>
   <div class="page-header-actions no-print">
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
-    <a href="{{ url_for('deliver_tomorrow_export', view_date=filters.view_date or tomorrow_date,
-        travel_date=filters.travel_date, company=filters.company, supplier=filters.supplier,
-        passenger=filters.passenger, status=filters.status, agent_id=filters.agent_id) }}"
+    <a href="{{ url_for('deliver_tomorrow_export',
+                view_date=filters.view_date or tomorrow_date,
+                date_from=filters.date_from, date_to=filters.date_to,
+                company=filters.company, supplier=filters.supplier,
+                passenger=filters.passenger, status=filters.status,
+                agent_id=filters.agent_id) }}"
        class="btn" style="background:#217346;color:#fff;font-weight:700">
       <i class="fas fa-file-excel"></i> Export Excel
     </a>
+    {# Email Team — sends current filtered view with Excel attachment #}
     <form method="POST" action="{{ url_for('send_deliver_email') }}" style="display:inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary"><i class="fas fa-envelope"></i> Email Team</button>
+      <input type="hidden" name="csrf_token"  value="{{ csrf_token() }}">
+      <input type="hidden" name="view_date"   value="{{ filters.view_date or tomorrow_date }}">
+      <input type="hidden" name="date_from"   value="{{ filters.date_from }}">
+      <input type="hidden" name="date_to"     value="{{ filters.date_to }}">
+      <input type="hidden" name="company"     value="{{ filters.company }}">
+      <input type="hidden" name="supplier"    value="{{ filters.supplier }}">
+      <input type="hidden" name="passenger"   value="{{ filters.passenger }}">
+      <input type="hidden" name="status"      value="{{ filters.status }}">
+      <input type="hidden" name="agent_id"    value="{{ filters.agent_id }}">
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-envelope"></i> Email Team
+      </button>
     </form>
   </div>
 </div>
 
-<form method="GET" action="{{ url_for('deliver_tomorrow') }}" class="filter-bar no-print" style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-  <div style="display:flex;align-items:center;gap:8px">
-    <label style="font-weight:700;font-size:13px;color:var(--navy)"><i class="fas fa-calendar-alt"></i> View Date:</label>
+{# ── Filter bar ─────────────────────────────────────────────────────────────── #}
+<form method="GET" action="{{ url_for('deliver_tomorrow') }}"
+      class="filter-bar no-print"
+      style="margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+
+  <div class="form-group" style="min-width:120px">
+    <label><i class="fas fa-calendar-alt"></i> View Date</label>
     <input type="date" name="view_date" value="{{ filters.view_date or tomorrow_date }}"
-           style="padding:7px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-weight:600">
+           style="padding:7px 10px;border:2px solid var(--border);border-radius:8px;
+                  font-size:13px;font-weight:600;width:100%">
   </div>
-  <button type="submit" class="btn btn-primary" style="padding:7px 18px"><i class="fas fa-search"></i> Go</button>
-  {% if filters.view_date and filters.view_date != tomorrow_date %}
-  <a href="{{ url_for('deliver_tomorrow') }}" class="btn" style="padding:7px 18px;background:#e2e8f0;color:#1e293b"><i class="fas fa-undo"></i> Back to Tomorrow</a>
-  {% endif %}
+
+  <div class="form-group" style="min-width:115px">
+    <label>Date From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from }}"
+           style="padding:7px 10px;border:2px solid var(--border);border-radius:8px;
+                  font-size:13px;width:100%">
+  </div>
+
+  <div class="form-group" style="min-width:115px">
+    <label>Date To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to }}"
+           style="padding:7px 10px;border:2px solid var(--border);border-radius:8px;
+                  font-size:13px;width:100%">
+  </div>
+
+  <div class="form-group" style="flex:2;min-width:140px">
+    <label>Company</label>
+    <select name="company">
+      <option value="">All Companies</option>
+      {% for co in companies %}
+      <option value="{{ co }}" {% if filters.company == co %}selected{% endif %}>{{ co }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group" style="min-width:110px">
+    <label>Status</label>
+    <select name="status">
+      <option value="">All</option>
+      <option value="PENDING" {% if filters.status=='PENDING' %}selected{% endif %}>Pending</option>
+      <option value="DONE"    {% if filters.status=='DONE'    %}selected{% endif %}>Done</option>
+    </select>
+  </div>
+
+  <div style="display:flex;gap:6px;align-self:flex-end">
+    <button type="submit" class="btn btn-primary" style="padding:7px 16px">
+      <i class="fas fa-search"></i> Apply
+    </button>
+    {% if filters.company or filters.date_from or filters.date_to or filters.status
+          or (filters.view_date and filters.view_date != tomorrow_date) %}
+    <a href="{{ url_for('deliver_tomorrow') }}" class="btn"
+       style="padding:7px 14px;background:#e2e8f0;color:#1e293b" title="Clear all filters">
+      <i class="fas fa-times"></i> Clear
+    </a>
+    {% endif %}
+  </div>
 </form>
 
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px">
