@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if employee else 'Add' }} Employee — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+{% set editing = employee is not none %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-{{ 'user-edit' if editing else 'user-plus' }}" style="color:var(--navy)"></i>
+      {{ 'Edit Employee' if editing else 'New Employee' }}
+    </h1>
+    <p>{{ employee.employee_id ~ ' — ' ~ employee.full_name if editing else 'Fill in all required fields below' }}</p>
+  </div>
+  <div class="page-header-actions">
+    {% if editing %}
+    <a href="{{ url_for('hr_employee_profile', emp_id=employee.id) }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back to Profile</a>
+    {% else %}
+    <a href="{{ url_for('hr_employees') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+    {% endif %}
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data"
+      action="{{ url_for('hr_edit_employee', emp_id=employee.id) if editing else url_for('hr_add_employee') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+
+    {# ── LEFT: Main Fields ── #}
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      {# Personal Info #}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-id-card" style="color:var(--navy)"></i>
+          <strong style="color:var(--navy);font-size:13px">Personal Information</strong>
+        </div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label required">Full Name</label>
+            <input type="text" name="full_name" class="form-control" required
+                   value="{{ employee.full_name if editing else '' }}" placeholder="e.g. Ahmad Al-Rashidi">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date of Birth</label>
+            <input type="date" name="date_of_birth" class="form-control"
+                   value="{{ employee.date_of_birth if editing else '' }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">National ID / Passport No.</label>
+            <input type="text" name="national_id" class="form-control"
+                   value="{{ employee.national_id if editing else '' }}" placeholder="ID or Passport number">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Address</label>
+            <input type="text" name="address" class="form-control"
+                   value="{{ employee.address if editing else '' }}" placeholder="City, Country">
+          </div>
+        </div>
+      </div>
+
+      {# Job Info #}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-briefcase" style="color:var(--navy)"></i>
+          <strong style="color:var(--navy);font-size:13px">Job Information</strong>
+        </div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group">
+            <label class="form-label required">Department</label>
+            <select name="department" class="form-control" required>
+              {% for d in ['Management','Operations','Sales','Finance','HR/Admin'] %}
+              <option value="{{ d }}" {% if editing and employee.department==d %}selected{% elif not editing and d=='Sales' %}selected{% endif %}>{{ d }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label required">Position</label>
+            <input type="text" name="position" class="form-control" required list="positions-list"
+                   value="{{ employee.position if editing else '' }}" placeholder="e.g. Sales Executive">
+            <datalist id="positions-list">
+              {% for p in ['General Manager','Operation Manager','Sales Executive','Finance Manager','HR Manager','Accountant','Receptionist'] %}
+              <option value="{{ p }}">
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Join Date</label>
+            <input type="date" name="join_date" class="form-control"
+                   value="{{ employee.join_date if editing else today }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Employment Status</label>
+            <select name="employment_status" class="form-control">
+              <option value="Active"   {% if not editing or employee.employment_status=='Active'   %}selected{% endif %}>Active</option>
+              <option value="Inactive" {% if editing and employee.employment_status=='Inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reports To (Manager)</label>
+            <select name="manager_id" class="form-control">
+              <option value="">— None —</option>
+              {% for m in managers %}
+              <option value="{{ m.id }}" {% if editing and employee.manager_id==m.id %}selected{% endif %}>
+                {{ m.full_name }} ({{ m.position }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Linked System User</label>
+            <select name="user_id" class="form-control">
+              <option value="">— No linked account —</option>
+              {% for u in users_list %}
+              <option value="{{ u.id }}" {% if editing and employee.user_id==u.id %}selected{% endif %}>
+                {{ u.full_name or u.username }} ({{ u.username }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {# Contact #}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-address-book" style="color:var(--navy)"></i>
+          <strong style="color:var(--navy);font-size:13px">Contact Details</strong>
+        </div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ employee.email if editing else '' }}" placeholder="work@alsondostravel.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="tel" name="phone" class="form-control"
+                   value="{{ employee.phone if editing else '' }}" placeholder="+962 7X XXX XXXX">
+          </div>
+        </div>
+      </div>
+
+      {# Notes #}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-sticky-note" style="color:var(--navy)"></i>
+          <strong style="color:var(--navy);font-size:13px">Notes</strong>
+        </div>
+        <div style="padding:20px">
+          <textarea name="notes" class="form-control" rows="3"
+                    placeholder="Additional notes about this employee…">{{ employee.notes if editing else '' }}</textarea>
+        </div>
+      </div>
+
+    </div>
+
+    {# ── RIGHT: Photo + Actions ── #}
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      {# Photo Upload #}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-camera" style="color:var(--navy)"></i>
+          <strong style="color:var(--navy);font-size:13px">Profile Photo</strong>
+        </div>
+        <div style="padding:20px;text-align:center">
+          <div id="photoPreview" style="width:100px;height:100px;border-radius:50%;margin:0 auto 14px;overflow:hidden;border:3px solid var(--border);background:#f1f5f9;display:flex;align-items:center;justify-content:center">
+            {% if editing and employee.photo_path %}
+              <img src="{{ url_for('static', filename=employee.photo_path) }}" id="previewImg"
+                   style="width:100%;height:100%;object-fit:cover">
+            {% else %}
+              <i class="fas fa-user" id="photoIcon" style="font-size:36px;color:#94a3b8"></i>
+              <img id="previewImg" style="display:none;width:100%;height:100%;object-fit:cover">
+            {% endif %}
+          </div>
+          <label for="photoInput" class="btn btn-outline" style="cursor:pointer;font-size:12px;display:inline-block">
+            <i class="fas fa-upload"></i> Choose Photo
+          </label>
+          <input type="file" name="photo" id="photoInput" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">JPG, PNG, GIF · Max 5MB</div>
+        </div>
+      </div>
+
+      {# Summary Card (edit only) #}
+      {% if editing %}
+      <div class="card" style="padding:16px 20px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Employee Summary</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--muted)">Employee ID</span>
+            <strong style="font-family:monospace;color:var(--navy)">{{ employee.employee_id }}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--muted)">Added by</span>
+            <strong>{{ employee.created_by or '—' }}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:var(--muted)">Added on</span>
+            <strong>{{ employee.created_at[:10] if employee.created_at else '—' }}</strong>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Actions #}
+      <div class="card" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:10px">
+          <i class="fas fa-{{ 'save' if editing else 'user-plus' }}"></i>
+          {{ 'Save Changes' if editing else 'Create Employee' }}
+        </button>
+        {% if editing %}
+        <a href="{{ url_for('hr_employee_profile', emp_id=employee.id) }}" class="btn btn-outline" style="width:100%;padding:10px;text-align:center">
+          Cancel
+        </a>
+        {% endif %}
+      </div>
+
+      {% if editing and session.get('user_role') == 'admin' %}
+      <div class="card" style="padding:16px 20px;border:1px solid #fee2e2">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#991b1b;margin-bottom:10px">Danger Zone</div>
+        <form method="post" action="{{ url_for('hr_delete_employee', emp_id=employee.id) }}"
+              onsubmit="return confirm('Remove {{ employee.full_name }}? This cannot be undone.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger" style="width:100%;font-size:12px">
+            <i class="fas fa-user-times"></i> Remove Employee
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function previewPhoto(input) {
+  if (input.files && input.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img  = document.getElementById('previewImg');
+      var icon = document.getElementById('photoIcon');
+      img.src  = e.target.result;
+      img.style.display = 'block';
+      if (icon) icon.style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+</script>
+{% endblock %}

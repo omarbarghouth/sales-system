@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}Attendance — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-clock" style="color:var(--navy)"></i> Attendance</h1>
+    <p>{{ total }} record{{ 's' if total != 1 else '' }} · {{ q_date or 'All dates' }}</p>
+  </div>
+  <div class="page-header-actions">
+    <button onclick="document.getElementById('addModal').style.display='flex'" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Add Record
+    </button>
+    <a href="{{ url_for('hr_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> HR Dashboard</a>
+  </div>
+</div>
+
+{# ── Filters ── #}
+<div class="card" style="padding:14px 20px;margin-bottom:18px">
+  <form method="get" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div style="min-width:170px">
+      <label class="form-label">Date</label>
+      <input type="date" name="date" value="{{ q_date }}" class="form-control">
+    </div>
+    <div style="flex:1;min-width:180px">
+      <label class="form-label">Employee</label>
+      <input type="text" name="emp" value="{{ q_emp }}" class="form-control" placeholder="Search by name…">
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+    <a href="{{ url_for('hr_attendance') }}" class="btn btn-outline">Today</a>
+  </form>
+</div>
+
+{# ── Quick date nav ── #}
+<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+  {% set today_val = today if today is defined else '' %}
+  {% for label, offset in [('Yesterday', -1), ('Today', 0)] %}
+  {% set d = (today_val|string) %}
+  <a href="{{ url_for('hr_attendance', date=today_val) if offset==0 else url_for('hr_attendance') }}"
+     class="btn btn-outline" style="font-size:12px;padding:5px 14px">
+    <i class="fas fa-calendar-day"></i> {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+{% if records %}
+{# ── Summary bar ── #}
+{% set present = records|selectattr('check_in')|list|length %}
+{% set late_count = records|selectattr('late_minutes', 'gt', 0)|list|length %}
+{% set avg_hours = (records|sum(attribute='hours_worked') / records|length)|round(1) if records else 0 %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
+  {% for val, label, color, bg in [
+    (records|length, 'Records', '#1B3A6B', '#eef4ff'),
+    (present, 'Checked In', '#065f46', '#d1fae5'),
+    (late_count, 'Late Arrivals', '#92400e', '#fef3c7'),
+    (avg_hours, 'Avg Hours', '#6D28D9', '#f5f3ff')
+  ] %}
+  <div style="background:{{ bg }};border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:24px;font-weight:800;color:{{ color }}">{{ val }}</div>
+    <div style="font-size:11px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.6px">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Department</th>
+        <th>Date</th>
+        <th>Check In</th>
+        <th>Check Out</th>
+        <th>Hours</th>
+        <th>Late</th>
+        <th>Notes</th>
+        <th style="width:80px">Edit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in records %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:9px">
+            {% if a.photo_path %}
+              <img src="{{ url_for('static', filename=a.photo_path) }}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0">
+            {% else %}
+              <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:800;color:#fff">
+                {{ a.full_name[0]|upper }}
+              </div>
+            {% endif %}
+            <div>
+              <div style="font-weight:600;font-size:13px">{{ a.full_name }}</div>
+              <div style="font-size:11px;color:var(--muted)">{{ a.position }}</div>
+            </div>
+          </div>
+        </td>
+        <td><span style="background:#f1f5f9;padding:2px 8px;border-radius:20px;font-size:11px;color:#475569;font-weight:600">{{ a.department }}</span></td>
+        <td style="font-weight:600;white-space:nowrap;font-size:13px">{{ a.att_date }}</td>
+        <td>
+          {% if a.check_in %}
+          <span style="font-family:monospace;font-weight:700;color:#1E7B34;font-size:13px">{{ a.check_in }}</span>
+          {% else %}
+          <span style="color:var(--muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if a.check_out %}
+          <span style="font-family:monospace;font-weight:700;color:#1B3A6B;font-size:13px">{{ a.check_out }}</span>
+          {% else %}
+          <span style="color:var(--muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if a.hours_worked > 0 %}
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-weight:800;font-size:14px;color:{% if a.hours_worked >= 8 %}#1E7B34{% elif a.hours_worked >= 6 %}#D97706{% else %}#dc2626{% endif %}">
+              {{ "%.1f"|format(a.hours_worked) }}
+            </span>
+            <span style="font-size:11px;color:var(--muted)">hrs</span>
+          </div>
+          {% else %}
+          <span style="color:var(--muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if a.late_minutes > 0 %}
+          <span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700">
+            +{{ a.late_minutes }}m
+          </span>
+          {% else %}
+          <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700">On time</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.notes or '—' }}</td>
+        <td>
+          <button onclick="editRecord({{ a.employee_id }}, '{{ a.att_date }}', '{{ a.check_in }}', '{{ a.check_out }}', {{ a.late_minutes }}, '{{ a.notes|replace("'","\\'") }}')"
+                  class="btn btn-edit" style="padding:4px 10px;font-size:11px">
+            <i class="fas fa-pen"></i>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:20px;flex-wrap:wrap">
+  {% for p in range(1, total_pages+1) %}
+  <a href="?page={{ p }}&date={{ q_date }}&emp={{ q_emp }}"
+     style="padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;{% if p==page %}background:var(--navy);color:#fff{% else %}background:#fff;color:var(--navy);border:1px solid var(--border){% endif %}">
+    {{ p }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <i class="fas fa-clock" style="font-size:48px;color:#e2e8f0;margin-bottom:16px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--muted);margin-bottom:8px">No attendance records found</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:16px">{{ 'No records for ' ~ q_date if q_date else 'Use filters above or add the first record.' }}</div>
+  <button onclick="document.getElementById('addModal').style.display='flex'" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Add Record
+  </button>
+</div>
+{% endif %}
+
+{# ── Add / Edit Modal ── #}
+<div id="addModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;width:520px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.22);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0d1e3f,#1B3A6B);padding:18px 24px;display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;align-items:center;gap:10px">
+        <i class="fas fa-clock" style="color:#C8A84B;font-size:18px"></i>
+        <span style="font-size:15px;font-weight:700;color:#fff" id="modalTitle">Add Attendance</span>
+      </div>
+      <button onclick="closeModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>
+    </div>
+    <form method="post" action="{{ url_for('hr_save_attendance') }}" style="padding:22px 24px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label required">Employee</label>
+          <select name="employee_id" id="modalEmpId" class="form-control" required>
+            <option value="">— Select employee —</option>
+            {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.full_name }} ({{ e.position }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label required">Date</label>
+          <input type="date" name="att_date" id="modalDate" class="form-control" required
+                 value="{{ q_date or '' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Check In</label>
+          <input type="time" name="check_in" id="modalCheckIn" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Check Out</label>
+          <input type="time" name="check_out" id="modalCheckOut" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Late Minutes</label>
+          <input type="number" name="late_minutes" id="modalLate" class="form-control" value="0" min="0" max="480">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" name="notes" id="modalNotes" class="form-control" placeholder="Optional…">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button type="submit" class="btn btn-primary" style="flex:1;padding:10px">
+          <i class="fas fa-save"></i> Save Record
+        </button>
+        <button type="button" onclick="closeModal()" class="btn btn-outline" style="flex:1;padding:10px">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function closeModal() {
+  document.getElementById('addModal').style.display = 'none';
+}
+function editRecord(empId, date, checkIn, checkOut, late, notes) {
+  document.getElementById('modalEmpId').value   = empId;
+  document.getElementById('modalDate').value    = date;
+  document.getElementById('modalCheckIn').value = checkIn;
+  document.getElementById('modalCheckOut').value= checkOut;
+  document.getElementById('modalLate').value    = late;
+  document.getElementById('modalNotes').value   = notes;
+  document.getElementById('modalTitle').textContent = 'Edit Attendance';
+  document.getElementById('addModal').style.display = 'flex';
+}
+document.getElementById('addModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+// Auto-calc hours on time change
+['modalCheckIn','modalCheckOut'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', function() {
+    var ci = document.getElementById('modalCheckIn').value;
+    var co = document.getElementById('modalCheckOut').value;
+    if (ci && co) {
+      var diff = (new Date('2000-01-01T'+co) - new Date('2000-01-01T'+ci)) / 3600000;
+      if (diff > 0 && diff < 24) {
+        // show computed hours hint
+        document.getElementById('modalCheckOut').title = diff.toFixed(1) + ' hours';
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

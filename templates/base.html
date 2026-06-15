@@ -146,10 +146,28 @@
       <i class="fas fa-satellite-dish"></i> Deliver Tomorrow
     </a>
 
+    <div class="sb-section">HR Module</div>
+    <a href="{{ url_for('hr_dashboard') }}"
+       class="sb-link {% if request.endpoint=='hr_dashboard' %}active{% endif %}">
+      <i class="fas fa-users-cog"></i> HR Dashboard
+    </a>
+    <a href="{{ url_for('hr_employees') }}"
+       class="sb-link {% if request.endpoint in ('hr_employees','hr_add_employee','hr_edit_employee','hr_employee_profile') %}active{% endif %}">
+      <i class="fas fa-id-badge"></i> Employees
+    </a>
+    <a href="{{ url_for('hr_leave') }}"
+       class="sb-link {% if request.endpoint in ('hr_leave',) %}active{% endif %}">
+      <i class="fas fa-calendar-alt"></i> Leave
+    </a>
+    <a href="{{ url_for('hr_attendance') }}"
+       class="sb-link {% if request.endpoint=='hr_attendance' %}active{% endif %}">
+      <i class="fas fa-clock"></i> Attendance
+    </a>
+
     <div class="sb-section">Management</div>
     <a href="{{ url_for('admin_employees') }}"
-       class="sb-link {% if 'employee' in (request.endpoint or '') %}active{% endif %}">
-      <i class="fas fa-users-cog"></i> Staff & Commission
+       class="sb-link {% if 'employee' in (request.endpoint or '') and 'hr_' not in (request.endpoint or '') %}active{% endif %}">
+      <i class="fas fa-chart-line"></i> Staff & Commission
     </a>
     <a href="{{ url_for('manage_users') }}"
        class="sb-link {% if request.endpoint in ('manage_users','add_user','change_password','admin_reset_pw') %}active{% endif %}">

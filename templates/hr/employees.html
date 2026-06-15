@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Employees — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-users" style="color:var(--navy)"></i> Employees</h1>
+    <p>{{ total }} employee{{ 's' if total != 1 else '' }} found</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_add_employee') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Employee</a>
+    <a href="{{ url_for('hr_dashboard') }}"    class="btn btn-outline"><i class="fas fa-tachometer-alt"></i> HR Dashboard</a>
+  </div>
+</div>
+
+{# ── Filters ── #}
+<div class="card" style="padding:14px 20px;margin-bottom:18px">
+  <form method="get" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <label class="form-label">Search</label>
+      <input type="text" name="q" value="{{ q_search }}" class="form-control" placeholder="Name, ID, or email…">
+    </div>
+    <div style="min-width:160px">
+      <label class="form-label">Department</label>
+      <select name="dept" class="form-control">
+        <option value="">All Departments</option>
+        {% for d in ['Management','Operations','Sales','Finance','HR/Admin'] %}
+        <option value="{{ d }}" {% if q_dept==d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="min-width:140px">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-control">
+        <option value="">All</option>
+        <option value="Active"   {% if q_status=='Active'   %}selected{% endif %}>Active</option>
+        <option value="Inactive" {% if q_status=='Inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+    <a href="{{ url_for('hr_employees') }}" class="btn btn-outline">Clear</a>
+  </form>
+</div>
+
+{# ── Employee Grid ── #}
+{% if employees %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+  {% for emp in employees %}
+  <div class="card" style="padding:0;overflow:hidden;transition:box-shadow .2s" onmouseover="this.style.boxShadow='0 8px 30px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+    {# Status bar #}
+    <div style="height:4px;background:{% if emp.employment_status=='Active' %}linear-gradient(90deg,#1E7B34,#27ae60){% else %}#94a3b8{% endif %}"></div>
+    <div style="padding:20px">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        {# Avatar #}
+        {% if emp.photo_path %}
+          <img src="{{ url_for('static', filename=emp.photo_path) }}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid var(--border);flex-shrink:0">
+        {% else %}
+          <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;font-weight:800;color:#fff">
+            {{ emp.full_name[0]|upper if emp.full_name else '?' }}
+          </div>
+        {% endif %}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ emp.full_name }}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">{{ emp.position or '—' }}</div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <span style="background:#eef4ff;color:#1B3A6B;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600">{{ emp.department }}</span>
+            <span style="background:{% if emp.employment_status=='Active' %}#d1fae5;color:#065f46{% else %}#f1f5f9;color:#64748b{% endif %};padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600">{{ emp.employment_status }}</span>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);white-space:nowrap;font-weight:700">{{ emp.employee_id }}</div>
+      </div>
+
+      <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        {% if emp.email %}
+        <div style="display:flex;align-items:center;gap:5px;color:var(--muted)"><i class="fas fa-envelope" style="width:12px;color:#94a3b8"></i> {{ emp.email }}</div>
+        {% endif %}
+        {% if emp.phone %}
+        <div style="display:flex;align-items:center;gap:5px;color:var(--muted)"><i class="fas fa-phone" style="width:12px;color:#94a3b8"></i> {{ emp.phone }}</div>
+        {% endif %}
+        {% if emp.join_date %}
+        <div style="display:flex;align-items:center;gap:5px;color:var(--muted)"><i class="fas fa-calendar" style="width:12px;color:#94a3b8"></i> Joined {{ emp.join_date }}</div>
+        {% endif %}
+        {% if emp.manager_name %}
+        <div style="display:flex;align-items:center;gap:5px;color:var(--muted)"><i class="fas fa-user-tie" style="width:12px;color:#94a3b8"></i> {{ emp.manager_name }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding:10px 16px;display:flex;gap:8px;background:#fafbfc">
+      <a href="{{ url_for('hr_employee_profile', emp_id=emp.id) }}" class="btn" style="flex:1;text-align:center;padding:6px 0;font-size:12px;background:var(--navy);color:#fff"><i class="fas fa-eye"></i> Profile</a>
+      <a href="{{ url_for('hr_edit_employee', emp_id=emp.id) }}" class="btn btn-edit" style="padding:6px 14px;font-size:12px"><i class="fas fa-pen"></i></a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:24px;flex-wrap:wrap">
+  {% for p in range(1, total_pages+1) %}
+  <a href="?page={{ p }}&q={{ q_search }}&dept={{ q_dept }}&status={{ q_status }}"
+     style="padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;{% if p==page %}background:var(--navy);color:#fff{% else %}background:#fff;color:var(--navy);border:1px solid var(--border){% endif %}">
+    {{ p }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <i class="fas fa-users" style="font-size:48px;color:#e2e8f0;margin-bottom:16px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--muted);margin-bottom:8px">No employees found</div>
+  <a href="{{ url_for('hr_add_employee') }}" class="btn btn-primary" style="margin-top:8px">
+    <i class="fas fa-user-plus"></i> Add First Employee
+  </a>
+</div>
+{% endif %}
+{% endblock %}

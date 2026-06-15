@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Leave Management — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-calendar-alt" style="color:var(--navy)"></i> Leave Management</h1>
+    <p>{{ total }} request{{ 's' if total != 1 else '' }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_dashboard') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> HR Dashboard</a>
+  </div>
+</div>
+
+{# ── Filters ── #}
+<div class="card" style="padding:14px 20px;margin-bottom:18px">
+  <form method="get" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:1;min-width:180px">
+      <label class="form-label">Employee</label>
+      <input type="text" name="emp" value="{{ q_emp }}" class="form-control" placeholder="Search by name…">
+    </div>
+    <div style="min-width:150px">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-control">
+        <option value="">All Statuses</option>
+        {% for s in ['Pending','Approved','Rejected'] %}
+        <option value="{{ s }}" {% if q_status==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="min-width:160px">
+      <label class="form-label">Leave Type</label>
+      <select name="type" class="form-control">
+        <option value="">All Types</option>
+        {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
+        <option value="{{ lt }}" {% if q_type==lt %}selected{% endif %}>{{ lt }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+    <a href="{{ url_for('hr_leave') }}" class="btn btn-outline">Clear</a>
+  </form>
+</div>
+
+{# ── Status summary pills ── #}
+<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+  {% for s, color, bg in [('Pending','#92400e','#fef3c7'),('Approved','#065f46','#d1fae5'),('Rejected','#991b1b','#fee2e2')] %}
+  <a href="{{ url_for('hr_leave', status=s) }}"
+     style="padding:6px 16px;border-radius:20px;font-size:12.5px;font-weight:700;text-decoration:none;background:{{ bg }};color:{{ color }};border:1px solid transparent;transition:opacity .15s"
+     onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+    {{ s }}
+  </a>
+  {% endfor %}
+</div>
+
+{% if leaves %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Leave Type</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Days</th>
+        <th>Reason</th>
+        <th>Status</th>
+        <th>Approved By</th>
+        <th style="width:110px">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lr in leaves %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            {% if lr.photo_path %}
+              <img src="{{ url_for('static', filename=lr.photo_path) }}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">
+            {% else %}
+              <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#fff">
+                {{ lr.full_name[0]|upper }}
+              </div>
+            {% endif %}
+            <div>
+              <div style="font-weight:600;font-size:13px">{{ lr.full_name }}</div>
+              <div style="font-size:11px;color:var(--muted)">{{ lr.position }}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          {% set lt_colors = {'Annual Leave': '#1B3A6B,#eef4ff', 'Sick Leave': '#1E7B34,#f0fdf4', 'Unpaid Leave': '#64748b,#f1f5f9', 'Emergency Leave': '#dc2626,#fee2e2'} %}
+          {% set lc = lt_colors.get(lr.leave_type, '#64748b,#f1f5f9').split(',') %}
+          <span style="background:{{ lc[1] }};color:{{ lc[0] }};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap">
+            {{ lr.leave_type }}
+          </span>
+        </td>
+        <td style="white-space:nowrap;font-size:13px">{{ lr.start_date }}</td>
+        <td style="white-space:nowrap;font-size:13px">{{ lr.end_date }}</td>
+        <td style="text-align:center">
+          <span style="font-weight:800;font-size:15px;color:var(--navy)">{{ lr.days }}</span>
+        </td>
+        <td style="font-size:12px;color:var(--muted);max-width:160px">
+          <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ lr.reason or '—' }}</span>
+          {% if lr.rejection_reason %}
+          <span style="color:#dc2626;font-size:11px"><i class="fas fa-times-circle"></i> {{ lr.rejection_reason }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <span style="padding:3px 12px;border-radius:20px;font-size:11.5px;font-weight:700;
+            {% if lr.status=='Approved' %}background:#d1fae5;color:#065f46
+            {% elif lr.status=='Rejected' %}background:#fee2e2;color:#991b1b
+            {% else %}background:#fef3c7;color:#92400e{% endif %}">
+            {% if lr.status=='Approved' %}✓ {% elif lr.status=='Rejected' %}✕ {% else %}⏳ {% endif %}{{ lr.status }}
+          </span>
+        </td>
+        <td style="font-size:12px;color:var(--muted)">
+          {{ lr.approved_by or '—' }}
+          {% if lr.approved_at %}<br><span style="font-size:10.5px">{{ lr.approved_at[:10] }}</span>{% endif %}
+        </td>
+        <td>
+          {% if lr.status == 'Pending' %}
+          <div style="display:flex;gap:5px">
+            <form method="post" action="{{ url_for('hr_approve_leave', leave_id=lr.id) }}" style="flex:1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn" style="width:100%;padding:5px 0;font-size:11px;font-weight:700;background:#d1fae5;color:#065f46;border:1px solid #a7f3d0">✓</button>
+            </form>
+            <button onclick="rejectLeave({{ lr.id }})"
+                    class="btn" style="flex:1;padding:5px 0;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca">✕</button>
+          </div>
+          {% else %}
+          <span style="font-size:11px;color:var(--muted);font-style:italic">{{ lr.status }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:20px;flex-wrap:wrap">
+  {% for p in range(1, total_pages+1) %}
+  <a href="?page={{ p }}&status={{ q_status }}&type={{ q_type }}&emp={{ q_emp }}"
+     style="padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;{% if p==page %}background:var(--navy);color:#fff{% else %}background:#fff;color:var(--navy);border:1px solid var(--border){% endif %}">
+    {{ p }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <i class="fas fa-calendar-check" style="font-size:48px;color:#e2e8f0;margin-bottom:16px"></i>
+  <div style="font-size:16px;font-weight:700;color:var(--muted)">No leave requests found</div>
+  <div style="font-size:13px;color:var(--muted);margin-top:6px">Requests appear here when employees submit them from their profile.</div>
+</div>
+{% endif %}
+
+{# Reject Modal #}
+<div id="rejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h3 style="margin:0;font-size:16px;color:var(--navy)"><i class="fas fa-times-circle" style="color:#dc2626;margin-right:8px"></i>Reject Leave Request</h3>
+      <button onclick="document.getElementById('rejectModal').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <form method="post" id="rejectForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label">Rejection Reason <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea name="rejection_reason" rows="3" class="form-control" style="resize:none;margin-top:6px" placeholder="Explain why the leave is being rejected…"></textarea>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button type="submit" class="btn btn-danger" style="flex:1;padding:10px"><i class="fas fa-times"></i> Confirm Reject</button>
+        <button type="button" onclick="document.getElementById('rejectModal').style.display='none'" class="btn btn-outline" style="flex:1;padding:10px">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function rejectLeave(id) {
+  document.getElementById('rejectModal').style.display = 'flex';
+  document.getElementById('rejectForm').action = '/hr/leave/' + id + '/reject';
+}
+document.getElementById('rejectModal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
+{% endblock %}

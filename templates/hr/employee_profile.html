@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.full_name }} — HR — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-id-badge" style="color:var(--navy)"></i> {{ emp.full_name }}</h1>
+    <p>{{ emp.employee_id }} · {{ emp.position or emp.department }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_edit_employee', emp_id=emp.id) }}" class="btn btn-edit"><i class="fas fa-pen"></i> Edit</a>
+    <a href="{{ url_for('hr_employees') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
+
+  {# ── LEFT COLUMN ── #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    {# Profile Card #}
+    <div class="card" style="padding:0;overflow:hidden;text-align:center">
+      <div style="height:5px;background:{% if emp.employment_status=='Active' %}linear-gradient(90deg,#1E7B34,#27ae60){% else %}#94a3b8{% endif %}"></div>
+      <div style="padding:28px 20px 20px">
+        {% if emp.photo_path %}
+          <img src="{{ url_for('static', filename=emp.photo_path) }}"
+               style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid var(--border);margin-bottom:14px">
+        {% else %}
+          <div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:34px;font-weight:800;color:#fff">
+            {{ emp.full_name[0]|upper }}
+          </div>
+        {% endif %}
+        <div style="font-size:18px;font-weight:800;color:var(--navy)">{{ emp.full_name }}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px">{{ emp.position or '—' }}</div>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <span style="background:#eef4ff;color:#1B3A6B;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">{{ emp.department }}</span>
+          <span style="background:{% if emp.employment_status=='Active' %}#d1fae5;color:#065f46{% else %}#f1f5f9;color:#64748b{% endif %};padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">
+            {{ emp.employment_status }}
+          </span>
+        </div>
+        <div style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--muted);background:#f8fafc;border-radius:6px;padding:4px 10px;display:inline-block">{{ emp.employee_id }}</div>
+      </div>
+    </div>
+
+    {# Info #}
+    <div class="card" style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Details</div>
+      {% macro info_row(icon, label, val) %}
+        {% if val %}
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f1f5f9">
+          <i class="fas fa-{{ icon }}" style="color:#94a3b8;width:14px;margin-top:2px;font-size:12px"></i>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">{{ label }}</div>
+            <div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ val }}</div>
+          </div>
+        </div>
+        {% endif %}
+      {% endmacro %}
+      {{ info_row('envelope',    'Email',        emp.email) }}
+      {{ info_row('phone',       'Phone',        emp.phone) }}
+      {{ info_row('map-marker-alt','Address',    emp.address) }}
+      {{ info_row('id-card',     'National ID',  emp.national_id) }}
+      {{ info_row('birthday-cake','Date of Birth', emp.date_of_birth) }}
+      {{ info_row('calendar-plus','Join Date',   emp.join_date) }}
+      {{ info_row('user-tie',    'Manager',      emp.manager_name) }}
+      {{ info_row('user-cog',    'System User',  emp.username) }}
+      {% if emp.notes %}
+      <div style="margin-top:10px;padding:8px 10px;background:#f8fafc;border-left:3px solid var(--navy);border-radius:0 6px 6px 0;font-size:12px;color:var(--muted)">
+        <strong>Notes:</strong> {{ emp.notes }}
+      </div>
+      {% endif %}
+    </div>
+
+    {# Sales Stats #}
+    {% if sales_stats %}
+    <div class="card" style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Performance (All Time)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:#eef4ff;border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--navy)">{{ sales_stats.total_sales }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Sales</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;text-align:center">
+          <div style="font-size:15px;font-weight:800;color:#1E7B34">{{ "%.0f"|format(sales_stats.total_revenue|float) }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Revenue JOD</div>
+        </div>
+        <div style="background:#fef9c3;border-radius:8px;padding:10px 12px;text-align:center;grid-column:1/-1">
+          <div style="font-size:18px;font-weight:800;color:#854d0e">{{ "%.0f"|format(sales_stats.total_profit|float) }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Profit JOD</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── RIGHT COLUMN: Tabs ── #}
+  <div>
+    {# Tab Nav #}
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
+      {% for tab, label, icon in [('leave','Leave','calendar-alt'),('attendance','Attendance','clock'),('docs','Documents','folder'),('balance','Leave Balance','chart-bar')] %}
+      <a href="#" onclick="switchTab('{{ tab }}');return false" id="tab-{{ tab }}"
+         style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:all .15s">
+        <i class="fas fa-{{ icon }}" style="margin-right:5px"></i>{{ label }}
+      </a>
+      {% endfor %}
+    </div>
+
+    {# ── TAB: Leave Balance ── #}
+    <div id="pane-balance" class="tab-pane" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px">
+        {% for b in balances %}
+        {% set remaining = [b.total_days - b.used_days, 0]|max %}
+        {% set pct = [(b.used_days / b.total_days * 100)|int, 100]|min if b.total_days else 0 %}
+        <div class="card" style="padding:16px 20px">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">{{ b.leave_type }}</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
+            <span>Used: <strong style="color:var(--text)">{{ b.used_days }}</strong></span>
+            <span>Remaining: <strong style="color:{% if remaining > 5 %}#1E7B34{% elif remaining > 0 %}#D97706{% else %}#dc2626{% endif %}">{{ remaining }}</strong></span>
+            <span>Total: <strong>{{ b.total_days }}</strong></span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:20px;height:8px;overflow:hidden">
+            <div style="height:8px;border-radius:20px;background:{% if pct < 70 %}linear-gradient(90deg,#1E7B34,#27ae60){% elif pct < 90 %}linear-gradient(90deg,#D97706,#f59e0b){% else %}linear-gradient(90deg,#dc2626,#ef4444){% endif %};width:{{ pct }}%;transition:width .4s"></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">{{ pct }}% used</div>
+        </div>
+        {% else %}
+        <div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:13px">No leave balance records for {{ year }}.</div>
+        {% endfor %}
+      </div>
+
+      {% if session.get('user_role') == 'admin' %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc">
+          <strong style="font-size:13px;color:var(--navy)">Adjust Leave Balance</strong>
+        </div>
+        <form method="post" action="{{ url_for('hr_adjust_balance') }}" style="padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="employee_id" value="{{ emp.id }}">
+          <div class="form-group" style="min-width:130px">
+            <label class="form-label">Leave Type</label>
+            <select name="leave_type" class="form-control">
+              {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
+              <option>{{ lt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="min-width:80px">
+            <label class="form-label">Year</label>
+            <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2099">
+          </div>
+          <div class="form-group" style="min-width:90px">
+            <label class="form-label">Total Days</label>
+            <input type="number" name="total_days" class="form-control" value="21" min="0" max="365">
+          </div>
+          <button type="submit" class="btn btn-primary">Update</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── TAB: Leave Requests ── #}
+    <div id="pane-leave" class="tab-pane" style="display:none">
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:13px;color:var(--navy)">Submit Leave Request</strong>
+        </div>
+        <form method="post" action="{{ url_for('hr_leave_request') }}" style="padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="employee_id" value="{{ emp.id }}">
+          <input type="hidden" name="redirect_to" value="profile">
+          <div class="form-group" style="min-width:150px">
+            <label class="form-label">Leave Type</label>
+            <select name="leave_type" class="form-control">
+              {% for lt in ['Annual Leave','Sick Leave','Unpaid Leave','Emergency Leave'] %}
+              <option>{{ lt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="start_date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Date</label>
+            <input type="date" name="end_date" class="form-control" required>
+          </div>
+          <div class="form-group" style="flex:1;min-width:150px">
+            <label class="form-label">Reason</label>
+            <input type="text" name="reason" class="form-control" placeholder="Optional reason">
+          </div>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit</button>
+        </form>
+      </div>
+
+      {% if leaves %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr>
+            <th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Reason</th><th style="width:100px">Actions</th>
+          </tr></thead>
+          <tbody>
+            {% for lr in leaves %}
+            <tr>
+              <td><span style="font-weight:600;font-size:12.5px">{{ lr.leave_type }}</span></td>
+              <td style="white-space:nowrap">{{ lr.start_date }}</td>
+              <td style="white-space:nowrap">{{ lr.end_date }}</td>
+              <td><strong>{{ lr.days }}</strong></td>
+              <td>
+                <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;
+                  {% if lr.status=='Approved' %}background:#d1fae5;color:#065f46
+                  {% elif lr.status=='Rejected' %}background:#fee2e2;color:#991b1b
+                  {% else %}background:#fef3c7;color:#92400e{% endif %}">
+                  {{ lr.status }}
+                </span>
+              </td>
+              <td style="font-size:12px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                {{ lr.reason or lr.rejection_reason or '—' }}
+              </td>
+              <td>
+                {% if lr.status == 'Pending' %}
+                <div style="display:flex;gap:4px">
+                  <form method="post" action="{{ url_for('hr_approve_leave', leave_id=lr.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn" style="padding:3px 8px;font-size:11px;background:#d1fae5;color:#065f46;border:none" title="Approve">✓</button>
+                  </form>
+                  <button onclick="rejectLeave({{ lr.id }})" class="btn" style="padding:3px 8px;font-size:11px;background:#fee2e2;color:#991b1b;border:none" title="Reject">✕</button>
+                </div>
+                {% else %}
+                <span style="font-size:11px;color:var(--muted)">{{ lr.approved_by or '—' }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No leave requests yet.</div>
+      {% endif %}
+    </div>
+
+    {# ── TAB: Attendance ── #}
+    <div id="pane-attendance" class="tab-pane" style="display:none">
+      {% if attendance %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Late (min)</th><th>Notes</th>
+          </tr></thead>
+          <tbody>
+            {% for a in attendance %}
+            <tr>
+              <td style="font-weight:600;white-space:nowrap">{{ a.att_date }}</td>
+              <td>{{ a.check_in or '—' }}</td>
+              <td>{{ a.check_out or '—' }}</td>
+              <td>
+                <span style="font-weight:700;color:{% if a.hours_worked >= 8 %}#1E7B34{% elif a.hours_worked >= 6 %}#D97706{% else %}#dc2626{% endif %}">
+                  {{ "%.1f"|format(a.hours_worked) }}h
+                </span>
+              </td>
+              <td>
+                {% if a.late_minutes > 0 %}
+                <span style="color:#dc2626;font-weight:600">{{ a.late_minutes }}m</span>
+                {% else %}
+                <span style="color:#1E7B34">On time</span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px;color:var(--muted)">{{ a.notes or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No attendance records yet.</div>
+      {% endif %}
+    </div>
+
+    {# ── TAB: Documents ── #}
+    <div id="pane-docs" class="tab-pane" style="display:none">
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc">
+          <strong style="font-size:13px;color:var(--navy)">Upload Document</strong>
+        </div>
+        <form method="post" action="{{ url_for('hr_upload_doc', emp_id=emp.id) }}" enctype="multipart/form-data"
+              style="padding:16px 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group" style="min-width:160px">
+            <label class="form-label">Document Type</label>
+            <select name="doc_type" class="form-control">
+              {% for dt in ['Employment Contract','Passport','National ID','Certificate','Other'] %}
+              <option>{{ dt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:200px">
+            <label class="form-label">File</label>
+            <input type="file" name="doc_file" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" required>
+          </div>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+        </form>
+      </div>
+
+      {% if documents %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>Type</th><th>Filename</th><th>Size</th><th>Uploaded By</th><th>Date</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for doc in documents %}
+            <tr>
+              <td>
+                <span style="background:#eef4ff;color:#1B3A6B;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">{{ doc.doc_type }}</span>
+              </td>
+              <td style="font-size:12.5px">
+                <i class="fas fa-{% if doc.filename.endswith('.pdf') %}file-pdf" style="color:#dc2626{% elif doc.filename.endswith(('.jpg','.jpeg','.png')) %}file-image" style="color:#8b5cf6{% else %}file-alt" style="color:#64748b{% endif %}"></i>
+                {{ doc.original_name }}
+              </td>
+              <td style="font-size:12px;color:var(--muted)">{{ "%.1f"|format(doc.file_size / 1024) }} KB</td>
+              <td style="font-size:12px;color:var(--muted)">{{ doc.uploaded_by }}</td>
+              <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ doc.uploaded_at[:10] }}</td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <a href="{{ url_for('static', filename='uploads/hr/docs/' ~ doc.filename) }}" target="_blank"
+                     class="btn" style="padding:4px 10px;font-size:11px;background:#eef4ff;color:#1B3A6B;border:none">
+                    <i class="fas fa-download"></i> Download
+                  </a>
+                  <form method="post" action="{{ url_for('hr_delete_doc', doc_id=doc.id) }}"
+                        onsubmit="return confirm('Delete this document?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:11px"><i class="fas fa-trash"></i></button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No documents uploaded yet.</div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+{# Reject modal #}
+<div id="rejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 16px;color:var(--navy)">Reject Leave Request</h3>
+    <form method="post" id="rejectForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="form-label">Reason (optional)</label>
+      <textarea name="rejection_reason" rows="3" class="form-control" style="resize:none"></textarea>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button type="submit" class="btn btn-danger" style="flex:1">Reject</button>
+        <button type="button" onclick="document.getElementById('rejectModal').style.display='none'" class="btn btn-outline" style="flex:1">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var TABS = ['leave','attendance','docs','balance'];
+
+function switchTab(name) {
+  TABS.forEach(function(t) {
+    document.getElementById('pane-' + t).style.display = 'none';
+    var el = document.getElementById('tab-' + t);
+    el.style.color = 'var(--muted)';
+    el.style.borderBottomColor = 'transparent';
+  });
+  document.getElementById('pane-' + name).style.display = 'block';
+  var active = document.getElementById('tab-' + name);
+  active.style.color = 'var(--navy)';
+  active.style.borderBottomColor = 'var(--navy)';
+  localStorage.setItem('hrProfileTab_{{ emp.id }}', name);
+}
+
+function rejectLeave(id) {
+  var m = document.getElementById('rejectModal');
+  m.style.display = 'flex';
+  document.getElementById('rejectForm').action = '/hr/leave/' + id + '/reject';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var saved = localStorage.getItem('hrProfileTab_{{ emp.id }}') || 'leave';
+  switchTab(saved);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}HR Dashboard — ALSONDOS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-users-cog" style="color:var(--navy)"></i> HR Dashboard</h1>
+    <p>Human Resources Overview — {{ today }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('hr_add_employee') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Employee</a>
+    <a href="{{ url_for('hr_employees') }}"    class="btn btn-outline"><i class="fas fa-users"></i> All Employees</a>
+    <a href="{{ url_for('hr_leave') }}"        class="btn btn-outline"><i class="fas fa-calendar-alt"></i> Leave</a>
+    <a href="{{ url_for('hr_attendance') }}"   class="btn btn-outline"><i class="fas fa-clock"></i> Attendance</a>
+  </div>
+</div>
+
+{# ── KPI Cards ── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+  <div class="card" style="padding:20px 24px;display:flex;align-items:center;gap:16px">
+    <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="fas fa-users" style="color:#fff;font-size:22px"></i>
+    </div>
+    <div>
+      <div style="font-size:28px;font-weight:800;color:var(--navy);line-height:1">{{ total_employees }}</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:2px">Total Employees</div>
+    </div>
+  </div>
+  <div class="card" style="padding:20px 24px;display:flex;align-items:center;gap:16px">
+    <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#1E7B34,#27ae60);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="fas fa-user-check" style="color:#fff;font-size:22px"></i>
+    </div>
+    <div>
+      <div style="font-size:28px;font-weight:800;color:#1E7B34;line-height:1">{{ active_employees }}</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:2px">Active Staff</div>
+    </div>
+  </div>
+  <div class="card" style="padding:20px 24px;display:flex;align-items:center;gap:16px">
+    <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#D97706,#f59e0b);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="fas fa-calendar-times" style="color:#fff;font-size:22px"></i>
+    </div>
+    <div>
+      <div style="font-size:28px;font-weight:800;color:#D97706;line-height:1">{{ pending_leaves }}</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:2px">Pending Leaves</div>
+    </div>
+  </div>
+  <div class="card" style="padding:20px 24px;display:flex;align-items:center;gap:16px">
+    <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#6D28D9,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="fas fa-clock" style="color:#fff;font-size:22px"></i>
+    </div>
+    <div>
+      <div style="font-size:28px;font-weight:800;color:#6D28D9;line-height:1">{{ present_today }}</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:2px">Present Today</div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  {# ── Department Breakdown ── #}
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <i class="fas fa-sitemap" style="color:var(--navy)"></i>
+      <strong style="font-size:14px;color:var(--navy)">Staff by Department</strong>
+    </div>
+    <div style="padding:16px 20px">
+      {% if dept_counts %}
+        {% for row in dept_counts %}
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span style="font-weight:600">{{ row.department }}</span>
+            <span style="color:var(--muted)">{{ row.cnt }} staff</span>
+          </div>
+          <div style="background:#f1f5f9;border-radius:20px;height:7px;overflow:hidden">
+            <div style="height:7px;border-radius:20px;background:linear-gradient(90deg,#1B3A6B,#2d5fa6);width:{{ [(row.cnt / (active_employees or 1) * 100)|int, 100]|min }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">No employees yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Pending Leave Requests ── #}
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <i class="fas fa-inbox" style="color:#D97706"></i>
+        <strong style="font-size:14px;color:var(--navy)">Pending Leave Requests</strong>
+      </div>
+      <a href="{{ url_for('hr_leave', status='Pending') }}" style="font-size:12px;color:var(--navy)">View all →</a>
+    </div>
+    <div style="padding:8px 0">
+      {% if recent_leaves %}
+        {% for lr in recent_leaves %}
+        <div style="padding:10px 20px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:600">{{ lr.full_name }}</div>
+            <div style="font-size:11.5px;color:var(--muted)">{{ lr.leave_type }} · {{ lr.days }} day{{ 's' if lr.days != 1 else '' }} · {{ lr.start_date }}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <form method="post" action="{{ url_for('hr_approve_leave', leave_id=lr.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn" style="padding:4px 10px;font-size:11px;background:#d1fae5;color:#065f46;border:none">✓ Approve</button>
+            </form>
+            <button onclick="rejectLeave({{ lr.id }})" class="btn" style="padding:4px 10px;font-size:11px;background:#fee2e2;color:#991b1b;border:none">✕ Reject</button>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="color:var(--muted);font-size:13px;padding:24px;text-align:center"><i class="fas fa-check-circle" style="color:#1E7B34;margin-right:6px"></i>No pending requests.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{# ── Recent Employees ── #}
+<div class="card" style="padding:0;overflow:hidden;margin-top:20px">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;align-items:center;gap:8px">
+      <i class="fas fa-user-clock" style="color:var(--navy)"></i>
+      <strong style="font-size:14px;color:var(--navy)">Recent Employees</strong>
+    </div>
+    <a href="{{ url_for('hr_employees') }}" style="font-size:12px;color:var(--navy)">View all →</a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0">
+    {% for emp in recent_employees %}
+    <a href="{{ url_for('hr_employee_profile', emp_id=emp.id) }}" style="text-decoration:none;padding:16px 20px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:12px;transition:background .15s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      {% if emp.photo_path %}
+        <img src="{{ url_for('static', filename=emp.photo_path) }}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0">
+      {% else %}
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <span style="color:#fff;font-weight:700;font-size:16px">{{ emp.full_name[0]|upper }}</span>
+        </div>
+      {% endif %}
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">{{ emp.full_name }}</div>
+        <div style="font-size:11px;color:var(--muted)">{{ emp.position or emp.department }}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">{{ emp.employee_id }}</div>
+      </div>
+    </a>
+    {% else %}
+    <div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:13px">No employees yet. <a href="{{ url_for('hr_add_employee') }}">Add one →</a></div>
+    {% endfor %}
+  </div>
+</div>
+
+{# Reject modal #}
+<div id="rejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 16px;color:var(--navy)">Reject Leave Request</h3>
+    <form method="post" id="rejectForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Reason (optional)</label>
+      <textarea name="rejection_reason" rows="3" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:none"></textarea>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button type="submit" class="btn btn-danger" style="flex:1">Reject</button>
+        <button type="button" onclick="document.getElementById('rejectModal').style.display='none'" class="btn btn-outline" style="flex:1">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function rejectLeave(id) {
+  var m = document.getElementById('rejectModal');
+  m.style.display = 'flex';
+  document.getElementById('rejectForm').action = '/hr/leave/' + id + '/reject';
+}
+</script>
+{% endblock %}
