@@ -2534,6 +2534,111 @@ def send_deliver_email():
                              company=p['f_company']))
 
 
+@app.route('/deliver-tomorrow/send-whatsapp', methods=['POST'])
+@login_required
+def send_whatsapp_deliver():
+    """WhatsApp Team button — sends filtered Deliver Tomorrow Excel via WhatsApp Cloud API."""
+    import io, requests as _req
+
+    # ── Config from environment ────────────────────────────────────────────
+    wa_token    = os.environ.get('WA_TOKEN', '')          # Meta permanent / system-user token
+    wa_phone_id = os.environ.get('WA_PHONE_ID', '')       # WhatsApp Business phone-number ID
+    wa_numbers_raw = os.environ.get('WA_RECIPIENTS', '')  # comma-separated E.164 numbers, e.g. 962791234567
+
+    if not wa_token or not wa_phone_id or not wa_numbers_raw:
+        return jsonify({'ok': False,
+                        'error': 'WhatsApp not configured. '
+                                 'Set WA_TOKEN, WA_PHONE_ID, WA_RECIPIENTS in environment.'}), 400
+
+    wa_numbers = [n.strip() for n in wa_numbers_raw.split(',') if n.strip()]
+
+    # ── Build Excel ────────────────────────────────────────────────────────
+    p = _dt_parse_filters(request.form)
+    outbound_tickets, return_tickets = _dt_query_tickets(p)
+    total = len(outbound_tickets) + len(return_tickets)
+
+    if total == 0:
+        return jsonify({'ok': False, 'error': 'No tickets for the selected date/filters.'}), 400
+
+    if p['f_date_from'] or p['f_date_to']:
+        label     = f"{p['start_date']}_to_{p['end_date']}"
+        label_txt = f"{p['start_date']} to {p['end_date']}"
+    else:
+        label     = p['view_date']
+        try:
+            label_txt = datetime.strptime(p['view_date'], '%Y-%m-%d').strftime('%d %B %Y')
+        except Exception:
+            label_txt = p['view_date']
+
+    xl_bytes  = _dt_build_excel(outbound_tickets, return_tickets, label)
+    filename  = f"deliver_{label}.xlsx"
+    sender    = session.get('username', 'system')
+
+    graph_url = f"https://graph.facebook.com/v19.0/{wa_phone_id}"
+    headers   = {'Authorization': f'Bearer {wa_token}'}
+
+    # ── Upload media once ──────────────────────────────────────────────────
+    try:
+        upload_resp = _req.post(
+            f"{graph_url}/media",
+            headers=headers,
+            files={
+                'file': (filename, io.BytesIO(xl_bytes),
+                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                'type': (None, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                'messaging_product': (None, 'whatsapp'),
+            },
+            timeout=30
+        )
+        upload_resp.raise_for_status()
+        media_id = upload_resp.json().get('id')
+        if not media_id:
+            raise ValueError(f"No media ID returned: {upload_resp.text}")
+    except Exception as _ue:
+        logger.error(f"send_whatsapp_deliver upload error: {_ue}")
+        return jsonify({'ok': False, 'error': f'Media upload failed: {_ue}'}), 500
+
+    # ── Send document to each recipient ───────────────────────────────────
+    errors = []
+    for number in wa_numbers:
+        payload = {
+            'messaging_product': 'whatsapp',
+            'to': number,
+            'type': 'document',
+            'document': {
+                'id': media_id,
+                'filename': filename,
+                'caption': (
+                    f"Deliver Tomorrow Report — {label_txt}\n"
+                    f"{len(outbound_tickets)} outbound  |  {len(return_tickets)} return\n"
+                    f"Sent by {sender}"
+                ),
+            },
+        }
+        try:
+            r = _req.post(
+                f"{graph_url}/messages",
+                headers={**headers, 'Content-Type': 'application/json'},
+                json=payload,
+                timeout=20
+            )
+            r.raise_for_status()
+        except Exception as _me:
+            logger.error(f"send_whatsapp_deliver message error to {number}: {_me}")
+            errors.append(f"{number}: {_me}")
+
+    if errors:
+        return jsonify({'ok': False,
+                        'error': 'Sent to some recipients but failed for: ' + '; '.join(errors)}), 207
+
+    log_action('WHATSAPP', 'sales', None,
+               f"Deliver Tomorrow '{label_txt}' sent via WhatsApp to {wa_numbers_raw} "
+               f"by {sender} ({len(outbound_tickets)} outbound + {len(return_tickets)} return)")
+    return jsonify({'ok': True,
+                    'message': f'Report sent to {len(wa_numbers)} WhatsApp number(s).',
+                    'total': total})
+
+
 @app.route('/deliver-tomorrow/daily-email', methods=['POST'])
 @csrf.exempt
 def deliver_tomorrow_daily_email():
