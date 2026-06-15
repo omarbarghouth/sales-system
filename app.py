@@ -2439,6 +2439,7 @@ def send_deliver_email():
 
 
 @app.route('/deliver-tomorrow/daily-email', methods=['POST'])
+@csrf.exempt
 def deliver_tomorrow_daily_email():
     """
     Automated daily email endpoint — call from OS cron, not from the browser.
