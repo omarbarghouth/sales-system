@@ -80,6 +80,24 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
         <i class="fas fa-envelope"></i> Email Team
       </button>
     </form>
+
+    {# WhatsApp Team — sends current filtered view Excel via WhatsApp Cloud API #}
+    <form id="wa-form" style="display:inline">
+      <input type="hidden" name="csrf_token"  value="{{ csrf_token() }}">
+      <input type="hidden" name="view_date"   value="{{ filters.view_date or tomorrow_date }}">
+      <input type="hidden" name="date_from"   value="{{ filters.date_from }}">
+      <input type="hidden" name="date_to"     value="{{ filters.date_to }}">
+      <input type="hidden" name="company"     value="{{ filters.company }}">
+      <input type="hidden" name="supplier"    value="{{ filters.supplier }}">
+      <input type="hidden" name="passenger"   value="{{ filters.passenger }}">
+      <input type="hidden" name="status"      value="{{ filters.status }}">
+      <input type="hidden" name="agent_id"    value="{{ filters.agent_id }}">
+      <button type="button" id="wa-btn" class="btn"
+              style="background:#25D366;color:#fff;font-weight:700"
+              onclick="sendWhatsApp()">
+        <i class="fab fa-whatsapp"></i> WhatsApp Team
+      </button>
+    </form>
   </div>
 </div>
 
@@ -300,5 +318,45 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
     });
   });
 })();
+
+function sendWhatsApp() {
+  var btn = document.getElementById('wa-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-ring"></span> Sending...';
+  var form = document.getElementById('wa-form');
+  fetch('{{ url_for("send_whatsapp_deliver") }}', {
+    method: 'POST',
+    body: new FormData(form),
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fab fa-whatsapp"></i> WhatsApp Team';
+    if (d.ok) {
+      showFlash(d.message, 'success');
+    } else {
+      showFlash(d.error || 'WhatsApp send failed.', 'danger');
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fab fa-whatsapp"></i> WhatsApp Team';
+    showFlash('WhatsApp send failed — network error.', 'danger');
+  });
+}
+
+function showFlash(msg, type) {
+  var colors = { success: '#d1fae5', danger: '#fee2e2' };
+  var borders = { success: '#6ee7b7', danger: '#fca5a5' };
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:18px;right:18px;z-index:9999;padding:12px 20px;'
+    + 'border-radius:8px;border:1.5px solid ' + (borders[type]||'#ccc') + ';'
+    + 'background:' + (colors[type]||'#f3f4f6') + ';font-weight:600;font-size:13.5px;'
+    + 'box-shadow:0 4px 18px rgba(0,0,0,.13);max-width:360px;';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { el.remove(); }, 5000);
+}
 </script>
 {% endblock %}
