@@ -3811,6 +3811,24 @@ try:
 except Exception as _ext_err:
     logger.error(f"Extension DB init error: {_ext_err}")
 
+# ── Direct-customer columns: standalone migration (runs even if init_db failed)
+try:
+    _dc_conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    _dc_cur  = _dc_conn.cursor()
+    for _dc_sql in [
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_type     TEXT DEFAULT 'COMPANY'",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_phone      TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_nationality TEXT DEFAULT ''",
+        "ALTER TABLE sales ADD COLUMN IF NOT EXISTS direct_email      TEXT DEFAULT ''",
+    ]:
+        _dc_cur.execute(_dc_sql)
+    _dc_conn.commit()
+    _dc_cur.close()
+    _dc_conn.close()
+    logger.info("Direct-customer columns OK")
+except Exception as _dc_err:
+    logger.error(f"Direct-customer column migration error: {_dc_err}")
+
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
 def next_txn_number() -> str:
