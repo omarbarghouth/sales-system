@@ -297,23 +297,24 @@
 </style>
 
 <div class="table-wrap">
-  {# Admin: 13 cols · Non-admin: 11 cols · All % widths → no horizontal scroll #}
+  {# Admin: 14 cols · Non-admin: 12 cols · All % widths → no horizontal scroll #}
   <table class="txn-table">
     <colgroup>
-      <col style="width:8%">    {# 1.  TXN # + Type       #}
-      <col style="width:6%">    {# 2.  Date               #}
-      <col style="width:9%">    {# 3.  Company            #}
-      <col style="width:11%">   {# 4.  Customer           #}
-      <col style="width:16%">   {# 5.  Route + Supplier   #}
-      <col style="width:3%">    {# 6.  Tix                #}
-      <col style="width:7%">    {# 7.  Travel Date        #}
-      <col style="width:7%">    {# 8.  NET (JOD)          #}
-      <col style="width:7%">    {# 9.  SELL (JOD)         #}
-      <col style="width:6%">    {# 10. PROFIT             #}
-      <col style="width:6%">    {# 11. Status             #}
+      <col style="width:8%">    {# 1.  TXN # + Type  #}
+      <col style="width:6%">    {# 2.  Date          #}
+      <col style="width:8%">    {# 3.  Company       #}
+      <col style="width:14%">   {# 4.  Customer      #}
+      <col style="width:7%">    {# 5.  Route         #}
+      <col style="width:10%">   {# 6.  Supplier      #}
+      <col style="width:3%">    {# 7.  Tix           #}
+      <col style="width:7%">    {# 8.  Travel Date   #}
+      <col style="width:7%">    {# 9.  NET (JOD)     #}
+      <col style="width:7%">    {# 10. SELL (JOD)    #}
+      <col style="width:6%">    {# 11. PROFIT        #}
+      <col style="width:6%">    {# 12. Status        #}
       {% if is_admin %}
-      <col style="width:7%">    {# 12. Agent              #}
-      <col style="width:7%">    {# 13. Actions            #}
+      <col style="width:6%">    {# 13. Agent         #}
+      <col style="width:5%">    {# 14. Actions       #}
       {% endif %}
     </colgroup>
     <thead>
@@ -322,7 +323,8 @@
         <th>Date</th>
         <th>Company</th>
         <th>Customer</th>
-        <th>Route &amp; Supplier</th>
+        <th>Route</th>
+        <th>Supplier</th>
         <th style="text-align:center">Tix</th>
         <th>Travel</th>
         <th class="txn-num txn-money-start" style="color:rgba(255,255,255,.5)">Net (JOD)</th>
@@ -369,7 +371,7 @@
           {{ s.customer }}
         </td>
 
-        {# ── 5. Route + Supplier ── #}
+        {# ── 5. Route ── #}
         <td title="{{ s.from_loc }} → {{ s.to_loc }}{% if s.via %} via {{ s.via }}{% endif %}{% if tkt_tip %} | {{ tkt_tip }}{% endif %}">
           <div class="txn-route-row">
             <span class="txn-route-loc">{{ s.from_loc }}</span>
@@ -377,6 +379,10 @@
             <span class="txn-route-loc">{{ s.to_loc }}</span>
           </div>
           {% if s.via %}<span class="txn-via-row">via {{ s.via }}</span>{% endif %}
+        </td>
+
+        {# ── 6. Supplier ── #}
+        <td>
           {% if s.buy_from %}
           <div class="txn-supp-row" title="{{ s.buy_from }}">
             <i class="fas fa-plane-departure" style="font-size:8px;color:var(--navy);flex-shrink:0"></i>
@@ -398,9 +404,12 @@
           {% if tkt_tip %}
           <div class="txn-via-row" style="font-family:monospace;font-size:9px">🎫 {{ tkt_tip }}</div>
           {% endif %}
+          {% if not s.buy_from and not s.hotel_supplier %}
+          <span style="color:var(--muted-lt)">—</span>
+          {% endif %}
         </td>
 
-        {# ── 6. Tickets ── #}
+        {# ── 7. Tickets ── #}
         <td style="text-align:center;font-weight:700;color:var(--navy-dk)">{{ s.tickets }}</td>
 
         {# ── 7. Travel Date ── #}
@@ -472,7 +481,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="{{ 13 if is_admin else 11 }}" class="text-center" style="padding:48px;color:var(--muted)">
+        <td colspan="{{ 14 if is_admin else 12 }}" class="text-center" style="padding:48px;color:var(--muted)">
           <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
           No transactions found.
           {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to or filters.get('customer') %}
@@ -488,7 +497,7 @@
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="7" style="color:rgba(255,255,255,.6);font-size:12px">
+        <td colspan="8" style="color:rgba(255,255,255,.6);font-size:12px">
           TOTALS — {{ totals.count }} transaction{{ 's' if totals.count != 1 else '' }}
           {% if filters.agent_id %} · {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}{% endif %}
         </td>
