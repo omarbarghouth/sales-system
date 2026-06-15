@@ -67,3 +67,37 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+  .card { padding: 0 !important; }
+  .card > div[style*="padding:28px"] { padding: 16px 20px !important; }
+
+  /* Header bar */
+  .card div[style*="padding-bottom:14px"] { padding-bottom: 8px !important; margin-bottom: 12px !important; }
+  .card img[style*="height:46px"] { height: 34px !important; }
+  .card div[style*="font-size:24px"] { font-size: 18px !important; }
+
+  /* Client / total row */
+  .card div[style*="grid-template-columns:1fr 1fr"] { margin-bottom: 10px !important; }
+  .card div[style*="font-size:17px"] { font-size: 13px !important; }
+  .card div[style*="font-size:24px;font-weight:900"] { font-size: 18px !important; }
+
+  /* Section cards (flight, hotel, transfer, tour) */
+  .card div[style*="border-radius:var(--radius)"] {
+    padding: 9px 12px !important;
+    margin-bottom: 8px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .card div[style*="grid-template-columns:repeat(3"] { gap: 6px !important; font-size: 11.5px !important; }
+
+  /* Notes */
+  .card div[style*="border-top:1px solid var(--border)"] { padding-top: 8px !important; margin-bottom: 8px !important; font-size: 11px !important; }
+
+  /* Signatures */
+  .card div[style*="gap:40px"] { gap: 24px !important; margin-top: 14px !important; padding-top: 10px !important; }
+}
+</style>
+{% endblock %}

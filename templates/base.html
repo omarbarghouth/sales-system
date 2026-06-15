@@ -10,6 +10,56 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 {% block extra_css %}{% endblock %}
+<style>
+/* ════════════════════════════════════════════════════════
+   ALSONDOS ERP — GLOBAL PRINT STANDARD
+   Applied to all printable documents (invoices, vouchers,
+   packages, contracts, receipts, statements).
+   Document-specific overrides go in each template's
+   extra_css block.
+   ════════════════════════════════════════════════════════ */
+@media print {
+  /* Page setup */
+  @page { size: A4 portrait; margin: 8mm 10mm; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body, html { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+
+  /* Hide all screen chrome */
+  .no-print,
+  .page-header,
+  .sidebar,
+  nav,
+  header:not(.inv-header):not(.contract-header),
+  .topbar,
+  .flash-messages,
+  .btn-print { display: none !important; }
+
+  /* Strip shadows/radii from document wrappers */
+  .doc-print-wrap,
+  .contract-wrap,
+  .card { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
+
+  /* Common section headers */
+  .print-section-header { page-break-after: avoid !important; break-after: avoid !important; }
+
+  /* Signatures always stay together */
+  .sig-row,
+  .inv-signatures { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* Footer stays on same page as last content block */
+  .inv-footer { page-break-before: avoid !important; break-before: avoid !important; }
+
+  /* Tables: no page break inside a row */
+  tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* Totals block always together */
+  .totals-block,
+  .contract-amount-box { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+  /* Compact table cells globally */
+  table th, table td { padding: 5px 8px !important; }
+}
+</style>
 </head>
 <body>
 
