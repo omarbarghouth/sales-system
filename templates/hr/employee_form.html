@@ -106,16 +106,35 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Linked System User</label>
-            <select name="user_id" class="form-control">
-              <option value="">— No linked account —</option>
-              {% for u in users_list %}
-              <option value="{{ u.id }}" {% if editing and employee.user_id==u.id %}selected{% endif %}>
-                {{ u.full_name or u.username }} ({{ u.username }})
-              </option>
-              {% endfor %}
-            </select>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="hasAccountChk" onchange="toggleUserAccount(this)"
+                     style="width:16px;height:16px;accent-color:var(--navy)"
+                     {% if editing and employee.user_id %}checked{% endif %}>
+              <span>Has System Account <span style="color:var(--muted);font-weight:400;font-size:11px">(link to existing ERP login)</span></span>
+            </label>
+            <div id="userAccountSection" style="display:{% if editing and employee.user_id %}block{% else %}none{% endif %};margin-top:10px;padding:14px 16px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+              <label class="form-label required">Linked System User</label>
+              {% if users_list %}
+              <select name="user_id" id="userIdSelect" class="form-control">
+                <option value="">— Select user account —</option>
+                {% for u in users_list %}
+                <option value="{{ u.id }}" {% if editing and employee.user_id==u.id %}selected{% endif %}>
+                  {{ u.full_name or u.username }} · {{ u.username }}
+                  {% if u.role %} [{{ u.role }}]{% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <div style="font-size:11px;color:var(--muted);margin-top:6px"><i class="fas fa-info-circle"></i> Only unlinked active accounts are shown. HR data is stored separately — passwords and permissions remain untouched.</div>
+              {% else %}
+              <div style="padding:10px;background:#fef3c7;border-radius:6px;font-size:12.5px;color:#92400e">
+                <i class="fas fa-exclamation-triangle"></i> All active user accounts are already linked to other employees.
+              </div>
+              <input type="hidden" name="user_id" value="">
+              {% endif %}
+            </div>
+            {# Hidden fallback when checkbox is unchecked #}
+            <input type="hidden" name="user_id_clear" value="1">
           </div>
         </div>
       </div>
@@ -248,5 +267,19 @@ function previewPhoto(input) {
     reader.readAsDataURL(input.files[0]);
   }
 }
+function toggleUserAccount(chk) {
+  var section = document.getElementById('userAccountSection');
+  var sel = document.getElementById('userIdSelect');
+  section.style.display = chk.checked ? 'block' : 'none';
+  if (!chk.checked && sel) sel.value = '';
+}
+// On form submit: if checkbox unchecked, clear user_id to send empty
+document.querySelector('form').addEventListener('submit', function() {
+  var chk = document.getElementById('hasAccountChk');
+  var sel = document.getElementById('userIdSelect');
+  if (!chk || !chk.checked) {
+    if (sel) sel.value = '';
+  }
+});
 </script>
 {% endblock %}

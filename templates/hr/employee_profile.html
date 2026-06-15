@@ -97,8 +97,8 @@
   {# ── RIGHT COLUMN: Tabs ── #}
   <div>
     {# Tab Nav #}
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
-      {% for tab, label, icon in [('leave','Leave','calendar-alt'),('attendance','Attendance','clock'),('docs','Documents','folder'),('balance','Leave Balance','chart-bar')] %}
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap">
+      {% for tab, label, icon in [('leave','Leave','calendar-alt'),('attendance','Attendance','clock'),('docs','Documents','folder'),('balance','Leave Balance','chart-bar'),('commission','Commission','percentage'),('activity','Activity','history')] %}
       <a href="#" onclick="switchTab('{{ tab }}');return false" id="tab-{{ tab }}"
          style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);transition:all .15s">
         <i class="fas fa-{{ icon }}" style="margin-right:5px"></i>{{ label }}
@@ -342,6 +342,119 @@
       {% endif %}
     </div>
 
+    {# ── TAB: Commission ── #}
+    <div id="pane-commission" class="tab-pane" style="display:none">
+      {% if emp.user_id %}
+      {# Commission Rate Card #}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+        <div class="card" style="padding:18px 20px;text-align:center;border-top:3px solid var(--navy)">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Commission Rate</div>
+          <div style="font-size:32px;font-weight:800;color:var(--navy)">{{ commission_rate or 0 }}<span style="font-size:16px">%</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">of profit per sale</div>
+        </div>
+        {% if sales_stats %}
+        <div class="card" style="padding:18px 20px;text-align:center;border-top:3px solid #1E7B34">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Total Profit</div>
+          <div style="font-size:28px;font-weight:800;color:#1E7B34">{{ "%.2f"|format(sales_stats.total_profit|float) }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">JOD all time</div>
+        </div>
+        <div class="card" style="padding:18px 20px;text-align:center;border-top:3px solid #C8A84B">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Commission Earned</div>
+          <div style="font-size:28px;font-weight:800;color:#854d0e">{{ "%.2f"|format(sales_stats.commission_earned|float) }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">JOD all time</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if recent_sales %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc;display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:13px;color:var(--navy)">Recent Sales (last 15)</strong>
+          <span style="font-size:11px;color:var(--muted)">Commission = Profit × {{ commission_rate or 0 }}%</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Client</th><th>Revenue</th><th>Net Cost</th><th>Profit</th><th>Commission %</th><th>Commission JOD</th><th>Date</th>
+          </tr></thead>
+          <tbody>
+            {% for s in recent_sales %}
+            <tr>
+              <td style="font-family:monospace;font-size:12px;color:var(--muted)">#{{ s.id }}</td>
+              <td style="font-size:13px;font-weight:600">{{ s.client_name or '—' }}</td>
+              <td style="font-weight:700;color:var(--navy)">{{ "%.2f"|format(s.sell|float) }}</td>
+              <td style="color:var(--muted)">{{ "%.2f"|format(s.net|float) }}</td>
+              <td>
+                {% set profit = s.sell|float - s.net|float %}
+                <span style="font-weight:700;color:{% if profit > 0 %}#1E7B34{% else %}#dc2626{% endif %}">
+                  {{ "%.2f"|format(profit) }}
+                </span>
+              </td>
+              <td style="text-align:center">
+                <span style="background:#f1f5f9;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700">{{ s.commission_rate }}%</span>
+              </td>
+              <td>
+                <span style="font-weight:800;color:#854d0e">{{ "%.2f"|format(s.commission_amount|float) }}</span>
+              </td>
+              <td style="font-size:12px;color:var(--muted);white-space:nowrap">{{ s.created_at[:10] if s.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No sales recorded for this employee.</div>
+      {% endif %}
+
+      {% else %}
+      <div class="card" style="padding:40px;text-align:center">
+        <i class="fas fa-link-slash" style="font-size:40px;color:#e2e8f0;margin-bottom:14px"></i>
+        <div style="font-size:15px;font-weight:700;color:var(--muted)">No System Account Linked</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">Link a system user account on the <a href="{{ url_for('hr_edit_employee', emp_id=emp.id) }}" style="color:var(--navy)">Edit page</a> to see commission data.</div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── TAB: Activity Log ── #}
+    <div id="pane-activity" class="tab-pane" style="display:none">
+      {% if emp.user_id and activity_log %}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:#fafbfc">
+          <strong style="font-size:13px;color:var(--navy)">Recent Activity (last 30)</strong>
+        </div>
+        <div style="max-height:520px;overflow-y:auto">
+          {% for entry in activity_log %}
+          {% set action_color = {'CREATE':'#1E7B34','UPDATE':'#1B3A6B','DELETE':'#dc2626'}.get(entry.action, '#64748b') %}
+          {% set action_bg = {'CREATE':'#d1fae5','UPDATE':'#eef4ff','DELETE':'#fee2e2'}.get(entry.action, '#f1f5f9') %}
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 18px;border-bottom:1px solid #f8fafc">
+            <div style="width:8px;height:8px;border-radius:50%;background:{{ action_color }};margin-top:5px;flex-shrink:0"></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span style="background:{{ action_bg }};color:{{ action_color }};padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px">{{ entry.action }}</span>
+                <span style="font-size:12px;font-weight:600;color:var(--text)">{{ entry.table_name }}</span>
+                {% if entry.record_id %}
+                <span style="font-size:11px;color:var(--muted);font-family:monospace">#{{ entry.record_id }}</span>
+                {% endif %}
+              </div>
+              {% if entry.detail %}
+              <div style="font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ entry.detail }}">{{ entry.detail }}</div>
+              {% endif %}
+            </div>
+            <div style="font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">{{ entry.created_at[:16] if entry.created_at else '' }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% elif emp.user_id %}
+      <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No activity recorded for this user.</div>
+      {% else %}
+      <div class="card" style="padding:40px;text-align:center">
+        <i class="fas fa-history" style="font-size:40px;color:#e2e8f0;margin-bottom:14px"></i>
+        <div style="font-size:15px;font-weight:700;color:var(--muted)">No System Account Linked</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">Link a system user account to see activity logs.</div>
+      </div>
+      {% endif %}
+    </div>
+
   </div>
 </div>
 
@@ -364,7 +477,7 @@
 
 {% block extra_js %}
 <script>
-var TABS = ['leave','attendance','docs','balance'];
+var TABS = ['leave','attendance','docs','balance','commission','activity'];
 
 function switchTab(name) {
   TABS.forEach(function(t) {
