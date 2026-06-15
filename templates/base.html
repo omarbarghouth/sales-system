@@ -146,32 +146,6 @@
       <i class="fas fa-satellite-dish"></i> Deliver Tomorrow
     </a>
 
-    <div class="sb-section">HR Module</div>
-    <a href="{{ url_for('hr_dashboard') }}"
-       class="sb-link {% if request.endpoint=='hr_dashboard' %}active{% endif %}">
-      <i class="fas fa-users-cog"></i> HR Dashboard
-    </a>
-    <a href="{{ url_for('hr_employees') }}"
-       class="sb-link {% if request.endpoint in ('hr_employees','hr_add_employee','hr_edit_employee','hr_employee_profile') %}active{% endif %}">
-      <i class="fas fa-id-badge"></i> Employees
-    </a>
-    <a href="{{ url_for('hr_leave') }}"
-       class="sb-link {% if request.endpoint in ('hr_leave',) %}active{% endif %}">
-      <i class="fas fa-calendar-alt"></i> Leave &amp; Permissions
-    </a>
-    <a href="{{ url_for('hr_attendance') }}"
-       class="sb-link {% if request.endpoint=='hr_attendance' %}active{% endif %}">
-      <i class="fas fa-clock"></i> Attendance
-    </a>
-    <a href="{{ url_for('hr_notifications_page') }}"
-       class="sb-link {% if request.endpoint=='hr_notifications_page' %}active{% endif %}"
-       style="position:relative">
-      <i class="fas fa-bell"></i> Notifications
-      {% if hr_unread_count > 0 %}
-      <span style="position:absolute;top:6px;right:10px;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:800;line-height:1.4">{{ hr_unread_count }}</span>
-      {% endif %}
-    </a>
-
     <div class="sb-section">Management</div>
     <a href="{{ url_for('admin_employees') }}"
        class="sb-link {% if 'employee' in (request.endpoint or '') and 'hr_' not in (request.endpoint or '') %}active{% endif %}">
@@ -269,32 +243,6 @@
 
     {% else %}
     {# ════════════ EMPLOYEE NAVIGATION ════════════ #}
-
-    <div class="sb-section">My HR</div>
-    <a href="{{ url_for('hr_my_dashboard') }}"
-       class="sb-link {% if request.endpoint in ('hr_my_dashboard',) %}active{% endif %}">
-      <i class="fas fa-user-circle"></i> My Profile &amp; Leave
-    </a>
-    <a href="{{ url_for('hr_my_leave') }}"
-       class="sb-link {% if request.endpoint=='hr_my_leave' %}active{% endif %}">
-      <i class="fas fa-calendar-alt"></i> My Requests
-    </a>
-    <a href="{{ url_for('hr_my_attendance') }}"
-       class="sb-link {% if request.endpoint=='hr_my_attendance' %}active{% endif %}">
-      <i class="fas fa-clock"></i> My Attendance
-    </a>
-    <a href="{{ url_for('hr_my_documents') }}"
-       class="sb-link {% if request.endpoint=='hr_my_documents' %}active{% endif %}">
-      <i class="fas fa-folder-open"></i> My Documents
-    </a>
-    <a href="{{ url_for('hr_notifications_page') }}"
-       class="sb-link {% if request.endpoint=='hr_notifications_page' %}active{% endif %}"
-       style="position:relative">
-      <i class="fas fa-bell"></i> Notifications
-      {% if hr_unread_count > 0 %}
-      <span style="position:absolute;top:6px;right:10px;background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:800;line-height:1.4">{{ hr_unread_count }}</span>
-      {% endif %}
-    </a>
 
     <div class="sb-section">My Work</div>
     <a href="{{ url_for('employee_dashboard') }}"
