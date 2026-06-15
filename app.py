@@ -6410,7 +6410,16 @@ def hr_employees():
 @app.route('/hr/employees/add', methods=['GET', 'POST'])
 @finance_required
 def hr_add_employee():
-    users_list = query_db("SELECT id, username, full_name FROM users WHERE is_active=TRUE ORDER BY full_name")
+    users_list = query_db("""
+        SELECT u.id, u.username, u.full_name, u.role
+        FROM users u
+        WHERE u.is_active = TRUE
+          AND u.id NOT IN (
+              SELECT user_id FROM employees
+              WHERE user_id IS NOT NULL AND deleted = FALSE
+          )
+        ORDER BY u.full_name
+    """)
     managers   = query_db("SELECT id, full_name, position FROM employees WHERE deleted=FALSE AND employment_status='Active' ORDER BY full_name")
 
     if request.method == 'POST':
@@ -6486,20 +6495,44 @@ def hr_employee_profile(emp_id):
     year      = date.today().year
     balances  = query_db("SELECT * FROM leave_balances WHERE employee_id=%s AND year=%s ORDER BY leave_type", [emp_id, year])
 
-    # Employee sales stats
-    sales_stats = None
+    # Employee sales stats + commission
+    sales_stats      = None
+    commission_rate  = None
+    recent_sales     = []
+    activity_log     = []
     if emp['user_id']:
         sales_stats = query_db("""
             SELECT COUNT(*) as total_sales,
                    COALESCE(SUM(sell),0) as total_revenue,
-                   COALESCE(SUM(sell - net),0) as total_profit
+                   COALESCE(SUM(sell - net),0) as total_profit,
+                   COALESCE(SUM((sell - net) * commission_rate / 100.0), 0) as commission_earned
             FROM sales WHERE created_by_user_id=%s AND deleted=FALSE
         """, [emp['user_id']], one=True)
+        user_info = query_db("SELECT commission_rate FROM users WHERE id=%s", [emp['user_id']], one=True)
+        if user_info:
+            commission_rate = user_info['commission_rate']
+        recent_sales = query_db("""
+            SELECT s.id, s.sell, s.net, s.commission_rate,
+                   ROUND((s.sell - s.net) * s.commission_rate / 100.0, 2) as commission_amount,
+                   s.created_at, c.full_name as client_name
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.created_by_user_id=%s AND s.deleted=FALSE
+            ORDER BY s.created_at DESC LIMIT 15
+        """, [emp['user_id']])
+        activity_log = query_db("""
+            SELECT action, table_name, record_id, detail, created_at
+            FROM audit_logs
+            WHERE user_id=%s
+            ORDER BY created_at DESC LIMIT 30
+        """, [emp['user_id']])
 
     return render_template('hr/employee_profile.html',
         emp=emp, documents=documents, leaves=leaves,
         attendance=attendance, balances=balances,
         sales_stats=sales_stats, year=year,
+        commission_rate=commission_rate,
+        recent_sales=recent_sales, activity_log=activity_log,
     )
 
 
@@ -6512,7 +6545,18 @@ def hr_edit_employee(emp_id):
         flash('Employee not found.', 'danger')
         return redirect(url_for('hr_employees'))
 
-    users_list = query_db("SELECT id, username, full_name FROM users WHERE is_active=TRUE ORDER BY full_name")
+    users_list = query_db("""
+        SELECT u.id, u.username, u.full_name, u.role
+        FROM users u
+        WHERE u.is_active = TRUE
+          AND (
+              u.id NOT IN (
+                  SELECT user_id FROM employees
+                  WHERE user_id IS NOT NULL AND deleted = FALSE AND id != %s
+              )
+          )
+        ORDER BY u.full_name
+    """, [emp_id])
     managers   = query_db("SELECT id, full_name, position FROM employees WHERE deleted=FALSE AND employment_status='Active' AND id!=%s ORDER BY full_name", [emp_id])
 
     if request.method == 'POST':
