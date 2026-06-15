@@ -5,7 +5,7 @@ import logging
 import psycopg2
 import psycopg2.extras
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import date, timedelta, datetime
 from functools import wraps
 from flask import (Flask, render_template, request, redirect,
@@ -2017,28 +2017,291 @@ def void_payment(pay_id):
     flash(f'Payment #{pay_id} voided. Ledger entry reversed.', 'warning')
     return redirect(url_for('payments'))
 
-# ── Deliver Tomorrow ──────────────────────────────────────────────────────────
+# ── Deliver Tomorrow — shared helpers ─────────────────────────────────────────
+
+def _dt_parse_filters(args):
+    """Parse all Deliver Tomorrow filter params from a request args or form dict."""
+    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    view_date   = (args.get('view_date',   '') or '').strip() or tomorrow_date
+    f_date_from = (args.get('date_from',   '') or '').strip()
+    f_date_to   = (args.get('date_to',     '') or '').strip()
+    f_company   = (args.get('company',     '') or '').strip().upper()
+    f_supplier  = (args.get('supplier',    '') or '').strip().upper()
+    f_passenger = (args.get('passenger',   '') or '').strip().upper()
+    f_status    = (args.get('status',      '') or '').strip().upper()
+    f_agent     = (args.get('agent_id',    '') or '').strip()
+
+    # When date_from/to are set they define the date window; otherwise single view_date
+    start_date = f_date_from or view_date
+    end_date   = f_date_to   or view_date
+
+    extra_where, extra_params = [], []
+    if f_company:
+        extra_where.append("AND UPPER(s.company) LIKE %s")
+        extra_params.append('%' + f_company + '%')
+    if f_supplier:
+        extra_where.append("AND (UPPER(COALESCE(s.buy_from,'')) LIKE %s"
+                           " OR UPPER(COALESCE(s.return_supplier,'')) LIKE %s)")
+        extra_params.extend(['%' + f_supplier + '%', '%' + f_supplier + '%'])
+    if f_passenger:
+        extra_where.append("AND UPPER(s.customer) LIKE %s")
+        extra_params.append('%' + f_passenger + '%')
+    if f_status:
+        extra_where.append("AND (COALESCE(s.outbound_status,s.status,'PENDING')=%s"
+                           " OR COALESCE(s.return_status,s.status,'PENDING')=%s)")
+        extra_params.extend([f_status, f_status])
+    if f_agent:
+        extra_where.append("AND s.created_by_user_id=%s")
+        extra_params.append(f_agent)
+
+    return dict(
+        view_date=view_date, start_date=start_date, end_date=end_date,
+        f_company=f_company, f_supplier=f_supplier, f_passenger=f_passenger,
+        f_status=f_status, f_agent=f_agent,
+        f_date_from=f_date_from, f_date_to=f_date_to,
+        extra_str=' '.join(extra_where),
+        extra_params=extra_params,
+    )
+
+
+def _dt_query_tickets(p):
+    """Run outbound + return delivery queries using a parsed filter dict."""
+    agent_select = "COALESCE(u.full_name, s.created_by_username, '—') AS agent_display"
+    agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
+    es, ep       = p['extra_str'], p['extra_params']
+    sd, ed       = p['start_date'], p['end_date']
+
+    outbound = query_db(f'''
+        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.deleted=FALSE
+          AND (
+            (s.outbound_delivery != '' AND s.outbound_delivery BETWEEN %s AND %s)
+            OR
+            (COALESCE(s.outbound_delivery,'')='' AND s.travel_date BETWEEN %s AND %s
+             AND COALESCE(s.travel_date,'') != '')
+          )
+        {es}
+        ORDER BY s.company, s.customer
+    ''', [sd, ed, sd, ed] + ep) or []
+
+    returns = query_db(f'''
+        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
+        FROM sales s {agent_join}
+        WHERE s.deleted=FALSE
+          AND (
+            (s.return_delivery != '' AND s.return_delivery BETWEEN %s AND %s)
+            OR
+            (COALESCE(s.return_delivery,'')='' AND s.return_date BETWEEN %s AND %s
+             AND COALESCE(s.return_date,'') != '')
+          )
+        {es}
+        ORDER BY s.company, s.customer
+    ''', [sd, ed, sd, ed] + ep) or []
+
+    return outbound, returns
+
+
+def _dt_build_excel(outbound_tickets, return_tickets, label):
+    """Build Deliver Tomorrow Excel in-memory and return raw bytes."""
+    _thin = Side(style='thin')
+    _bdr  = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+    hdr_font = Font(bold=True, color='FFFFFF')
+    out_fill = PatternFill('solid', fgColor='1B3A6B')
+    ret_fill = PatternFill('solid', fgColor='FFF7ED')
+    center   = Alignment(horizontal='center', vertical='center')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Deliver Tomorrow'
+
+    headers = ['#', 'Type', 'Customer Name', 'Company', 'Route',
+               'Airline / Supplier', 'Ticket Number', 'Travel Date', 'Delivery Status']
+    ws.append(headers)
+    for ci, _ in enumerate(headers, 1):
+        c = ws.cell(1, ci)
+        c.font = hdr_font; c.fill = out_fill
+        c.alignment = center; c.border = _bdr
+
+    row_num = 1
+    for t in outbound_tickets:
+        row_num += 1
+        status = t.get('outbound_status') or t.get('status') or 'PENDING'
+        ws.append([
+            row_num - 1, 'OUTBOUND',
+            t.get('customer', ''), t.get('company', ''),
+            f"{t.get('from_loc','') or ''} → {t.get('to_loc','') or ''}",
+            t.get('buy_from') or '—',
+            t.get('ticket_number') or '—',
+            str(t.get('travel_date') or '—'),
+            status,
+        ])
+        for ci in range(1, len(headers)+1):
+            ws.cell(row_num, ci).border = _bdr
+
+    for t in return_tickets:
+        row_num += 1
+        status = t.get('return_status') or t.get('status') or 'PENDING'
+        ws.append([
+            row_num - 1, 'RETURN',
+            t.get('customer', ''), t.get('company', ''),
+            f"{t.get('to_loc','') or ''} → {t.get('from_loc','') or ''}",
+            t.get('return_supplier') or t.get('buy_from') or '—',
+            t.get('return_ticket_number') or t.get('ticket_number') or '—',
+            str(t.get('return_date') or '—'),
+            status,
+        ])
+        for ci in range(1, len(headers)+1):
+            c = ws.cell(row_num, ci)
+            c.fill = ret_fill; c.border = _bdr
+
+    for col, width in zip('ABCDEFGHI', [5, 10, 26, 22, 18, 24, 22, 14, 14]):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _dt_send_email(outbound_tickets, return_tickets, label, sender_username='system'):
+    """
+    Send Deliver Tomorrow email with Excel attachment to all NOTIFY_EMAIL recipients.
+    Returns (success: bool, message: str).
+    NOTIFY_EMAIL supports comma-separated addresses.
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text      import MIMEText
+    from email.mime.base      import MIMEBase
+    from email                import encoders
+
+    smtp_host     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port     = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user     = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    email_to_raw  = os.environ.get('NOTIFY_EMAIL', smtp_user)
+
+    if not smtp_user or not smtp_password:
+        return False, ('Email not configured. '
+                       'Set SMTP_USER, SMTP_PASSWORD, NOTIFY_EMAIL in environment variables.')
+
+    recipients = [r.strip() for r in email_to_raw.split(',') if r.strip()]
+    if not recipients:
+        return False, 'No valid recipient addresses found in NOTIFY_EMAIL.'
+
+    total    = len(outbound_tickets) + len(return_tickets)
+    xl_bytes = _dt_build_excel(outbound_tickets, return_tickets, label)
+    xl_name  = f"deliver_{label.replace(' ','_')}.xlsx"
+
+    # Build HTML summary table
+    rows_html = ''
+    for i, t in enumerate(outbound_tickets + return_tickets, 1):
+        is_ret = (t.get('delivery_type') == 'RETURN')
+        status = (t.get('return_status') if is_ret else t.get('outbound_status')) \
+                 or t.get('status') or 'PENDING'
+        sc     = '#1E7B34' if status == 'DONE' else '#E67E22'
+        route  = (f"{t.get('to_loc','')} → {t.get('from_loc','')}" if is_ret
+                  else f"{t.get('from_loc','')} → {t.get('to_loc','')}")
+        supp   = ((t.get('return_supplier') or t.get('buy_from') or '—') if is_ret
+                  else (t.get('buy_from') or '—'))
+        dt     = str((t.get('return_date') if is_ret else t.get('travel_date')) or '—')
+        dtype  = 'RETURN' if is_ret else 'OUTBOUND'
+        bg     = '#fff7ed' if is_ret else ('#f9fafb' if i % 2 == 0 else '#ffffff')
+        rows_html += (
+            f'<tr style="background:{bg}">'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">{i}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700;'
+            f'color:{"#8B6914" if is_ret else "#1B3A6B"};font-size:11px">{dtype}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;font-weight:700">{t.get("company","")}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd">{t.get("customer","")}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;text-align:center"><strong>{route}</strong></td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">{supp}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;text-align:center">{dt}</td>'
+            f'<td style="padding:7px 10px;border:1px solid #ddd;text-align:center;'
+            f'color:{sc};font-weight:700">{status}</td>'
+            f'</tr>'
+        )
+
+    html_body = f"""<html><body style="font-family:Arial,sans-serif;margin:0;padding:20px;background:#f4f7fc">
+<div style="max-width:900px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,.1)">
+  <div style="background:#1B3A6B;padding:24px 28px">
+    <h1 style="color:#C8A84B;margin:0;font-size:20px">&#9992; ALSONDOS TRAVEL</h1>
+    <h2 style="color:#fff;margin:8px 0 0;font-size:16px">Daily Deliver Tomorrow Report &mdash; {label}</h2>
+    <p style="color:rgba(255,255,255,.7);margin:4px 0 0;font-size:13px">
+      {len(outbound_tickets)} outbound &nbsp;&middot;&nbsp; {len(return_tickets)} return
+      &nbsp;&middot;&nbsp; {total} total tickets
+    </p>
+  </div>
+  <div style="padding:20px">
+    <p style="color:#374151;font-size:13px">Please find attached today's Deliver Tomorrow report.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#1B3A6B;color:#fff">
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">#</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Type</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Company</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Customer</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Route</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Supplier</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Travel Date</th>
+          <th style="padding:9px 10px;border:1px solid #1B3A6B">Status</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    <p style="color:#6B7A99;font-size:11px;margin-top:16px;text-align:center">
+      Generated by ALSONDOS TRAVEL System &middot; {label} &middot; Sent by {sender_username}
+    </p>
+  </div>
+</div>
+</body></html>"""
+
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = f'Daily Deliver Tomorrow Report - {label}'
+    msg['From']    = smtp_user
+    msg['To']      = ', '.join(recipients)
+    msg.attach(MIMEText(html_body, 'html'))
+
+    att = MIMEBase('application',
+                   'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    att.set_payload(xl_bytes)
+    encoders.encode_base64(att)
+    att.add_header('Content-Disposition', f'attachment; filename="{xl_name}"')
+    msg.attach(att)
+
+    try:
+        import smtplib
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=25) as srv:
+            srv.ehlo(); srv.starttls(); srv.ehlo()
+            srv.login(smtp_user, smtp_password)
+            srv.sendmail(smtp_user, recipients, msg.as_string())
+        logger.info(f"Deliver Tomorrow email sent to {recipients} ({total} tickets)")
+        return True, f'Email sent to {", ".join(recipients)} — {total} ticket(s).'
+    except Exception as ex:
+        logger.error(f"Deliver Tomorrow email failed: {ex}")
+        return False, f'Email failed: {ex}'
+
+
+# ── Deliver Tomorrow — routes ──────────────────────────────────────────────────
 @app.route('/deliver-tomorrow')
 @login_required
 def deliver_tomorrow():
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     today_str     = str(date.today())
-    # Allow viewing any date via ?view_date=YYYY-MM-DD
-    view_date = request.args.get('view_date', '').strip() or tomorrow_date
 
-    # Auto-update outbound statuses (active only)
+    # Auto-update delivery statuses
     execute_db('''
         UPDATE sales SET outbound_status='DONE'
         WHERE outbound_delivery != '' AND outbound_delivery <= %s
           AND outbound_status='PENDING' AND deleted=FALSE AND is_archived=FALSE
     ''', [today_str])
-    # Auto-update return statuses (active only)
     execute_db('''
         UPDATE sales SET return_status='DONE'
         WHERE return_delivery != '' AND return_delivery <= %s
           AND return_status='PENDING' AND deleted=FALSE AND is_archived=FALSE
     ''', [today_str])
-    # Update overall status to DONE when all sectors complete
     execute_db('''
         UPDATE sales SET status='DONE'
         WHERE outbound_status='DONE'
@@ -2046,74 +2309,10 @@ def deliver_tomorrow():
           AND status != 'DONE' AND deleted=FALSE AND is_archived=FALSE
     ''')
 
-    # ── Filters ──
-    f_travel_date = request.args.get('travel_date', '').strip()
-    f_company     = request.args.get('company', '').strip().upper()
-    f_supplier    = request.args.get('supplier', '').strip().upper()
-    f_passenger   = request.args.get('passenger', '').strip().upper()
-    f_status      = request.args.get('status', '').strip().upper()
-    f_agent       = request.args.get('agent_id', '').strip()
-
-    # Build shared extra filter fragments (appended to each query's WHERE)
-    extra_where  = []
-    extra_params = []
-    if f_company:
-        extra_where.append("AND UPPER(s.company) LIKE %s")
-        extra_params.append('%' + f_company + '%')
-    if f_supplier:
-        extra_where.append("AND (UPPER(COALESCE(s.buy_from,'')) LIKE %s OR UPPER(COALESCE(s.return_supplier,'')) LIKE %s)")
-        extra_params.extend(['%' + f_supplier + '%', '%' + f_supplier + '%'])
-    if f_passenger:
-        extra_where.append("AND UPPER(s.customer) LIKE %s")
-        extra_params.append('%' + f_passenger + '%')
-    if f_status:
-        extra_where.append("AND (COALESCE(s.outbound_status,s.status,'PENDING')=%s OR COALESCE(s.return_status,s.status,'PENDING')=%s)")
-        extra_params.extend([f_status, f_status])
-    if f_agent:
-        extra_where.append("AND s.created_by_user_id=%s")
-        extra_params.append(f_agent)
-    if f_travel_date:
-        extra_where.append("AND s.travel_date=%s")
-        extra_params.append(f_travel_date)
-    extra_str = ' '.join(extra_where)
-
-    agent_select = "COALESCE(u.full_name, s.created_by_username, '—') AS agent_display"
-    agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
-
-    # Outbound tickets due tomorrow
-    # Use outbound_delivery if set, otherwise fall back to travel_date
-    outbound_tickets = query_db(f'''
-        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
-        FROM sales s {agent_join}
-        WHERE s.deleted=FALSE
-          AND (
-            (s.outbound_delivery != '' AND s.outbound_delivery = %s)
-            OR
-            (COALESCE(s.outbound_delivery, '') = '' AND s.travel_date = %s AND COALESCE(s.travel_date, '') != '')
-          )
-        {extra_str}
-        ORDER BY s.company, s.customer
-    ''', [view_date, view_date] + extra_params) or []
-
-    # Return tickets due on view_date
-    # Use return_delivery if set, otherwise fall back to return_date
-    return_tickets = query_db(f'''
-        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
-        FROM sales s {agent_join}
-        WHERE s.deleted=FALSE
-          AND (
-            (s.return_delivery != '' AND s.return_delivery = %s)
-            OR
-            (COALESCE(s.return_delivery, '') = '' AND s.return_date = %s AND COALESCE(s.return_date, '') != '')
-          )
-        {extra_str}
-        ORDER BY s.company, s.customer
-    ''', [view_date, view_date] + extra_params) or []
-
-    # Legacy travel_date tickets (no delivery dates set at all)
+    p = _dt_parse_filters(request.args)
+    outbound_tickets, return_tickets = _dt_query_tickets(p)
     travel_date_tickets = []
 
-    # Lists for filter dropdowns
     agents    = query_db(
         "SELECT id, COALESCE(full_name, username) AS name FROM users ORDER BY full_name, username"
     ) or []
@@ -2121,157 +2320,50 @@ def deliver_tomorrow():
 
     tomorrow_str = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
     try:
-        view_date_str = datetime.strptime(view_date, '%Y-%m-%d').strftime('%d %B %Y')
+        view_date_str = datetime.strptime(p['view_date'], '%Y-%m-%d').strftime('%d %B %Y')
     except Exception:
         view_date_str = tomorrow_str
+
     return render_template('deliver.html',
         outbound_tickets=outbound_tickets,
         return_tickets=return_tickets,
         travel_date_tickets=travel_date_tickets,
         tomorrow=view_date_str,
         tomorrow_date=tomorrow_date,
-        view_date=view_date,
+        view_date=p['view_date'],
         agents=agents,
         companies=companies,
         filters=dict(
-            travel_date=f_travel_date,
-            company=f_company,
-            supplier=f_supplier,
-            passenger=f_passenger,
-            status=f_status,
-            agent_id=f_agent,
-            view_date=view_date,
+            travel_date='',
+            company=p['f_company'],
+            supplier=p['f_supplier'],
+            passenger=p['f_passenger'],
+            status=p['f_status'],
+            agent_id=p['f_agent'],
+            view_date=p['view_date'],
+            date_from=p['f_date_from'],
+            date_to=p['f_date_to'],
         )
     )
+
 
 @app.route('/deliver-tomorrow/export')
 @login_required
 def deliver_tomorrow_export():
-    """Export the current Deliver Tomorrow view to Excel."""
-    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    view_date = request.args.get('view_date', '').strip() or tomorrow_date
+    """Export filtered Deliver Tomorrow view to Excel."""
+    p = _dt_parse_filters(request.args)
+    outbound_tickets, return_tickets = _dt_query_tickets(p)
 
-    f_travel_date = request.args.get('travel_date', '').strip()
-    f_company     = request.args.get('company', '').strip().upper()
-    f_supplier    = request.args.get('supplier', '').strip().upper()
-    f_passenger   = request.args.get('passenger', '').strip().upper()
-    f_status      = request.args.get('status', '').strip().upper()
-    f_agent       = request.args.get('agent_id', '').strip()
+    if p['f_date_from'] or p['f_date_to']:
+        label = f"{p['start_date']}_to_{p['end_date']}"
+    else:
+        label = p['view_date']
 
-    extra_where, extra_params = [], []
-    if f_company:
-        extra_where.append("AND UPPER(s.company) LIKE %s")
-        extra_params.append('%' + f_company + '%')
-    if f_supplier:
-        extra_where.append("AND (UPPER(COALESCE(s.buy_from,'')) LIKE %s OR UPPER(COALESCE(s.return_supplier,'')) LIKE %s)")
-        extra_params.extend(['%' + f_supplier + '%', '%' + f_supplier + '%'])
-    if f_passenger:
-        extra_where.append("AND UPPER(s.customer) LIKE %s")
-        extra_params.append('%' + f_passenger + '%')
-    if f_status:
-        extra_where.append("AND (COALESCE(s.outbound_status,s.status,'PENDING')=%s OR COALESCE(s.return_status,s.status,'PENDING')=%s)")
-        extra_params.extend([f_status, f_status])
-    if f_agent:
-        extra_where.append("AND s.created_by_user_id=%s")
-        extra_params.append(f_agent)
-    if f_travel_date:
-        extra_where.append("AND s.travel_date=%s")
-        extra_params.append(f_travel_date)
-    extra_str = ' '.join(extra_where)
-
-    agent_select = "COALESCE(u.full_name, s.created_by_username, '—') AS agent_display"
-    agent_join   = "LEFT JOIN users u ON s.created_by_user_id = u.id"
-
-    outbound_tickets = query_db(f'''
-        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
-        FROM sales s {agent_join}
-        WHERE s.deleted=FALSE
-          AND (
-            (s.outbound_delivery != '' AND s.outbound_delivery = %s)
-            OR
-            (COALESCE(s.outbound_delivery, '') = '' AND s.travel_date = %s AND COALESCE(s.travel_date, '') != '')
-          )
-        {extra_str}
-        ORDER BY s.company, s.customer
-    ''', [view_date, view_date] + extra_params) or []
-
-    return_tickets = query_db(f'''
-        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
-        FROM sales s {agent_join}
-        WHERE s.deleted=FALSE
-          AND (
-            (s.return_delivery != '' AND s.return_delivery = %s)
-            OR
-            (COALESCE(s.return_delivery, '') = '' AND s.return_date = %s AND COALESCE(s.return_date, '') != '')
-          )
-        {extra_str}
-        ORDER BY s.company, s.customer
-    ''', [view_date, view_date] + extra_params) or []
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Deliver Tomorrow'
-
-    header_font = Font(bold=True, color='FFFFFF')
-    out_fill    = PatternFill('solid', fgColor='1B3A6B')
-    ret_fill    = PatternFill('solid', fgColor='8B6914')
-    center      = Alignment(horizontal='center', vertical='center')
-
-    columns = ['#', 'Type', 'Company', 'Customer', 'Route', 'Supplier', 'Tickets', 'Date', 'Status']
-    ws.append(columns)
-    for col_idx, _ in enumerate(columns, 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.font   = Font(bold=True, color='FFFFFF')
-        cell.fill   = PatternFill('solid', fgColor='1B3A6B')
-        cell.alignment = center
-
-    row_num = 1
-    for t in outbound_tickets:
-        row_num += 1
-        route  = f"{t['from_loc'] or ''} → {t['to_loc'] or ''}"
-        status = t.get('outbound_status') or t.get('status') or 'PENDING'
-        ws.append([
-            row_num - 1, 'OUTBOUND',
-            t['company'], t['customer'],
-            route,
-            t.get('buy_from') or '-',
-            t['tickets'],
-            str(t.get('travel_date') or '-'),
-            status,
-        ])
-
-    for t in return_tickets:
-        row_num += 1
-        route  = f"{t['to_loc'] or ''} → {t['from_loc'] or ''}"
-        status = t.get('return_status') or t.get('status') or 'PENDING'
-        ws.append([
-            row_num - 1, 'RETURN',
-            t['company'], t['customer'],
-            route,
-            t.get('return_supplier') or t.get('buy_from') or '-',
-            t['tickets'],
-            str(t.get('return_date') or '-'),
-            status,
-        ])
-
-    ws.column_dimensions['A'].width = 5
-    ws.column_dimensions['B'].width = 10
-    ws.column_dimensions['C'].width = 22
-    ws.column_dimensions['D'].width = 22
-    ws.column_dimensions['E'].width = 18
-    ws.column_dimensions['F'].width = 22
-    ws.column_dimensions['G'].width = 8
-    ws.column_dimensions['H'].width = 14
-    ws.column_dimensions['I'].width = 10
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    filename = f"deliver_{view_date}.xlsx"
+    xl_bytes = _dt_build_excel(outbound_tickets, return_tickets, label)
     return Response(
-        buf.getvalue(),
+        xl_bytes,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        headers={'Content-Disposition': f'attachment; filename="deliver_{label}.xlsx"'}
     )
 
 
@@ -2301,134 +2393,80 @@ def mark_delivered(sale_id):
 @app.route('/deliver-tomorrow/send-email', methods=['POST'])
 @login_required
 def send_deliver_email():
-    import smtplib
+    """Email Team button — sends filtered Deliver Tomorrow report with Excel attachment."""
     import threading
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
 
-    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-    tomorrow_str  = (date.today() + timedelta(days=1)).strftime('%d %B %Y')
+    p = _dt_parse_filters(request.form)
+    outbound_tickets, return_tickets = _dt_query_tickets(p)
+    total = len(outbound_tickets) + len(return_tickets)
 
-    # Gather all tickets
-    outbound_tickets = query_db('''
-        SELECT * FROM sales WHERE outbound_delivery=%s AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
-    return_tickets = query_db('''
-        SELECT * FROM sales WHERE return_delivery=%s AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
-    travel_date_tickets = query_db('''
-        SELECT * FROM sales WHERE travel_date=%s
-          AND (outbound_delivery IS NULL OR outbound_delivery='')
-          AND deleted=FALSE
-        ORDER BY company, customer
-    ''', [tomorrow_date])
+    if total == 0:
+        flash('No tickets to send — delivery list is empty for the selected date/filters.', 'warning')
+        return redirect(url_for('deliver_tomorrow', **{k: v for k, v in request.form.items()
+                                                        if k != 'csrf_token' and v}))
 
-    all_tickets = list(outbound_tickets) + list(return_tickets) + list(travel_date_tickets)
-
-    if not all_tickets:
-        flash('No tickets to send — delivery list is empty for tomorrow.', 'warning')
-        return redirect(url_for('deliver_tomorrow'))
-
-    # Build HTML email table
-    rows_html = ''
-    for i, t in enumerate(all_tickets, 1):
-        status = t.get('outbound_status') or t.get('status') or 'PENDING'
-        color = '#1E7B34' if status == 'DONE' else '#E67E22'
-        rows_html += f"""
-        <tr style="background:{'#f0fff4' if i%2==0 else '#ffffff'}">
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{i}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold">{t['company']}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd">{t['customer']}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center"><strong>{t['from_loc']}</strong></td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center"><strong>{t['to_loc']}</strong></td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('via') or '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('travel_date') or t.get('return_date') or '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t.get('buy_from') or t.get('return_supplier') or '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center">{t['tickets']}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;color:{color};font-weight:bold">{status}</td>
-        </tr>"""
-
-    html_body = f"""
-    <html><body style="font-family:Arial,sans-serif;margin:0;padding:20px;background:#f4f7fc">
-    <div style="max-width:900px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">
-      <div style="background:#1B3A6B;padding:24px 28px">
-        <h1 style="color:#C8A84B;margin:0;font-size:20px">✈ ALSONDOS TRAVEL</h1>
-        <h2 style="color:#fff;margin:8px 0 0;font-size:16px">🚨 Delivery List — {tomorrow_str}</h2>
-        <p style="color:rgba(255,255,255,.7);margin:4px 0 0;font-size:13px">Total tickets: {len(all_tickets)}</p>
-      </div>
-      <div style="padding:20px">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:#1B3A6B;color:#fff">
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">#</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Company</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Customer</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">From</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">To</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Via</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Travel Date</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Buy From</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Tkts</th>
-              <th style="padding:10px 12px;border:1px solid #1B3A6B">Status</th>
-            </tr>
-          </thead>
-          <tbody>{rows_html}</tbody>
-          <tfoot>
-            <tr style="background:#1B3A6B;color:#fff">
-              <td colspan="8" style="padding:10px 12px;border:1px solid #1B3A6B;font-weight:bold">TOTAL TICKETS</td>
-              <td style="padding:10px 12px;border:1px solid #1B3A6B;font-weight:bold;text-align:center">{sum(t['tickets'] for t in all_tickets)}</td>
-              <td style="border:1px solid #1B3A6B"></td>
-            </tr>
-          </tfoot>
-        </table>
-        <p style="color:#6B7A99;font-size:12px;margin-top:16px;text-align:center">
-          Generated by ALSONDOS TRAVEL System — {tomorrow_str} | Sent by {session.get('username','system')}
-        </p>
-      </div>
-    </div>
-    </body></html>"""
-
-    # Get email settings from env
-    smtp_host     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port     = int(os.environ.get('SMTP_PORT', 587))
-    smtp_user     = os.environ.get('SMTP_USER', '')
-    smtp_password = os.environ.get('SMTP_PASSWORD', '')
-    email_to      = os.environ.get('NOTIFY_EMAIL', smtp_user)
-
-    if not smtp_user or not smtp_password:
-        flash('Email not configured. Set SMTP_USER, SMTP_PASSWORD, NOTIFY_EMAIL in Render environment variables.', 'danger')
-        return redirect(url_for('deliver_tomorrow'))
-
-    # Build message before thread starts
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = f'ALSONDOS Delivery List {tomorrow_str} ({len(all_tickets)} tickets)'
-    msg['From']    = smtp_user
-    msg['To']      = email_to
-    msg.attach(MIMEText(html_body, 'html'))
-    msg_string = msg.as_string()
-
-    # Send in background so request returns immediately (avoids 502 timeout)
-    def send_background():
+    if p['f_date_from'] or p['f_date_to']:
+        label = f"{p['start_date']} to {p['end_date']}"
+    else:
         try:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=25) as srv:
-                srv.ehlo()
-                srv.starttls()
-                srv.ehlo()
-                srv.login(smtp_user, smtp_password)
-                srv.sendmail(smtp_user, email_to, msg_string)
-            logger.info(f"Email sent OK to {email_to}")
-        except Exception as ex:
-            logger.error(f"Background email failed: {ex}")
+            label = datetime.strptime(p['view_date'], '%Y-%m-%d').strftime('%d %B %Y')
+        except Exception:
+            label = p['view_date']
 
-    import threading
-    threading.Thread(target=send_background, daemon=True).start()
+    sender = session.get('username', 'system')
+
+    def _send():
+        ok, msg_text = _dt_send_email(outbound_tickets, return_tickets, label, sender)
+        if not ok:
+            logger.error(f"send_deliver_email background error: {msg_text}")
+
+    threading.Thread(target=_send, daemon=True).start()
+
+    email_to_raw = os.environ.get('NOTIFY_EMAIL', os.environ.get('SMTP_USER', ''))
+    if not os.environ.get('SMTP_USER') or not os.environ.get('SMTP_PASSWORD'):
+        flash('Email not configured. Set SMTP_USER, SMTP_PASSWORD, NOTIFY_EMAIL in environment variables.',
+              'danger')
+        return redirect(url_for('deliver_tomorrow'))
 
     log_action('EMAIL', 'sales', None,
-               f"Delivery list {tomorrow_str} queued to {email_to} ({len(all_tickets)} tickets)")
-    flash(f'Email sending to {email_to} — {len(all_tickets)} tickets. Check inbox in 30 seconds.', 'success')
-    return redirect(url_for('deliver_tomorrow'))
+               f"Deliver Tomorrow report '{label}' queued to {email_to_raw} "
+               f"({len(outbound_tickets)} outbound + {len(return_tickets)} return)")
+    flash(f'Deliver Tomorrow report emailed successfully — {total} ticket(s) sent to {email_to_raw}.',
+          'success')
+    return redirect(url_for('deliver_tomorrow', view_date=p['view_date'],
+                             date_from=p['f_date_from'], date_to=p['f_date_to'],
+                             company=p['f_company']))
+
+
+@app.route('/deliver-tomorrow/daily-email', methods=['POST'])
+def deliver_tomorrow_daily_email():
+    """
+    Automated daily email endpoint — call from OS cron, not from the browser.
+
+    Cron setup on Hostinger VPS (fires at 08:00 every day):
+        0 8 * * * curl -s -X POST -H "X-Cron-Key: YOUR_CRON_KEY" \\
+            http://127.0.0.1:5000/deliver-tomorrow/daily-email >> /var/log/deliver_email.log 2>&1
+
+    Set CRON_KEY env var to a random secret to protect the endpoint.
+    """
+    cron_key = os.environ.get('CRON_KEY', '')
+    if cron_key and request.headers.get('X-Cron-Key', '') != cron_key:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+
+    tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
+    p = _dt_parse_filters({'view_date': tomorrow_date})
+    outbound_tickets, return_tickets = _dt_query_tickets(p)
+    total = len(outbound_tickets) + len(return_tickets)
+
+    try:
+        label = datetime.strptime(tomorrow_date, '%Y-%m-%d').strftime('%d %B %Y')
+    except Exception:
+        label = tomorrow_date
+
+    ok, msg_text = _dt_send_email(outbound_tickets, return_tickets, label, sender_username='cron')
+    log_action('EMAIL', 'sales', None,
+               f"Auto daily email '{label}': {msg_text} ({total} tickets)")
+    return jsonify({'ok': ok, 'message': msg_text, 'tickets': total})
 
 # ── Admin DB viewer ───────────────────────────────────────────────────────────
 @app.route('/admin')
