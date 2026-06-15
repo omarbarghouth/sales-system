@@ -1541,6 +1541,7 @@ def statement():
 
         try:
             raw_rows = query_db(f"""
+            SELECT * FROM (
                 -- 1. Sales to this company (DEBIT)
                 SELECT
                     sale_date            AS entry_date,
@@ -1714,6 +1715,7 @@ def statement():
                   AND UPPER(TRIM(account))=%s
                   {_adj_date_sql}
 
+            ) AS _ledger
                 ORDER BY
                     entry_date ASC,
                     CASE entry_type
