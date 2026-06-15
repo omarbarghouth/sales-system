@@ -1,29 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Sales Report — ALSONDOS TRAVEL{% endblock %}
+{% block title %}Transactions — ALSONDOS TRAVEL{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-exchange-alt" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:6px"></i>Sales Report</h1>
+    <h1><i class="fas fa-exchange-alt" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:6px"></i>Transactions</h1>
     <p>
-      {{ totals.count }} transactions
-      · JOD {{ "%.3f"|format((totals.sell or 0)|float) }} revenue
-      · JOD {{ "%.3f"|format((totals.profit or 0)|float) }} profit
+      {{ totals.count }} records
+      &nbsp;·&nbsp; <span style="color:var(--gold);font-weight:600">JOD {{ "%.3f"|format((totals.sell or 0)|float) }}</span> revenue
+      &nbsp;·&nbsp; <span style="color:var(--green);font-weight:600">JOD {{ "%.3f"|format((totals.profit or 0)|float) }}</span> profit
       {% if filters.agent_id %}&nbsp;·&nbsp;<span style="color:var(--red);font-weight:700">Filtered by agent</span>{% endif %}
     </p>
   </div>
   <div class="page-header-actions no-print">
     {% if is_admin %}
-    <a href="{{ url_for('add_sale') }}" class="btn btn-red">
-      <i class="fas fa-plus"></i> New Sale
-    </a>
+    <a href="{{ url_for('add_sale') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Sale</a>
     {% endif %}
-    <a href="{{ url_for('export_excel') }}" class="btn btn-gold">
-      <i class="fas fa-file-excel"></i> Export
-    </a>
-    <button onclick="window.print()" class="btn btn-print">
-      <i class="fas fa-print"></i> Print
-    </button>
+    <a href="{{ url_for('export_excel') }}" class="btn btn-gold"><i class="fas fa-file-excel"></i> Export</a>
+    <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
   </div>
 </div>
 
@@ -31,7 +25,7 @@
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;width:100%">
 
-    <div class="form-group" style="flex:2;min-width:160px">
+    <div class="form-group" style="flex:2;min-width:150px">
       <label>Company</label>
       <select name="company" onchange="this.form.submit()">
         <option value="">All Companies</option>
@@ -42,43 +36,31 @@
     </div>
 
     {% if is_admin and agents %}
-    <div class="form-group" style="flex:2;min-width:160px">
-      <label><i class="fas fa-user-tie" style="color:var(--navy);margin-right:3px"></i>Sales Agent</label>
+    <div class="form-group" style="flex:2;min-width:150px">
+      <label><i class="fas fa-user-tie" style="color:var(--navy);margin-right:3px"></i>Agent</label>
       <select name="agent_id" onchange="this.form.submit()">
         <option value="">All Agents</option>
         {% for a in agents %}
-        <option value="{{ a.id }}" {% if filters.agent_id == a.id|string %}selected{% endif %}>
-          {{ a.display }}
-        </option>
+        <option value="{{ a.id }}" {% if filters.agent_id == a.id|string %}selected{% endif %}>{{ a.display }}</option>
         {% endfor %}
       </select>
     </div>
     {% endif %}
 
-    <div class="form-group" style="min-width:130px">
+    <div class="form-group" style="min-width:120px">
       <label>Status</label>
       <select name="status" onchange="this.form.submit()">
         <option value="">All</option>
-        <option value="STILL"  {% if filters.status=='STILL'  %}selected{% endif %}>Still</option>
-        <option value="DONE"   {% if filters.status=='DONE'   %}selected{% endif %}>Done</option>
+        <option value="STILL"    {% if filters.status=='STILL'    %}selected{% endif %}>Still</option>
+        <option value="DONE"     {% if filters.status=='DONE'     %}selected{% endif %}>Done</option>
         <option value="CANCEL"   {% if filters.status=='CANCEL'   %}selected{% endif %}>Cancelled</option>
         <option value="REFUNDED" {% if filters.status=='REFUNDED' %}selected{% endif %}>Refunded</option>
-        <option value="PARTIAL"  {% if filters.status=='PARTIAL'  %}selected{% endif %}>Partial Refund</option>
+        <option value="PARTIAL"  {% if filters.status=='PARTIAL'  %}selected{% endif %}>Partial</option>
       </select>
     </div>
 
-    <div class="form-group" style="min-width:130px">
-      <label>Date From</label>
-      <input type="date" name="date_from" value="{{ svc_filter|default("") and "" }}{{ filters.date_from }}" onchange="this.form.submit()">
-    </div>
-
-    <div class="form-group" style="min-width:130px">
-      <label>Date To</label>
-      <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
-    </div>
-
-    <div class="form-group" style="min-width:130px">
-      <label>Service Type</label>
+    <div class="form-group" style="min-width:120px">
+      <label>Service</label>
       <select name="svc_type" onchange="this.form.submit()">
         <option value="">All Types</option>
         {% for t in ['FLIGHT','HOTEL','PACKAGE','VISA','INSURANCE','TRANSFER','TOUR'] %}
@@ -87,259 +69,390 @@
       </select>
     </div>
 
-    <div class="form-group" style="flex:2;min-width:160px">
-      <label><i class="fas fa-user" style="color:var(--navy);margin-right:3px"></i>Customer Name</label>
-      <input type="text" name="customer" value="{{ filters.get('customer','') }}"
-             placeholder="Search by name…" autocomplete="off">
+    <div class="form-group" style="min-width:120px">
+      <label>From</label>
+      <input type="date" name="date_from" value="{{ filters.date_from }}" onchange="this.form.submit()">
     </div>
 
-    <div style="display:flex;gap:7px;align-self:flex-end">
-      <button type="submit" class="btn btn-primary btn-sm">
-        <i class="fas fa-search"></i> Search
-      </button>
+    <div class="form-group" style="min-width:120px">
+      <label>To</label>
+      <input type="date" name="date_to" value="{{ filters.date_to }}" onchange="this.form.submit()">
+    </div>
+
+    <div class="form-group" style="flex:2;min-width:140px">
+      <label>Customer</label>
+      <input type="text" name="customer" value="{{ filters.get('customer','') }}"
+             placeholder="Search name…" autocomplete="off">
+    </div>
+
+    <div style="display:flex;gap:6px;align-self:flex-end">
+      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
       {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') or filters.get('customer') %}
-      <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" title="Clear filters">
-        <i class="fas fa-times"></i>
-      </a>
+      <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" title="Clear filters"><i class="fas fa-times"></i></a>
       {% endif %}
     </div>
 
   </form>
 </div>
 
-{# ── Active filter badges ─────────────────────────────────────── #}
+{# ── Active filter chips ──────────────────────────────────────── #}
 {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to %}
 <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;align-items:center" class="no-print">
-  <span style="font-size:11.5px;color:var(--muted);font-weight:600">Active filters:</span>
+  <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Filters:</span>
   {% if filters.company %}
-  <span style="background:var(--navy-lt);color:var(--navy);padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:5px">
-    <i class="fas fa-building" style="font-size:10px"></i> {{ filters.company }}
-    <a href="{{ url_for('sales_report', status=filters.status, date_from=filters.date_from, date_to=filters.date_to, agent_id=filters.agent_id) }}" style="color:var(--red);margin-left:2px;text-decoration:none">×</a>
+  <span class="txn-chip chip-navy"><i class="fas fa-building" style="font-size:9px"></i> {{ filters.company }}
+    <a href="{{ url_for('sales_report', status=filters.status, date_from=filters.date_from, date_to=filters.date_to, agent_id=filters.agent_id) }}" style="color:var(--red);margin-left:4px;text-decoration:none;font-weight:900">×</a>
   </span>
   {% endif %}
   {% if filters.agent_id %}
-  <span style="background:var(--purple-lt);color:var(--purple);padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:5px">
-    <i class="fas fa-user-tie" style="font-size:10px"></i>
+  <span class="txn-chip chip-purple"><i class="fas fa-user-tie" style="font-size:9px"></i>
     {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}
-    <a href="{{ url_for('sales_report', company=filters.company, status=filters.status, date_from=filters.date_from, date_to=filters.date_to) }}" style="color:var(--red);margin-left:2px;text-decoration:none">×</a>
+    <a href="{{ url_for('sales_report', company=filters.company, status=filters.status, date_from=filters.date_from, date_to=filters.date_to) }}" style="color:var(--red);margin-left:4px;text-decoration:none;font-weight:900">×</a>
   </span>
   {% endif %}
   {% if filters.status %}
-  <span style="background:var(--orange-lt);color:var(--orange);padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600">
-    {{ filters.status }}
-  </span>
+  <span class="txn-chip chip-orange">{{ filters.status }}</span>
   {% endif %}
   {% if filters.date_from or filters.date_to %}
-  <span style="background:var(--blue-lt);color:var(--blue);padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600">
-    <i class="fas fa-calendar" style="font-size:10px"></i>
-    {{ svc_filter|default("") and "" }}{{ filters.date_from or '…' }} → {{ filters.date_to or '…' }}
-  </span>
+  <span class="txn-chip chip-blue"><i class="fas fa-calendar" style="font-size:9px"></i> {{ filters.date_from or '…' }} → {{ filters.date_to or '…' }}</span>
   {% endif %}
 </div>
 {% endif %}
 
-{# ── Summary KPIs ─────────────────────────────────────────────── #}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
-  <div class="kpi-box">
+{# ── Summary KPI strip ─────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
+  <div class="kpi-box" style="padding:14px 16px">
     <div class="kpi-icon"><i class="fas fa-exchange-alt"></i></div>
     <div class="kpi-label">Transactions</div>
     <div class="kpi-value">{{ totals.count }}</div>
   </div>
-  <div class="kpi-box gold">
+  <div class="kpi-box gold" style="padding:14px 16px">
     <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
     <div class="kpi-label">Revenue</div>
-    <div class="kpi-value gold" style="font-size:16px">JOD {{ "%.3f"|format((totals.sell or 0)|float) }}</div>
+    <div class="kpi-value gold" style="font-size:16px">{{ "%.3f"|format((totals.sell or 0)|float) }}</div>
   </div>
-  <div class="kpi-box" style="--top-color:var(--muted-lt)">
+  <div class="kpi-box" style="padding:14px 16px">
     <div class="kpi-icon"><i class="fas fa-receipt"></i></div>
     <div class="kpi-label">Net Cost</div>
-    <div class="kpi-value" style="font-size:16px;color:var(--muted)">JOD {{ "%.3f"|format((totals.net or 0)|float) }}</div>
+    <div class="kpi-value" style="font-size:16px;color:var(--muted)">{{ "%.3f"|format((totals.net or 0)|float) }}</div>
   </div>
-  <div class="kpi-box green">
+  <div class="kpi-box green" style="padding:14px 16px">
     <div class="kpi-icon"><i class="fas fa-coins"></i></div>
     <div class="kpi-label">Profit</div>
-    <div class="kpi-value green" style="font-size:16px">JOD {{ "%.3f"|format((totals.profit or 0)|float) }}</div>
+    <div class="kpi-value green" style="font-size:16px">{{ "%.3f"|format((totals.profit or 0)|float) }}</div>
   </div>
 </div>
 
-{# ── Transactions Table ────────────────────────────────────────── #}
+{# ─────────────────────────────────────────────────────────────────────
+   TRANSACTIONS TABLE
+   Column budget (admin, 1360px min-width total):
+     T#:72  Type:70  Date:86  Company:140  Customer:140  Route:118
+     Suppliers:108  Tix:38  Travel:84  Net:84  Sell:90  Profit:82
+     Status:68  Agent:88  Actions:92
+   Non-admin (1080px):
+     same except no Agent/Actions
+──────────────────────────────────────────────────────────────────── #}
 <style>
-/* ── Report table: professional fixed-layout ──────────────────── */
-.report-table {
+.txn-table {
   table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
 }
-.report-table th {
-  vertical-align: middle;
+.txn-table th {
+  padding: 9px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
   white-space: nowrap;
-  padding: 9px 7px;
-  text-align: left;
-}
-.report-table td {
   vertical-align: middle;
-  padding: 8px 7px;
+  background: var(--navy-dk);
+  color: rgba(255,255,255,.75);
+  border-bottom: 2px solid var(--border-lt);
 }
-.report-table td:not(:first-child) {
+.txn-table td {
+  padding: 8px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 12.5px;
+  overflow: hidden;
+}
+.txn-table tbody tr:hover { background: var(--navy-lt,#f0f4ff); }
+/* Ellipsis cells */
+.txn-cell-clip {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* Numeric columns — right-align with tabular digits */
-.report-table th.col-num,
-.report-table td.col-num {
+/* Right-aligned numeric cells */
+.txn-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
   white-space: nowrap;
-  padding-right: 10px;
+  padding-right: 12px !important;
 }
-/* Supplier lines inside the Suppliers cell */
-.report-table .supp-line {
+.txn-table th.txn-num { padding-right: 12px; }
+/* Transaction number badge */
+.txn-id-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy-dk);
+  letter-spacing: .3px;
+}
+.txn-db-id {
   display: block;
+  font-size: 10px;
+  color: var(--muted-lt);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+/* Route cell */
+.txn-route {
+  font-weight: 800;
+  color: var(--navy-dk);
+  font-size: 12.5px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.txn-route-arrow { color: var(--gold); font-size: 10px; flex-shrink: 0; }
+.txn-via {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-lt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+/* Supplier lines */
+.supp-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.supp-line-icon { flex-shrink: 0; font-size: 9px; }
+/* Travel date */
+.txn-date-main  { display: block; font-weight: 600; color: var(--navy-dk); font-size: 12px; white-space: nowrap; }
+.txn-date-ret   { display: block; font-size: 10.5px; color: var(--gold-dk,#b8860b); white-space: nowrap; margin-top: 1px; }
+/* Agent pill */
+.agent-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--purple-lt); color: var(--purple);
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 10.5px; font-weight: 700;
+  border: 1px solid rgba(109,40,217,.15);
+  text-decoration: none; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  transition: background .12s, color .12s;
+}
+.agent-pill:hover { background: var(--purple); color: #fff; }
+/* Filter chips */
+.txn-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+.chip-navy   { background: var(--navy-lt); color: var(--navy); }
+.chip-purple { background: var(--purple-lt); color: var(--purple); }
+.chip-orange { background: var(--orange-lt,#fff4e6); color: var(--orange); }
+.chip-blue   { background: var(--blue-lt,#e8f4fd); color: var(--blue,#2980b9); }
+/* Tfoot */
+.txn-table tfoot td {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--navy-dk);
+  color: rgba(255,255,255,.55);
+  border-top: 2px solid rgba(255,255,255,.1);
 }
 </style>
+
 <div class="table-wrap" style="overflow-x:auto">
-  {# Column totals — non-admin: 994px  admin: 1148px — fits typical ERP sidebar layout #}
-  <table class="report-table" style="min-width:{% if is_admin %}1000px{% else %}860px{% endif %}">
+  <table class="txn-table" style="min-width:{% if is_admin %}1360px{% else %}1090px{% endif %}">
     <colgroup>
-      <col style="width:30px">   {# ID #}
-      <col style="width:68px">   {# Type #}
-      <col style="width:84px">   {# Date #}
-      <col style="width:104px">  {# Company #}
-      <col style="width:110px">  {# Customer #}
-      <col style="width:92px">   {# Route #}
-      <col style="width:96px">   {# Suppliers #}
-      <col style="width:30px">   {# Tix #}
-      <col style="width:84px">   {# Travel Date #}
+      <col style="width:72px">   {# T# #}
+      <col style="width:70px">   {# Type #}
+      <col style="width:86px">   {# Date #}
+      <col style="width:140px">  {# Company #}
+      <col style="width:140px">  {# Customer #}
+      <col style="width:118px">  {# Route #}
+      <col style="width:108px">  {# Suppliers #}
+      <col style="width:38px">   {# Tix #}
+      <col style="width:84px">   {# Travel #}
       <col style="width:84px">   {# Net #}
-      <col style="width:84px">   {# Sell #}
-      <col style="width:76px">   {# Profit #}
-      <col style="width:58px">   {# Status #}
+      <col style="width:90px">   {# Sell #}
+      <col style="width:82px">   {# Profit #}
+      <col style="width:68px">   {# Status #}
       {% if is_admin %}
-      <col style="width:74px">   {# Agent #}
-      <col style="width:80px">   {# Actions #}
+      <col style="width:88px">   {# Agent #}
+      <col style="width:92px">   {# Actions #}
       {% endif %}
     </colgroup>
     <thead>
       <tr>
-        <th style="min-width:64px">#</th>
+        <th>Txn #</th>
         <th>Type</th>
         <th>Date</th>
         <th>Company</th>
         <th>Customer</th>
         <th>Route</th>
-        <th>Suppliers</th>
-        <th class="text-center">Tix</th>
-        <th>Travel Date</th>
-        <th class="col-num">Net (JOD)</th>
-        <th class="col-num">Sell (JOD)</th>
-        <th class="col-num">Profit (JOD)</th>
+        <th>Supplier</th>
+        <th class="text-center" style="color:rgba(255,255,255,.75)">Tix</th>
+        <th>Travel</th>
+        <th class="txn-num" style="color:rgba(255,255,255,.75)">Net</th>
+        <th class="txn-num" style="color:var(--gold)">Sell (JOD)</th>
+        <th class="txn-num" style="color:#6dd58a">Profit</th>
         <th>Status</th>
         {% if is_admin %}
-        <th>
-          <span style="display:flex;align-items:center;gap:4px;color:var(--gold)">
-            <i class="fas fa-user-tie"></i> Agent
-          </span>
-        </th>
+        <th style="color:var(--gold)"><i class="fas fa-user-tie" style="font-size:10px"></i> Agent</th>
         <th>Actions</th>
         {% endif %}
       </tr>
     </thead>
     <tbody>
       {% for s in sales %}
+      {# Build ticket tooltip #}
+      {% set tkt_tip = '' %}
+      {% if s.ticket_number|default('') %}{% set tkt_tip = tkt_tip + '🎫 ' + s.ticket_number %}{% endif %}
+      {% if s.return_ticket_number|default('') %}{% set tkt_tip = tkt_tip + (' | ' if tkt_tip else '') + '↩ ' + s.return_ticket_number %}{% endif %}
       <tr>
-        <td style="font-size:11px;white-space:nowrap;min-width:64px">
-          <div style="font-weight:700;color:var(--navy);font-size:12px">{{ s.txn_number or ('T-%04d'|format(loop.index + (page-1)*50)) }}</div>
-          <div style="color:var(--muted-lt);font-size:10px">#{{ s.id }}</div>
-        </td>
-        <td>{% set st = (s.service_type or 'FLIGHT') %}<span class="svc-badge svc-{{ st }}"><i class="fas {{ st|svc_icon }}"></i>{{ st }}</span></td>
-        <td style="font-size:12px;white-space:nowrap">{{ s.sale_date }}</td>
 
-        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ s.company }}">
+        {# ── T# ── #}
+        <td title="DB id: {{ s.id }}">
+          <span class="txn-id-badge">{{ s.txn_number or ('T-%04d'|format(s.id)) }}</span>
+          <span class="txn-db-id">#{{ s.id }}</span>
+        </td>
+
+        {# ── Type ── #}
+        <td>
+          {% set st = (s.service_type or 'FLIGHT') %}
+          <span class="svc-badge svc-{{ st }}"><i class="fas {{ st|svc_icon }}"></i>{{ st }}</span>
+        </td>
+
+        {# ── Sale Date ── #}
+        <td style="font-size:12px;white-space:nowrap;color:var(--muted)">{{ s.sale_date }}</td>
+
+        {# ── Company ── #}
+        <td class="txn-cell-clip" title="{{ s.company }}">
           <a href="{{ url_for('statement', company=s.company) }}"
              style="color:var(--navy-dk);font-weight:700;text-decoration:none;font-size:13px">
             {{ s.company }}
           </a>
         </td>
 
-        <td style="font-size:13px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-            title="{{ s.customer }}">{{ s.customer }}</td>
+        {# ── Customer ── #}
+        <td class="txn-cell-clip" title="{{ s.customer }}" style="font-size:13px;color:var(--navy)">
+          {{ s.customer }}
+        </td>
 
-        <td style="white-space:nowrap">
-          <span style="font-weight:800;color:var(--navy-dk);font-size:13px">{{ s.from_loc }}</span>
-          <span style="color:var(--gold);margin:0 3px;font-size:11px">→</span>
-          <span style="font-weight:800;color:var(--navy-dk);font-size:13px">{{ s.to_loc }}</span>
+        {# ── Route ── ticket numbers go to title tooltip only #}
+        <td title="{{ tkt_tip or (s.from_loc + ' → ' + s.to_loc) }}">
+          <div class="txn-route">
+            <span style="font-weight:800;color:var(--navy-dk)">{{ s.from_loc }}</span>
+            <span class="txn-route-arrow">→</span>
+            <span style="font-weight:800;color:var(--navy-dk);overflow:hidden;text-overflow:ellipsis">{{ s.to_loc }}</span>
+          </div>
           {% if s.via %}
-          <br><span style="color:var(--muted-lt);font-size:10.5px">via {{ s.via }}</span>
+          <span class="txn-via">via {{ s.via }}</span>
           {% endif %}
-          {% if s.ticket_number|default('') %}<br><span style="font-family:monospace;font-size:10px;color:var(--navy-dk)">🎫 {{ s.ticket_number }}</span>{% endif %}
-          {% if s.return_ticket_number|default('') %}<br><span style="font-family:monospace;font-size:10px;color:var(--gold-dk)">↩ {{ s.return_ticket_number }}</span>{% endif %}
+          {% if tkt_tip %}
+          <span style="display:block;font-size:9.5px;color:var(--muted-lt);margin-top:2px;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🎫 {{ tkt_tip }}</span>
+          {% endif %}
         </td>
 
+        {# ── Suppliers ── #}
         <td>
-          {% if s.buy_from %}<span class="supp-line"><i class="fas fa-plane-departure" style="color:var(--navy);font-size:9px;margin-right:2px"></i>{{ s.buy_from }}</span>{% endif %}
-          {% if s.hotel_supplier %}<span class="supp-line" style="color:var(--gold-dk)"><i class="fas fa-hotel" style="font-size:9px;margin-right:2px"></i>{{ s.hotel_supplier }}</span>{% endif %}
-          {% if s.return_supplier and s.return_supplier != s.buy_from %}<span class="supp-line" style="color:var(--muted)"><i class="fas fa-plane-arrival" style="font-size:9px;margin-right:2px"></i>{{ s.return_supplier }}</span>{% endif %}
-          {% if not s.buy_from and not s.return_supplier and not s.hotel_supplier %}<span style="color:var(--muted-lt)">—</span>{% endif %}
+          {% if s.buy_from %}
+          <span class="supp-line" title="{{ s.buy_from }}">
+            <i class="fas fa-plane-departure supp-line-icon" style="color:var(--navy)"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.buy_from }}</span>
+          </span>
+          {% endif %}
+          {% if s.hotel_supplier %}
+          <span class="supp-line" title="{{ s.hotel_supplier }}" style="color:var(--gold-dk,#b8860b)">
+            <i class="fas fa-hotel supp-line-icon"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.hotel_supplier }}</span>
+          </span>
+          {% endif %}
+          {% if s.return_supplier and s.return_supplier != s.buy_from %}
+          <span class="supp-line" title="{{ s.return_supplier }}" style="color:var(--muted)">
+            <i class="fas fa-plane-arrival supp-line-icon"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.return_supplier }}</span>
+          </span>
+          {% endif %}
+          {% if not s.buy_from and not s.return_supplier and not s.hotel_supplier %}
+          <span style="color:var(--muted-lt)">—</span>
+          {% endif %}
         </td>
 
+        {# ── Tickets ── #}
         <td class="text-center" style="font-weight:700;color:var(--navy-dk)">{{ s.tickets }}</td>
 
-        <td style="font-size:11.5px">
-          {% if s.travel_date %}<span style="color:var(--navy-dk);font-weight:600;display:block;white-space:nowrap">{{ s.travel_date }}</span>{% endif %}
-          {% if s.return_date %}<span style="color:var(--gold-dk);font-size:10.5px;display:block;white-space:nowrap">↩ {{ s.return_date }}</span>{% endif %}
-          {% if not s.travel_date and not s.return_date %}<span style="color:var(--muted-lt)">—</span>{% endif %}
-        </td>
-
-        <td class="col-num" style="color:var(--muted);font-size:12px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
-        <td class="col-num" style="font-weight:700;color:var(--navy-dk);font-size:12.5px">{{ "%.3f"|format((s.sell or 0)|float) }}</td>
-        <td class="col-num text-green" style="font-size:12.5px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
-
+        {# ── Travel Date ── #}
         <td>
-          <span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span>
+          {% if s.travel_date %}
+          <span class="txn-date-main">{{ s.travel_date }}</span>
+          {% endif %}
+          {% if s.return_date %}
+          <span class="txn-date-ret">↩ {{ s.return_date }}</span>
+          {% endif %}
+          {% if not s.travel_date and not s.return_date %}
+          <span style="color:var(--muted-lt)">—</span>
+          {% endif %}
         </td>
+
+        {# ── Monetary ── #}
+        <td class="txn-num" style="color:var(--muted);font-size:12px">{{ "%.3f"|format((s.net or 0)|float) }}</td>
+        <td class="txn-num" style="font-weight:700;color:var(--navy-dk);font-size:13px">{{ "%.3f"|format((s.sell or 0)|float) }}</td>
+        <td class="txn-num text-green" style="font-size:12.5px">{{ "%.3f"|format((s.profit or 0)|float) }}</td>
+
+        {# ── Status ── #}
+        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
 
         {% if is_admin %}
+        {# ── Agent ── #}
         <td>
-          {# Agent pill — click to filter by this agent #}
-          {% set agent = s.agent_display or s.agent_name or '—' %}
+          {% set agent = s.agent_display or s.agent_name or '' %}
           {% if agent and agent != '—' %}
           <a href="{{ url_for('sales_report', agent_id=s.created_by_user_id, company=filters.company, date_from=filters.date_from, date_to=filters.date_to) }}"
-             style="display:inline-flex;align-items:center;gap:5px;text-decoration:none;
-                    background:var(--purple-lt);color:var(--purple);
-                    padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;
-                    border:1px solid rgba(109,40,217,.15);
-                    transition:all .15s"
-             onmouseover="this.style.background='var(--purple)';this.style.color='#fff'"
-             onmouseout="this.style.background='var(--purple-lt)';this.style.color='var(--purple)'"
-             title="Filter by {{ agent }}">
-            <i class="fas fa-user-tie" style="font-size:9px"></i>
-            {{ agent }}
+             class="agent-pill" title="Filter by {{ agent }}">
+            <i class="fas fa-user-tie" style="font-size:9px;flex-shrink:0"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis">{{ agent }}</span>
           </a>
           {% else %}
           <span style="color:var(--muted-lt);font-size:12px">—</span>
           {% endif %}
         </td>
+        {# ── Actions ── #}
         <td>
-          <div style="display:flex;gap:5px">
+          <div style="display:flex;gap:4px;flex-wrap:nowrap">
             <a href="{{ url_for('edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit">
               <i class="fas fa-pencil-alt"></i>
             </a>
+            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Invoice">
+              <i class="fas fa-file-invoice"></i>
+            </a>
             {% if (s.service_type or '') == 'PACKAGE' %}
             <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
-               onclick="return confirm('Auto-generate voucher from this package?')"
-               class="btn btn-gold btn-xs" title="Generate Voucher">
+               onclick="return confirm('Auto-generate voucher?')"
+               class="btn btn-gold btn-xs" title="Voucher">
               <i class="fas fa-magic"></i>
             </a>
             {% endif %}
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
-                  onsubmit="return confirm('Delete transaction #{{ s.id }}? This cannot be undone.')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  onsubmit="return confirm('Delete T#{{ s.id }}? This cannot be undone.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-xs" title="Delete">
                 <i class="fas fa-trash"></i>
               </button>
@@ -347,16 +460,17 @@
           </div>
         </td>
         {% endif %}
+
       </tr>
       {% else %}
       <tr>
-        <td colspan="{{ 15 if is_admin else 13 }}" class="text-center" style="padding:36px;color:var(--muted)">
-          <i class="fas fa-inbox" style="font-size:28px;display:block;margin-bottom:10px;opacity:.3"></i>
+        <td colspan="{{ 15 if is_admin else 13 }}" class="text-center" style="padding:48px;color:var(--muted)">
+          <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
           No transactions found.
           {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to %}
-          <a href="{{ url_for('sales_report') }}" style="color:var(--navy);font-weight:700">Clear filters →</a>
-          {% else %}
-          <a href="{{ url_for('add_sale') }}" style="color:var(--navy);font-weight:700">Add the first transaction →</a>
+          <br><a href="{{ url_for('sales_report') }}" style="color:var(--navy);font-weight:700;margin-top:8px;display:inline-block">Clear filters →</a>
+          {% elif is_admin %}
+          <br><a href="{{ url_for('add_sale') }}" style="color:var(--red);font-weight:700;margin-top:8px;display:inline-block">Add the first transaction →</a>
           {% endif %}
         </td>
       </tr>
@@ -366,16 +480,13 @@
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="9">
-          TOTALS — {{ totals.count }} records
-          {% if filters.agent_id %}
-          &nbsp;·&nbsp;
-          {% for a in agents %}{% if a.id|string == filters.agent_id %}Agent: {{ a.display }}{% endif %}{% endfor %}
-          {% endif %}
+        <td colspan="9" style="font-weight:700;color:rgba(255,255,255,.6);font-size:12px">
+          TOTALS — {{ totals.count }} transaction{{ 's' if totals.count != 1 else '' }}
+          {% if filters.agent_id %} · Agent: {% for a in agents %}{% if a.id|string == filters.agent_id %}{{ a.display }}{% endif %}{% endfor %}{% endif %}
         </td>
-        <td class="text-right" style="color:rgba(255,255,255,.55);font-size:12.5px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
-        <td class="text-right" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
-        <td class="text-right" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
+        <td class="txn-num" style="color:rgba(255,255,255,.45);font-size:12px">{{ "%.3f"|format((totals.net or 0)|float) }}</td>
+        <td class="txn-num" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.3f"|format((totals.sell or 0)|float) }}</td>
+        <td class="txn-num" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.3f"|format((totals.profit or 0)|float) }}</td>
         <td colspan="{{ 3 if is_admin else 1 }}"></td>
       </tr>
     </tfoot>

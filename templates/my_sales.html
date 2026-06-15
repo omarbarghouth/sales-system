@@ -1,10 +1,14 @@
 {% extends "base.html" %}
-{% block title %}My Sales — ALSONDOS{% endblock %}
+{% block title %}My Transactions — ALSONDOS{% endblock %}
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
     <h1><i class="fas fa-exchange-alt"></i> My Transactions</h1>
-    <p>{{ totals.count }} transactions · JOD {{ "%.2f"|format(totals.sell) }} revenue · JOD {{ "%.2f"|format(totals.profit) }} profit</p>
+    <p>
+      {{ totals.count }} records
+      &nbsp;·&nbsp; <span style="color:var(--gold);font-weight:600">JOD {{ "%.2f"|format(totals.sell) }}</span> revenue
+      &nbsp;·&nbsp; <span style="color:var(--green);font-weight:600">JOD {{ "%.2f"|format(totals.profit) }}</span> profit
+    </p>
   </div>
   <div class="page-header-actions">
     <a href="{{ url_for('add_sale_v2') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Transaction</a>
@@ -13,31 +17,36 @@
 
 <div class="filter-bar no-print">
   <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%">
-    <div class="form-group" style="flex:2;min-width:150px"><label>Customer Name</label>
+    <div class="form-group" style="flex:2;min-width:150px">
+      <label>Customer Name</label>
       <input type="text" name="customer" value="{{ filters.customer }}"
              placeholder="Search by customer…" style="text-transform:uppercase">
     </div>
-    <div class="form-group" style="flex:2;min-width:150px"><label>Company</label>
+    <div class="form-group" style="flex:2;min-width:150px">
+      <label>Company</label>
       <select name="company">
         <option value="">All Companies</option>
         {% for co in companies %}<option value="{{ co }}" {% if filters.company==co %}selected{% endif %}>{{ co }}</option>{% endfor %}
       </select>
     </div>
-    <div class="form-group" style="min-width:120px"><label>Status</label>
+    <div class="form-group" style="min-width:110px">
+      <label>Status</label>
       <select name="status">
         <option value="">All</option>
         <option value="STILL" {% if filters.status=='STILL' %}selected{% endif %}>Still</option>
         <option value="DONE"  {% if filters.status=='DONE'  %}selected{% endif %}>Done</option>
       </select>
     </div>
-    <div class="form-group" style="min-width:130px"><label>From</label>
+    <div class="form-group" style="min-width:120px">
+      <label>From</label>
       <input type="date" name="date_from" value="{{ filters.date_from }}">
     </div>
-    <div class="form-group" style="min-width:130px"><label>To</label>
+    <div class="form-group" style="min-width:120px">
+      <label>To</label>
       <input type="date" name="date_to" value="{{ filters.date_to }}">
     </div>
     <div style="align-self:flex-end;display:flex;gap:6px">
-      <button type="submit" class="btn btn-primary" style="padding:8px 16px"><i class="fas fa-search"></i></button>
+      <button type="submit" class="btn btn-primary" style="padding:8px 16px"><i class="fas fa-search"></i> Search</button>
       {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.customer %}
       <a href="{{ url_for('my_sales') }}" class="btn btn-outline" style="padding:8px 12px" title="Clear filters"><i class="fas fa-times"></i></a>
       {% endif %}
@@ -45,60 +54,234 @@
   </form>
 </div>
 
-<div class="table-wrap">
-  <table>
-    <thead><tr>
-      <th>ID</th><th>Type</th><th>Date</th><th>Company</th><th>Customer</th>
-      <th>Route</th><th>Tix</th><th>Travel</th>
-      <th class="text-right">Sell (JOD)</th><th class="text-right">Profit (JOD)</th>
-      <th>Status</th><th>Actions</th>
-    </tr></thead>
+{# ─────────────────────────────────────────────────────────────────
+   MY SALES TABLE — column budget 1060px
+     T#:72  Type:68  Date:82  Company:130  Customer:130  Route:112
+     Tix:36  Travel:80  Sell:88  Profit:80  Status:68  Actions:114
+──────────────────────────────────────────────────────────────────── #}
+<style>
+.my-txn-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+}
+.my-txn-table th {
+  padding: 9px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--navy-dk);
+  color: rgba(255,255,255,.75);
+  border-bottom: 2px solid var(--border-lt);
+}
+.my-txn-table td {
+  padding: 8px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 12.5px;
+  overflow: hidden;
+}
+.my-txn-table tbody tr:hover { background: var(--navy-lt,#f0f4ff); }
+.my-txn-clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-txn-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+  padding-right: 12px !important;
+}
+.my-txn-table th.my-txn-num { padding-right: 12px; }
+.my-txn-id {
+  font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy-dk);
+  letter-spacing: .3px;
+  display: block;
+}
+.my-txn-dbid {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-lt);
+  margin-top: 1px;
+}
+.my-txn-route {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.my-txn-route-loc  { font-weight: 800; color: var(--navy-dk); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.my-txn-route-arrow { color: var(--gold); font-size: 10px; flex-shrink: 0; }
+.my-txn-via {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-lt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.my-txn-table tfoot td {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--navy-dk);
+  color: rgba(255,255,255,.55);
+  border-top: 2px solid rgba(255,255,255,.1);
+}
+</style>
+
+<div class="table-wrap" style="overflow-x:auto">
+  <table class="my-txn-table" style="min-width:1060px">
+    <colgroup>
+      <col style="width:72px">
+      <col style="width:68px">
+      <col style="width:82px">
+      <col style="width:130px">
+      <col style="width:130px">
+      <col style="width:112px">
+      <col style="width:36px">
+      <col style="width:80px">
+      <col style="width:88px">
+      <col style="width:80px">
+      <col style="width:68px">
+      <col style="width:114px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Txn #</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Company</th>
+        <th>Customer</th>
+        <th>Route</th>
+        <th class="text-center" style="color:rgba(255,255,255,.75)">Tix</th>
+        <th>Travel</th>
+        <th class="my-txn-num" style="color:var(--gold)">Sell (JOD)</th>
+        <th class="my-txn-num" style="color:#6dd58a">Profit</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
     <tbody>
       {% for s in sales %}
       <tr>
-        <td class="text-muted" style="font-size:11.5px">{{ s.id }}</td>
-          <td><span class="svc-badge svc-{{ (s.service_type or 'FLIGHT') }}"><i class="fas {{ (s.service_type or 'FLIGHT')|svc_icon }}"></i>{{ s.service_type or 'FLIGHT' }}</span></td>
-        <td style="font-size:12.5px">{{ s.sale_date }}</td>
-        <td><strong>{{ s.company }}</strong></td>
-        <td>{{ s.customer }}</td>
-        <td><strong>{{ s.from_loc }}</strong> <span style="color:var(--gold)">→</span> <strong>{{ s.to_loc }}</strong>{% if s.via %}<br><span style="font-size:11px;color:var(--muted)">via {{ s.via }}</span>{% endif %}</td>
-        <td class="text-center">{{ s.tickets }}</td>
-        <td style="font-size:12.5px">{{ s.travel_date or '—' }}</td>
-        <td class="text-right text-gold">{{ "%.2f"|format(s.sell|float) }}</td>
-        <td class="text-right text-green">{{ "%.2f"|format(s.profit|float) }}</td>
-        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+
+        {# ── T# ── #}
+        <td title="DB id: {{ s.id }}">
+          <span class="my-txn-id">{{ s.txn_number|default('T-%04d'|format(s.id)) }}</span>
+          <span class="my-txn-dbid">#{{ s.id }}</span>
+        </td>
+
+        {# ── Type ── #}
         <td>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit"><i class="fas fa-pencil-alt"></i></a>
-            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Invoice"><i class="fas fa-file-invoice"></i></a>
+          {% set st = (s.service_type or 'FLIGHT') %}
+          <span class="svc-badge svc-{{ st }}"><i class="fas {{ st|svc_icon }}"></i>{{ st }}</span>
+        </td>
+
+        {# ── Date ── #}
+        <td style="font-size:12px;white-space:nowrap;color:var(--muted)">{{ s.sale_date }}</td>
+
+        {# ── Company ── #}
+        <td class="my-txn-clip" title="{{ s.company }}">
+          <strong style="color:var(--navy-dk);font-size:13px">{{ s.company }}</strong>
+        </td>
+
+        {# ── Customer ── #}
+        <td class="my-txn-clip" title="{{ s.customer }}" style="color:var(--navy)">{{ s.customer }}</td>
+
+        {# ── Route ── #}
+        <td title="{{ s.from_loc }} → {{ s.to_loc }}{% if s.via %} via {{ s.via }}{% endif %}">
+          <div class="my-txn-route">
+            <span class="my-txn-route-loc">{{ s.from_loc }}</span>
+            <span class="my-txn-route-arrow">→</span>
+            <span class="my-txn-route-loc">{{ s.to_loc }}</span>
+          </div>
+          {% if s.via %}<span class="my-txn-via">via {{ s.via }}</span>{% endif %}
+        </td>
+
+        {# ── Tickets ── #}
+        <td class="text-center" style="font-weight:700;color:var(--navy-dk)">{{ s.tickets }}</td>
+
+        {# ── Travel Date ── #}
+        <td>
+          {% if s.travel_date %}
+          <span style="display:block;font-weight:600;color:var(--navy-dk);font-size:12px;white-space:nowrap">{{ s.travel_date }}</span>
+          {% endif %}
+          {% if s.return_date %}
+          <span style="display:block;font-size:10.5px;color:var(--gold-dk,#b8860b);white-space:nowrap;margin-top:1px">↩ {{ s.return_date }}</span>
+          {% endif %}
+          {% if not s.travel_date and not s.return_date %}
+          <span style="color:var(--muted-lt)">—</span>
+          {% endif %}
+        </td>
+
+        {# ── Sell ── #}
+        <td class="my-txn-num" style="font-weight:700;color:var(--navy-dk);font-size:13px">
+          {{ "%.2f"|format(s.sell|float) }}
+        </td>
+
+        {# ── Profit ── #}
+        <td class="my-txn-num text-green" style="font-size:12.5px">
+          {{ "%.2f"|format(s.profit|float) }}
+        </td>
+
+        {# ── Status ── #}
+        <td><span class="badge badge-{{ s.status|lower }}">{{ s.status }}</span></td>
+
+        {# ── Actions ── #}
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:nowrap">
+            <a href="{{ url_for('my_edit_sale', sale_id=s.id) }}" class="btn btn-edit btn-xs" title="Edit">
+              <i class="fas fa-pencil-alt"></i>
+            </a>
+            <a href="{{ url_for('new_invoice', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Invoice">
+              <i class="fas fa-file-invoice"></i>
+            </a>
             {% if (s.service_type or 'FLIGHT') == 'PACKAGE' %}
             <a href="{{ url_for('auto_generate_voucher', sale_id=s.id) }}"
                onclick="return confirm('Auto-generate voucher from this package?')"
-               class="btn btn-gold btn-xs" title="Auto Generate Package Voucher">
+               class="btn btn-gold btn-xs" title="Generate Voucher">
               <i class="fas fa-magic"></i>
             </a>
             {% else %}
-            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Voucher"><i class="fas fa-hotel"></i></a>
+            <a href="{{ url_for('new_voucher', sale_id=s.id) }}" class="btn btn-xs btn-outline" title="Create Voucher">
+              <i class="fas fa-hotel"></i>
+            </a>
             {% endif %}
           </div>
         </td>
+
       </tr>
       {% else %}
-      <tr><td colspan="12" class="text-center text-muted" style="padding:32px">No transactions found. <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700">Add one →</a></td></tr>
+      <tr>
+        <td colspan="12" class="text-center" style="padding:48px;color:var(--muted)">
+          <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
+          No transactions found.
+          <a href="{{ url_for('add_sale_v2') }}" style="color:var(--red);font-weight:700;display:inline-block;margin-top:8px">Add one →</a>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
+
     {% if sales %}
     <tfoot>
       <tr>
-        <td colspan="8">TOTALS — {{ totals.count }} transactions</td>
-        <td class="text-right" style="color:var(--gold);font-size:14px">{{ "%.2f"|format(totals.sell) }}</td>
-        <td class="text-right" style="color:#6dd58a;font-size:14px">{{ "%.2f"|format(totals.profit) }}</td>
+        <td colspan="8">TOTALS — {{ totals.count }} transaction{{ 's' if totals.count != 1 else '' }}</td>
+        <td class="my-txn-num" style="color:var(--gold);font-size:14px;font-weight:800">{{ "%.2f"|format(totals.sell) }}</td>
+        <td class="my-txn-num" style="color:#86efac;font-size:14px;font-weight:800">{{ "%.2f"|format(totals.profit) }}</td>
         <td colspan="2"></td>
       </tr>
     </tfoot>
     {% endif %}
   </table>
 </div>
+
 {% from 'pagination_macro.html' import render_pagination %}
 {{ render_pagination(page, total_pages, total_rows, 'my_sales') }}
 {% endblock %}
