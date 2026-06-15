@@ -20,7 +20,7 @@
   <span style="font-size:13px;color:var(--muted)">Agent: <strong>{{ inv.created_by }}</strong></span>
 </div>
 
-{# ── Resolve sale for package detail sections ────────────────── #}
+{# ── Resolve sale data ────────────────── #}
 {% set svc = (sale.service_type if sale else '') or '' %}
 {% set passengers = [] %}
 {% set tours = [] %}
@@ -30,238 +30,267 @@
 {% endif %}
 
 <div class="doc-print-wrap">
-  <div class="print-only" id="genStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;padding:8px 36px 0"></div>
+  <div class="print-only" id="genStamp" style="text-align:right;font-size:10px;color:#94a3b8;font-style:italic;padding:6px 32px 0"></div>
 
-  {# ── HEADER ─────────────────────────────────────────────────── #}
-  <div style="background:linear-gradient(135deg,#0d1e3f 0%,#1a2f52 55%,#1a3360 100%);padding:28px 36px 24px;display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;border-bottom:3px solid #C8A84B">
+  {# ── HEADER ── #}
+  <div class="inv-header" style="background:linear-gradient(135deg,#0d1e3f 0%,#1a2f52 55%,#1a3360 100%);padding:24px 32px 20px;display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:3px solid #C8A84B">
     <div>
       <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Alsondos Travel & Tourism"
-           style="height:72px;width:auto;display:block;margin-bottom:10px;filter:drop-shadow(0 2px 10px rgba(0,0,0,.25))">
-      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.7">
+           style="height:68px;width:auto;display:block;margin-bottom:8px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.25))">
+      <div style="font-size:11.5px;color:rgba(255,255,255,.55);line-height:1.6">
         Alsondos Travel &amp; Tourism<br>Amman, Jordan &nbsp;·&nbsp; Travel Agency
       </div>
     </div>
     <div style="text-align:right">
-      <div style="font-family:'Playfair Display',Georgia,serif;font-size:36px;font-weight:800;color:#fff;line-height:1;letter-spacing:-.5px">INVOICE</div>
-      <div style="font-size:16px;font-weight:700;color:#C8A84B;margin-top:7px;letter-spacing:.5px">{{ inv.invoice_number }}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px">{{ inv.invoice_date }}</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:34px;font-weight:800;color:#fff;line-height:1;letter-spacing:-.5px">INVOICE</div>
+      <div style="font-size:15px;font-weight:700;color:#C8A84B;margin-top:6px;letter-spacing:.5px">{{ inv.invoice_number }}</div>
+      <div style="font-size:11.5px;color:rgba(255,255,255,.45);margin-top:3px">{{ inv.invoice_date }}</div>
       {% if inv.due_date %}<div style="font-size:11px;color:rgba(255,200,100,.6);margin-top:2px">Due: {{ inv.due_date }}</div>{% endif %}
     </div>
   </div>
 
-  {# ── BILLED TO + META ────────────────────────────────────────── #}
-  <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0">
-    <div style="padding:20px 36px;border-right:1px solid #e2e8f0">
-      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Billed To</div>
-      <div style="font-family:'Playfair Display',Georgia,serif;font-size:19px;font-weight:700;color:#0f1d35;line-height:1.2">{{ inv.company }}</div>
-      <div style="font-size:13px;color:#64748b;margin-top:4px">{{ inv.customer }}</div>
+  {# ── BILLED TO + INVOICE META ── #}
+  <div class="inv-meta" style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0">
+    <div style="padding:16px 32px;border-right:1px solid #e2e8f0">
+      <div style="font-size:9px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Billed To</div>
+      <div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;font-weight:700;color:#0f1d35;line-height:1.2">{{ inv.company }}</div>
+      <div style="font-size:12.5px;color:#64748b;margin-top:3px">{{ inv.customer }}</div>
     </div>
-    <div style="padding:20px 36px">
-      <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f1f5f9">Invoice Details</div>
-      <div style="display:flex;flex-direction:column;gap:4px;font-size:13px">
-        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Invoice No.</span><strong>{{ inv.invoice_number }}</strong></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Date</span><strong>{{ inv.invoice_date }}</strong></div>
-        {% if inv.due_date %}<div style="display:flex;justify-content:space-between"><span style="color:#64748b">Due Date</span><strong style="color:#8b1a1a">{{ inv.due_date }}</strong></div>{% endif %}
-        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Status</span>
-          <span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}">{{ inv.status }}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Agent</span><strong>{{ inv.created_by }}</strong></div>
-        {% if sale %}<div style="display:flex;justify-content:space-between"><span style="color:#64748b">Service Type</span>
-          <span class="svc-badge svc-{{ svc or 'FLIGHT' }}"><i class="fas {{ (svc or 'FLIGHT')|svc_icon }}"></i>{{ svc or 'FLIGHT' }}</span>
-        </div>{% endif %}
+    <div style="padding:16px 32px">
+      <div style="font-size:9px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">Invoice Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;font-size:12px">
+        <span style="color:#64748b">Invoice No.</span><strong>{{ inv.invoice_number }}</strong>
+        <span style="color:#64748b">Date</span><strong>{{ inv.invoice_date }}</strong>
+        {% if inv.due_date %}<span style="color:#64748b">Due Date</span><strong style="color:#8b1a1a">{{ inv.due_date }}</strong>{% endif %}
+        <span style="color:#64748b">Status</span><span class="badge {% if inv.status=='PAID' %}badge-done{% elif inv.status=='PARTIAL' %}badge-still{% else %}badge-cancel{% endif %}">{{ inv.status }}</span>
+        <span style="color:#64748b">Agent</span><strong>{{ inv.created_by }}</strong>
+        {% if sale %}<span style="color:#64748b">Service</span><span class="svc-badge svc-{{ svc or 'FLIGHT' }}"><i class="fas {{ (svc or 'FLIGHT')|svc_icon }}"></i>{{ svc or 'FLIGHT' }}</span>{% endif %}
       </div>
     </div>
   </div>
 
-  <div style="padding:22px 36px">
+  {# ── SERVICES BODY ── #}
+  <div class="inv-body" style="padding:16px 32px">
 
-    {# ── SERVICE DESCRIPTION TABLE ────────────────────────────── #}
-    <table style="margin-bottom:0;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0">
-      <thead>
-        <tr>
-          <th style="background:#0f1d35;color:rgba(255,255,255,.85);padding:11px 16px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Description of Services</th>
-          <th style="background:#0f1d35;color:rgba(255,255,255,.85);padding:11px 16px;text-align:right;font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:700;min-width:130px;white-space:nowrap">Amount (JOD)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="padding:16px;vertical-align:top;border-bottom:1px solid #f1f5f9">
+    {# Section header bar #}
+    <div style="display:flex;justify-content:space-between;align-items:center;background:#0f1d35;color:rgba(255,255,255,.85);padding:9px 14px;border-radius:6px 6px 0 0;margin-bottom:0">
+      <span style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Description of Services</span>
+      <span style="font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;white-space:nowrap">Amount (JOD) &nbsp; <strong style="font-size:13px;color:#C8A84B">{{ "%.3f"|format((inv.amount or 0)|float) }}</strong></span>
+    </div>
 
-            {# ── STRUCTURED SERVICE SECTIONS (all types) ─────── #}
-            {% if sale %}
+    {# ── SERVICE GRID (2-col on print) ── #}
+    <div class="svc-grid" style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;padding:12px 14px">
 
-              {# Flight section — shown for any type with flight/route data #}
-              {% if sale.from_loc or sale.airline or svc in ('FLIGHT','PACKAGE') %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1B3A6B;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8eef8">✈ FLIGHT DETAILS</div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
-                  {% if sale.airline %}<div><span style="color:#94a3b8">Airline:</span> <strong>{{ sale.airline }}</strong></div>{% endif %}
-                  {% if sale.from_loc and sale.from_loc != '-' %}<div><span style="color:#94a3b8">Route:</span> <strong>{{ sale.from_loc }} → {{ sale.to_loc }}</strong></div>{% endif %}
-                  {% if sale.pnr %}<div><span style="color:#94a3b8">PNR:</span> <strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.pnr }}</strong></div>{% endif %}
-                  {% if sale.travel_date %}<div><span style="color:#94a3b8">Departure:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
-                  {% if sale.return_date %}<div><span style="color:#94a3b8">Return:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
-                  {% if sale.baggage %}<div><span style="color:#94a3b8">Baggage:</span> <strong>{{ sale.baggage }}</strong></div>{% endif %}
-                  {% if sale.trip_type %}<div><span style="color:#94a3b8">Trip Type:</span> <strong>{{ sale.trip_type }}</strong></div>{% endif %}
-                  <div><span style="color:#94a3b8">Tickets / Pax:</span> <strong>{{ sale.tickets }}</strong></div>
-                </div>
-              </div>
-              {% endif %}
+      {% if sale %}
 
-              {# Hotel section — shown when hotel data exists #}
-              {% if sale.hotel_name %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8B6914;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fff8e7">🏨 HOTEL DETAILS</div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
-                  <div><span style="color:#94a3b8">Hotel:</span> <strong>{{ sale.hotel_name }}</strong></div>
-                  {% if sale.hotel_room %}<div><span style="color:#94a3b8">Room:</span> <strong>{{ sale.hotel_room }}</strong></div>{% endif %}
-                  {% if sale.hotel_meal %}<div><span style="color:#94a3b8">Board:</span> <strong>{{ sale.hotel_meal }}</strong></div>{% endif %}
-                  {% if sale.hotel_checkin %}<div><span style="color:#94a3b8">Check-In:</span> <strong>{{ sale.hotel_checkin }}</strong></div>{% endif %}
-                  {% if sale.hotel_checkout %}<div><span style="color:#94a3b8">Check-Out:</span> <strong>{{ sale.hotel_checkout }}</strong></div>{% endif %}
-                  {% if sale.hotel_nights %}<div><span style="color:#94a3b8">Nights:</span> <strong>{{ sale.hotel_nights }}</strong></div>{% endif %}
-                </div>
-              </div>
-              {% endif %}
-              {# Transfer section — show for TRANSFER or PACKAGE, or when transfer data exists #}
-              {% if svc in ('TRANSFER','PACKAGE') or sale.transfer_type %}
-              {% if sale.transfer_type %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#D97706;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #fffbf0">🚗 TRANSFER DETAILS</div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
-                  <div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.transfer_type }}</strong></div>
-                  {% if sale.transfer_vehicle %}<div><span style="color:#94a3b8">Vehicle:</span> <strong>{{ sale.transfer_vehicle }}</strong></div>{% endif %}
-                  {% if sale.transfer_pickup %}<div><span style="color:#94a3b8">Pickup:</span> <strong>{{ sale.transfer_pickup }}</strong></div>{% endif %}
-                </div>
-              </div>
-              {% endif %}
+        {# ── FLIGHT ── #}
+        {% if sale.from_loc or sale.airline or svc in ('FLIGHT','PACKAGE') %}
+        <div class="svc-section svc-flight">
+          <div class="svc-label" style="color:#1B3A6B;border-bottom-color:#dbe8f8">✈ FLIGHT DETAILS</div>
+          <div class="svc-fields">
+            {% if sale.airline %}<div><span class="lbl">Airline</span><strong>{{ sale.airline }}</strong></div>{% endif %}
+            {% if sale.from_loc and sale.from_loc != '-' %}<div><span class="lbl">Route</span><strong>{{ sale.from_loc }} → {{ sale.to_loc }}</strong></div>{% endif %}
+            {% if sale.pnr %}<div><span class="lbl">PNR</span><strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.pnr }}</strong></div>{% endif %}
+            {% if sale.travel_date %}<div><span class="lbl">Departure</span><strong>{{ sale.travel_date }}</strong></div>{% endif %}
+            {% if sale.return_date %}<div><span class="lbl">Return</span><strong>{{ sale.return_date }}</strong></div>{% endif %}
+            {% if sale.baggage %}<div><span class="lbl">Baggage</span><strong>{{ sale.baggage }}</strong></div>{% endif %}
+            {% if sale.trip_type %}<div><span class="lbl">Trip Type</span><strong>{{ sale.trip_type }}</strong></div>{% endif %}
+            <div><span class="lbl">Pax</span><strong>{{ sale.tickets }}</strong></div>
+          </div>
+        </div>
+        {% endif %}
 
-              {% endif %}{# end transfer wrapper #}
+        {# ── HOTEL ── #}
+        {% if sale.hotel_name %}
+        <div class="svc-section svc-hotel">
+          <div class="svc-label" style="color:#8B6914;border-bottom-color:#f0e4b8">🏨 HOTEL DETAILS</div>
+          <div class="svc-fields">
+            <div><span class="lbl">Hotel</span><strong>{{ sale.hotel_name }}</strong></div>
+            {% if sale.hotel_room %}<div><span class="lbl">Room</span><strong>{{ sale.hotel_room }}</strong></div>{% endif %}
+            {% if sale.hotel_meal %}<div><span class="lbl">Board</span><strong>{{ sale.hotel_meal }}</strong></div>{% endif %}
+            {% if sale.hotel_checkin %}<div><span class="lbl">Check-In</span><strong>{{ sale.hotel_checkin }}</strong></div>{% endif %}
+            {% if sale.hotel_checkout %}<div><span class="lbl">Check-Out</span><strong>{{ sale.hotel_checkout }}</strong></div>{% endif %}
+            {% if sale.hotel_nights %}<div><span class="lbl">Nights</span><strong>{{ sale.hotel_nights }}</strong></div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
 
-              {# Tours section — show when tour data exists #}
-              {% if tours %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">🗺 TOURS</div>
-                <table style="width:100%;font-size:12px;border:none;background:transparent">
-                  <thead><tr style="background:#f5f3ff">
-                    <th style="padding:5px 8px;text-align:left;font-size:9.5px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Tour</th>
-                    <th style="padding:5px 8px;text-align:left;font-size:9.5px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Date</th>
-                    <th style="padding:5px 8px;text-align:left;font-size:9.5px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Status</th>
-                  </tr></thead>
-                  <tbody>
-                    {% for t in tours %}
-                    <tr><td style="padding:4px 8px;border-bottom:1px solid #ede9fe"><strong>{{ t.name }}</strong></td>
-                        <td style="padding:4px 8px;border-bottom:1px solid #ede9fe">{{ t.date or '—' }}</td>
-                        <td style="padding:4px 8px;border-bottom:1px solid #ede9fe">{{ t.status or 'Included' }}</td></tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              {% endif %}
+        {# ── TRANSFER ── #}
+        {% if sale.transfer_type %}
+        <div class="svc-section svc-transfer">
+          <div class="svc-label" style="color:#D97706;border-bottom-color:#fde8b0">🚗 TRANSFER DETAILS</div>
+          <div class="svc-fields">
+            <div><span class="lbl">Type</span><strong>{{ sale.transfer_type }}</strong></div>
+            {% if sale.transfer_vehicle %}<div><span class="lbl">Vehicle</span><strong>{{ sale.transfer_vehicle }}</strong></div>{% endif %}
+            {% if sale.transfer_pickup %}<div><span class="lbl">Pickup</span><strong>{{ sale.transfer_pickup }}</strong></div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
 
-              {# Visa section — show for VISA type #}
-              {% if svc == 'VISA' and (sale.visa_type or sale.passport_number) %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#6D28D9;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #ede9fe">📋 VISA DETAILS</div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
-                  {% if sale.visa_type %}<div><span style="color:#94a3b8">Visa Type:</span> <strong>{{ sale.visa_type }}</strong></div>{% endif %}
-                  {% if sale.passport_number %}<div><span style="color:#94a3b8">Passport:</span> <strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.passport_number }}</strong></div>{% endif %}
-                  {% if sale.visa_status %}<div><span style="color:#94a3b8">Status:</span> <strong>{{ sale.visa_status }}</strong></div>{% endif %}
-                  {% if sale.travel_date %}<div><span style="color:#94a3b8">Travel Date:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
-                </div>
-              </div>
-              {% endif %}
+        {# ── VISA ── #}
+        {% if svc == 'VISA' and (sale.visa_type or sale.passport_number) %}
+        <div class="svc-section svc-visa">
+          <div class="svc-label" style="color:#6D28D9;border-bottom-color:#ddd6fe">📋 VISA DETAILS</div>
+          <div class="svc-fields">
+            {% if sale.visa_type %}<div><span class="lbl">Visa Type</span><strong>{{ sale.visa_type }}</strong></div>{% endif %}
+            {% if sale.passport_number %}<div><span class="lbl">Passport</span><strong style="font-family:'Courier New',monospace;color:#8b1a1a">{{ sale.passport_number }}</strong></div>{% endif %}
+            {% if sale.visa_status %}<div><span class="lbl">Status</span><strong>{{ sale.visa_status }}</strong></div>{% endif %}
+            {% if sale.travel_date %}<div><span class="lbl">Travel Date</span><strong>{{ sale.travel_date }}</strong></div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
 
-              {# Insurance section — show for INSURANCE type #}
-              {% if svc == 'INSURANCE' and sale.insurance_type %}
-              <div class="svc-section" style="margin-bottom:12px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">🛡 INSURANCE DETAILS</div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;font-size:12.5px">
-                  {% if sale.insurance_type %}<div><span style="color:#94a3b8">Type:</span> <strong>{{ sale.insurance_type }}</strong></div>{% endif %}
-                  {% if sale.travel_date %}<div><span style="color:#94a3b8">From:</span> <strong>{{ sale.travel_date }}</strong></div>{% endif %}
-                  {% if sale.return_date %}<div><span style="color:#94a3b8">To:</span> <strong>{{ sale.return_date }}</strong></div>{% endif %}
-                </div>
-              </div>
-              {% endif %}
+        {# ── INSURANCE ── #}
+        {% if svc == 'INSURANCE' and sale.insurance_type %}
+        <div class="svc-section svc-insurance">
+          <div class="svc-label" style="color:#1E7B34;border-bottom-color:#bbf7d0">🛡 INSURANCE DETAILS</div>
+          <div class="svc-fields">
+            <div><span class="lbl">Type</span><strong>{{ sale.insurance_type }}</strong></div>
+            {% if sale.travel_date %}<div><span class="lbl">From</span><strong>{{ sale.travel_date }}</strong></div>{% endif %}
+            {% if sale.return_date %}<div><span class="lbl">To</span><strong>{{ sale.return_date }}</strong></div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
 
-              {# Passengers section #}
-              {% if passengers %}
-              <div class="svc-section" style="margin-bottom:4px">
-                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#1E7B34;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e8f8ee">👥 PASSENGERS</div>
-                <table style="width:100%;font-size:12px;background:transparent;border:none">
-                  <thead><tr>
-                    <th style="padding:4px 8px;text-align:left;font-size:9.5px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Name</th>
-                    <th style="padding:4px 8px;text-align:left;font-size:9.5px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Passport</th>
-                    <th style="padding:4px 8px;text-align:left;font-size:9.5px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Nationality</th>
-                  </tr></thead>
-                  <tbody>
-                    {% for p in passengers %}
-                    <tr><td style="padding:4px 8px;border-bottom:1px solid #e8f8ee"><strong>{{ p.name }}</strong></td>
-                        <td style="padding:4px 8px;border-bottom:1px solid #e8f8ee;font-family:'Courier New',monospace;font-size:11.5px;color:#8b1a1a">{{ p.passport or '—' }}</td>
-                        <td style="padding:4px 8px;border-bottom:1px solid #e8f8ee">{{ p.nationality or '—' }}</td></tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              {% endif %}
-
-              {# Notes / Remarks #}
-              {% if sale.remarks %}
-              <div style="margin-top:8px;background:#f8fafc;border-left:3px solid #94a3b8;padding:8px 12px;font-size:12.5px;color:#374151;border-radius:0 6px 6px 0">
-                <strong>Remarks:</strong> {{ sale.remarks }}
-              </div>
-              {% endif %}
-
-              {# Ref line at bottom #}
-              <div style="margin-top:10px;font-size:11px;color:#94a3b8;padding:5px 10px;background:#f8fafc;border-radius:5px;border-left:3px solid #C8A84B">
-                Transaction Ref #{{ sale.id }} &nbsp;·&nbsp; {{ sale.sale_date }}
-              </div>
-
-            {% else %}
-              {# No linked sale — show plain description only #}
-              <div style="font-size:13.5px;line-height:1.7;color:#1e293b;white-space:pre-line">{{ inv.service_desc or 'Travel Services' }}</div>
+        {# ── FINANCIAL SUMMARY (becomes right-col pair in print) ── #}
+        <div class="svc-section svc-financial">
+          <div class="svc-label" style="color:#0f1d35;border-bottom-color:#e2e8f0">💰 FINANCIAL SUMMARY</div>
+          <div style="font-size:12px">
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9">
+              <span style="color:#64748b">Subtotal</span>
+              <strong>JOD {{ "%.3f"|format((inv.amount or 0)|float) }}</strong>
+            </div>
+            {% if inv.discount and inv.discount|float > 0 %}
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9">
+              <span style="color:#1e7b34">Discount</span>
+              <strong style="color:#1e7b34">− JOD {{ "%.3f"|format((inv.discount or 0)|float) }}</strong>
+            </div>
             {% endif %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;margin-top:6px;background:linear-gradient(90deg,#0f1d35,#1a2f52);border-radius:5px;color:#fff">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.5px">TOTAL DUE</span>
+              <span style="font-family:'Playfair Display',Georgia,serif;font-size:17px;font-weight:800;color:#C8A84B">JOD {{ "%.3f"|format((inv.total or 0)|float) }}</span>
+            </div>
+            {% if inv.notes %}
+            <div style="margin-top:8px;background:#f8fafc;border-left:3px solid #1B3A6B;padding:6px 10px;font-size:11.5px;color:#374151;border-radius:0 4px 4px 0">
+              <strong>Notes:</strong> {{ inv.notes }}
+            </div>
+            {% endif %}
+            <div style="margin-top:8px;font-size:10.5px;color:#94a3b8;padding:4px 8px;background:#f8fafc;border-radius:4px;border-left:3px solid #C8A84B">
+              Ref #{{ sale.id }} &nbsp;·&nbsp; {{ sale.sale_date }}
+            </div>
+          </div>
+        </div>
 
-          </td>
-          <td style="padding:16px;text-align:right;vertical-align:top;border-bottom:1px solid #f1f5f9">
-            <div style="font-size:15px;font-weight:700;color:#0f1d35;white-space:nowrap">{{ "%.3f"|format((inv.amount or 0)|float) }}</div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+        {# ── TOURS (full width) ── #}
+        {% if tours %}
+        <div class="svc-section svc-full">
+          <div class="svc-label" style="color:#6D28D9;border-bottom-color:#ddd6fe">🗺 TOURS</div>
+          <table style="width:100%;font-size:11.5px;border:none;background:transparent">
+            <thead><tr>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Tour</th>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Date</th>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#6D28D9;font-weight:700;text-transform:uppercase;background:transparent">Status</th>
+            </tr></thead>
+            <tbody>
+              {% for t in tours %}
+              <tr><td style="padding:3px 8px;border-bottom:1px solid #ede9fe"><strong>{{ t.name }}</strong></td>
+                  <td style="padding:3px 8px;border-bottom:1px solid #ede9fe">{{ t.date or '—' }}</td>
+                  <td style="padding:3px 8px;border-bottom:1px solid #ede9fe">{{ t.status or 'Included' }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
 
-    {# ── TOTALS ─────────────────────────────────────────────────── #}
-    <div class="totals-block" style="display:flex;justify-content:flex-end;margin-top:16px">
-      <div style="min-width:270px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
+        {# ── PASSENGERS (full width) ── #}
+        {% if passengers %}
+        <div class="svc-section svc-full">
+          <div class="svc-label" style="color:#1E7B34;border-bottom-color:#bbf7d0">👥 PASSENGERS</div>
+          <table style="width:100%;font-size:11.5px;background:transparent;border:none">
+            <thead><tr>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Name</th>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Passport</th>
+              <th style="padding:4px 8px;text-align:left;font-size:9px;color:#1E7B34;font-weight:700;text-transform:uppercase;background:transparent">Nationality</th>
+            </tr></thead>
+            <tbody>
+              {% for p in passengers %}
+              <tr><td style="padding:3px 8px;border-bottom:1px solid #e8f8ee"><strong>{{ p.name }}</strong></td>
+                  <td style="padding:3px 8px;border-bottom:1px solid #e8f8ee;font-family:'Courier New',monospace;font-size:11px;color:#8b1a1a">{{ p.passport or '—' }}</td>
+                  <td style="padding:3px 8px;border-bottom:1px solid #e8f8ee">{{ p.nationality or '—' }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+
+        {# ── REMARKS (full width) ── #}
+        {% if sale.remarks %}
+        <div class="svc-full" style="background:#f8fafc;border-left:3px solid #94a3b8;padding:7px 10px;font-size:12px;color:#374151;border-radius:0 5px 5px 0">
+          <strong>Remarks:</strong> {{ sale.remarks }}
+        </div>
+        {% endif %}
+
+      {% else %}
+        {# No linked sale #}
+        <div style="font-size:13px;line-height:1.7;color:#1e293b;white-space:pre-line">{{ inv.service_desc or 'Travel Services' }}</div>
+
+        {# Totals for standalone invoice #}
+        <div class="svc-financial" style="margin-top:12px">
+          <div style="font-size:12px">
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9">
+              <span style="color:#64748b">Subtotal</span><strong>JOD {{ "%.3f"|format((inv.amount or 0)|float) }}</strong>
+            </div>
+            {% if inv.discount and inv.discount|float > 0 %}
+            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9">
+              <span style="color:#1e7b34">Discount</span><strong style="color:#1e7b34">− JOD {{ "%.3f"|format((inv.discount or 0)|float) }}</strong>
+            </div>
+            {% endif %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;margin-top:6px;background:linear-gradient(90deg,#0f1d35,#1a2f52);border-radius:5px;color:#fff">
+              <span style="font-size:11px;font-weight:700">TOTAL DUE</span>
+              <span style="font-family:'Playfair Display',Georgia,serif;font-size:17px;font-weight:800;color:#C8A84B">JOD {{ "%.3f"|format((inv.total or 0)|float) }}</span>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+    </div>{# /svc-grid #}
+
+    {# Totals block for screen only (hidden in print — shown inside svc-grid instead) #}
+    {% if sale %}
+    <div class="totals-screen-only" style="display:flex;justify-content:flex-end;margin-top:14px">
+      <div style="min-width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;padding:9px 14px;font-size:12.5px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
           <span style="color:#64748b">Subtotal</span>
           <span style="font-weight:600;color:#0f1d35">JOD {{ "%.3f"|format((inv.amount or 0)|float) }}</span>
         </div>
         {% if inv.discount and inv.discount|float > 0 %}
-        <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
+        <div style="display:flex;justify-content:space-between;padding:9px 14px;font-size:12.5px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
           <span style="color:#1e7b34">Discount</span>
           <span style="color:#1e7b34;font-weight:600">− JOD {{ "%.3f"|format((inv.discount or 0)|float) }}</span>
         </div>
         {% endif %}
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:linear-gradient(90deg,#0f1d35,#1a2f52);color:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:13px 14px;background:linear-gradient(90deg,#0f1d35,#1a2f52);color:#fff">
           <span style="font-size:13px;font-weight:700;letter-spacing:.5px">TOTAL DUE</span>
           <span style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:800;color:#C8A84B">JOD {{ "%.3f"|format((inv.total or 0)|float) }}</span>
         </div>
       </div>
     </div>
-
     {% if inv.notes %}
-    <div class="inv-notes" style="margin-top:16px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1B3A6B;border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;color:#374151">
+    <div style="margin-top:14px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1B3A6B;border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;color:#374151">
       <strong style="color:#0f1d35">Notes:</strong> {{ inv.notes }}
     </div>
     {% endif %}
+    {% endif %}
+
+  </div>{# /inv-body #}
+
+  {# ── SIGNATURES ── #}
+  <div class="inv-signatures" style="display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:16px 32px;border-top:1px solid #e2e8f0">
+    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:10.5px;color:#94a3b8;text-align:center">Authorized Signature — Alsondos Travel &amp; Tourism</div></div>
+    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:10.5px;color:#94a3b8;text-align:center">Client Signature &amp; Stamp &nbsp;·&nbsp; Date: _______________</div></div>
   </div>
 
-  {# ── SIGNATURES ──────────────────────────────────────────────── #}
-  <div class="inv-signatures" style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:20px 36px;border-top:1px solid #e2e8f0">
-    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Authorized Signature — Alsondos Travel &amp; Tourism</div></div>
-    <div><div style="height:1.5px;background:#cbd5e1;margin-bottom:5px"></div><div style="font-size:11px;color:#94a3b8;text-align:center">Client Signature &amp; Stamp &nbsp;·&nbsp; Date: _______________</div></div>
-  </div>
-
-  <div class="inv-footer" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:11px 36px;text-align:center;font-size:10.5px;color:#94a3b8;line-height:1.8">
+  <div class="inv-footer" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 32px;text-align:center;font-size:10px;color:#94a3b8;line-height:1.7">
     Alsondos Travel &amp; Tourism &nbsp;·&nbsp; Amman, Jordan &nbsp;·&nbsp; This invoice is computer-generated<br>
     Please retain a copy for your records &nbsp;·&nbsp; Payment due as specified above
   </div>
@@ -270,128 +299,117 @@
 
 {% block extra_js %}
 <style>
+/* ── Screen styles for service grid ── */
+.svc-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.svc-section {
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.svc-section:last-child { border-bottom: none; }
+.svc-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 7px;
+  padding-bottom: 4px;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+.svc-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px 14px;
+  font-size: 12.5px;
+}
+.svc-fields .lbl { color: #94a3b8; display: block; font-size: 11px; }
+.svc-full { grid-column: 1 / -1; }
+.svc-financial { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+
+/* ── PRINT ── */
 @media print {
   @page { size: A4 portrait; margin: 8mm 10mm; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  body, html { margin: 0 !important; padding: 0 !important; font-size: 11px !important; }
+  body, html { margin: 0 !important; padding: 0 !important; }
   .no-print { display: none !important; }
-  nav, header, footer, aside, .sidebar { display: none !important; }
+  nav, header, footer, aside, .sidebar, .page-header { display: none !important; }
 
-  /* Strip screen chrome — make print wrap fill the page */
-  .doc-print-wrap {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
+  .doc-print-wrap { box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; width: 100% !important; }
 
-  /* ── HEADER: shrink logo & padding ── */
-  .doc-print-wrap > div:first-child {
-    padding: 10px 18px 8px !important;
-  }
-  .doc-print-wrap > div:first-child img {
-    height: 44px !important;
-    margin-bottom: 4px !important;
-  }
-  .doc-print-wrap > div:first-child div[style*="font-size:36px"] {
-    font-size: 26px !important;
-  }
-  .doc-print-wrap > div:first-child div[style*="font-size:16px"] {
-    font-size: 13px !important;
-    margin-top: 4px !important;
-  }
-  .doc-print-wrap > div:first-child div[style*="font-size:12px"] {
-    font-size: 9px !important;
+  /* Header */
+  .inv-header { padding: 10px 20px 8px !important; }
+  .inv-header img { height: 42px !important; margin-bottom: 3px !important; }
+
+  /* Meta */
+  .inv-meta > div { padding: 8px 20px !important; }
+
+  /* Body */
+  .inv-body { padding: 8px 20px !important; }
+
+  /* Service grid: 2-column layout */
+  .svc-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 12px !important;
+    align-items: start !important;
   }
 
-  /* ── BILLED TO / INVOICE DETAILS ── */
-  .doc-print-wrap > div:nth-child(2) > div {
-    padding: 8px 18px !important;
-  }
-  .doc-print-wrap > div:nth-child(2) div[style*="font-size:19px"] {
-    font-size: 14px !important;
-  }
-  .doc-print-wrap > div:nth-child(2) div[style*="font-size:13px"] {
-    font-size: 11px !important;
-    gap: 2px !important;
-  }
-
-  /* ── MAIN CONTENT WRAPPER ── */
-  .doc-print-wrap > div:nth-child(3) { padding: 10px 18px !important; }
-
-  /* ── TABLE ── */
-  .doc-print-wrap table { margin-bottom: 0 !important; }
-  .doc-print-wrap td, .doc-print-wrap th { padding: 8px 10px !important; }
-
-  /* ── SERVICE SECTIONS: compact + no page break ── */
   .svc-section {
+    padding: 8px 10px !important;
+    border: 1px solid #eef2f7 !important;
+    border-radius: 5px !important;
+    background: #fafbfc !important;
     margin-bottom: 6px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
-  .svc-section > div:first-child {
-    margin-bottom: 4px !important;
-    padding-bottom: 3px !important;
-    font-size: 9px !important;
-  }
-  /* 2-column grid in print — prevents date/route wrapping */
-  .svc-section > div[style*="grid-template-columns:repeat(3"] {
+
+  /* Flight col-1, Hotel col-2 on same row */
+  .svc-flight { grid-column: 1; grid-row: 1; }
+  .svc-hotel  { grid-column: 2; grid-row: 1; }
+  /* Transfer col-1, Financial col-2 on same row */
+  .svc-transfer  { grid-column: 1; grid-row: 2; }
+  .svc-financial { grid-column: 2; grid-row: 2; padding: 8px 10px !important; border: 1px solid #eef2f7 !important; border-radius: 5px !important; background: #fafbfc !important; margin-bottom: 6px !important; }
+  /* Visa/Insurance take col-1 on row 2 if no transfer */
+  .svc-visa      { grid-column: 1; grid-row: 2; }
+  .svc-insurance { grid-column: 1; grid-row: 2; }
+  /* Full-width rows */
+  .svc-full  { grid-column: 1 / -1 !important; }
+
+  /* Fields: 2-col in print */
+  .svc-fields {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 3px 12px !important;
+    gap: 3px 10px !important;
     font-size: 11px !important;
   }
-  /* Inner table rows (tours, passengers) */
-  .svc-section table td, .svc-section table th {
-    padding: 3px 6px !important;
-    font-size: 10.5px !important;
+  .svc-fields .lbl { font-size: 9.5px !important; }
+
+  .svc-label {
+    font-size: 8.5px !important;
+    margin-bottom: 5px !important;
+    padding-bottom: 3px !important;
   }
 
-  /* Ref line */
-  .doc-print-wrap td > div[style*="background:#f8fafc"] {
-    margin-top: 5px !important;
-    padding: 3px 8px !important;
-    font-size: 10px !important;
-  }
+  /* Hide screen-only totals block */
+  .totals-screen-only { display: none !important; }
 
-  /* ── TOTALS ── */
-  .totals-block {
-    margin-top: 6px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-  .totals-block > div > div { padding: 6px 12px !important; font-size: 11px !important; }
-  .totals-block > div > div[style*="font-size:20px"] span { font-size: 16px !important; }
+  /* Inner table rows */
+  .svc-full table td, .svc-full table th { padding: 3px 6px !important; font-size: 10.5px !important; }
 
-  /* ── NOTES ── */
-  .inv-notes {
-    margin-top: 6px !important;
-    padding: 6px 10px !important;
-    font-size: 11px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
+  /* Signatures */
+  .inv-signatures { padding: 10px 20px !important; gap: 24px !important; page-break-inside: avoid !important; break-inside: avoid !important; }
 
-  /* ── SIGNATURES ── */
-  .inv-signatures {
-    padding: 10px 18px !important;
-    gap: 28px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* ── FOOTER ── */
-  .inv-footer {
-    padding: 6px 18px !important;
-    font-size: 9.5px !important;
-    line-height: 1.5 !important;
-  }
+  /* Footer */
+  .inv-footer { padding: 6px 20px !important; font-size: 9px !important; line-height: 1.5 !important; }
 }
 </style>
 <script>
 (function(){
   var d=new Date(), months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' \u2014 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var stamp='Generated on: '+String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+d.getFullYear()+' — '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   var el=document.getElementById('genStamp'); if(el) el.textContent=stamp;
 })();
 </script>
