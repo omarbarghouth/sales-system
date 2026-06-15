@@ -2537,22 +2537,36 @@ def send_deliver_email():
 @app.route('/deliver-tomorrow/send-whatsapp', methods=['POST'])
 @login_required
 def send_whatsapp_deliver():
-    """WhatsApp Team button — sends filtered Deliver Tomorrow Excel via WhatsApp Cloud API."""
-    import io, requests as _req
+    """WhatsApp Team button — user-entered recipients, sends Excel via WhatsApp Cloud API."""
+    import io, re as _re, requests as _req
 
-    # ── Config from environment ────────────────────────────────────────────
-    wa_token    = os.environ.get('WA_TOKEN', '')          # Meta permanent / system-user token
-    wa_phone_id = os.environ.get('WA_PHONE_ID', '')       # WhatsApp Business phone-number ID
-    wa_numbers_raw = os.environ.get('WA_RECIPIENTS', '')  # comma-separated E.164 numbers, e.g. 962791234567
+    # ── API credentials from environment (never from client) ──────────────
+    wa_token    = os.environ.get('WA_TOKEN', '')
+    wa_phone_id = os.environ.get('WA_PHONE_ID', '')
 
-    if not wa_token or not wa_phone_id or not wa_numbers_raw:
+    if not wa_token or not wa_phone_id:
         return jsonify({'ok': False,
-                        'error': 'WhatsApp not configured. '
-                                 'Set WA_TOKEN, WA_PHONE_ID, WA_RECIPIENTS in environment.'}), 400
+                        'error': 'WhatsApp not configured on server. '
+                                 'Set WA_TOKEN and WA_PHONE_ID in environment variables.'}), 400
 
-    wa_numbers = [n.strip() for n in wa_numbers_raw.split(',') if n.strip()]
+    # ── Recipients from the modal form (user-entered) ─────────────────────
+    raw_numbers = request.form.getlist('wa_number')      # multiple <input name="wa_number">
+    wa_numbers  = [n.strip() for n in raw_numbers if n.strip()]
 
-    # ── Build Excel ────────────────────────────────────────────────────────
+    if not wa_numbers:
+        return jsonify({'ok': False, 'error': 'Enter at least one WhatsApp number.'}), 400
+
+    # Validate E.164: + then 7–15 digits
+    _e164 = _re.compile(r'^\+\d{7,15}$')
+    bad   = [n for n in wa_numbers if not _e164.match(n)]
+    if bad:
+        return jsonify({'ok': False,
+                        'error': f'Invalid number format (use +CountryCode…): {", ".join(bad)}'}), 400
+
+    # Strip leading + for Meta API (it expects digits only)
+    api_numbers = [n.lstrip('+') for n in wa_numbers]
+
+    # ── Build Excel from current filters ──────────────────────────────────
     p = _dt_parse_filters(request.form)
     outbound_tickets, return_tickets = _dt_query_tickets(p)
     total = len(outbound_tickets) + len(return_tickets)
@@ -2564,78 +2578,88 @@ def send_whatsapp_deliver():
         label     = f"{p['start_date']}_to_{p['end_date']}"
         label_txt = f"{p['start_date']} to {p['end_date']}"
     else:
-        label     = p['view_date']
+        label = p['view_date']
         try:
             label_txt = datetime.strptime(p['view_date'], '%Y-%m-%d').strftime('%d %B %Y')
         except Exception:
             label_txt = p['view_date']
 
-    xl_bytes  = _dt_build_excel(outbound_tickets, return_tickets, label)
-    filename  = f"deliver_{label}.xlsx"
-    sender    = session.get('username', 'system')
+    xl_bytes = _dt_build_excel(outbound_tickets, return_tickets, label)
+    filename = f"deliver_{label}.xlsx"
+    sender   = session.get('username', 'system')
 
     graph_url = f"https://graph.facebook.com/v19.0/{wa_phone_id}"
-    headers   = {'Authorization': f'Bearer {wa_token}'}
+    auth_hdr  = {'Authorization': f'Bearer {wa_token}'}
 
-    # ── Upload media once ──────────────────────────────────────────────────
+    # ── Upload Excel once, reuse media_id for all recipients ──────────────
     try:
-        upload_resp = _req.post(
+        up = _req.post(
             f"{graph_url}/media",
-            headers=headers,
+            headers=auth_hdr,
             files={
                 'file': (filename, io.BytesIO(xl_bytes),
                          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
                 'type': (None, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
                 'messaging_product': (None, 'whatsapp'),
             },
-            timeout=30
+            timeout=30,
         )
-        upload_resp.raise_for_status()
-        media_id = upload_resp.json().get('id')
+        up.raise_for_status()
+        media_id = up.json().get('id')
         if not media_id:
-            raise ValueError(f"No media ID returned: {upload_resp.text}")
+            raise ValueError(f"No media ID in response: {up.text}")
     except Exception as _ue:
         logger.error(f"send_whatsapp_deliver upload error: {_ue}")
-        return jsonify({'ok': False, 'error': f'Media upload failed: {_ue}'}), 500
+        return jsonify({'ok': False, 'error': f'File upload to WhatsApp failed: {_ue}'}), 500
 
-    # ── Send document to each recipient ───────────────────────────────────
-    errors = []
-    for number in wa_numbers:
-        payload = {
-            'messaging_product': 'whatsapp',
-            'to': number,
-            'type': 'document',
-            'document': {
-                'id': media_id,
-                'filename': filename,
-                'caption': (
-                    f"Deliver Tomorrow Report — {label_txt}\n"
-                    f"{len(outbound_tickets)} outbound  |  {len(return_tickets)} return\n"
-                    f"Sent by {sender}"
-                ),
-            },
-        }
+    caption = (
+        f"\U0001f4cb Deliver Tomorrow — {label_txt}\n"
+        f"✈ {len(outbound_tickets)} outbound  |  \U0001f6ec {len(return_tickets)} return\n"
+        f"Sent by {sender}"
+    )
+
+    # ── Send document to each number ──────────────────────────────────────
+    sent, errors = [], []
+    for number in api_numbers:
         try:
             r = _req.post(
                 f"{graph_url}/messages",
-                headers={**headers, 'Content-Type': 'application/json'},
-                json=payload,
-                timeout=20
+                headers={**auth_hdr, 'Content-Type': 'application/json'},
+                json={
+                    'messaging_product': 'whatsapp',
+                    'to': number,
+                    'type': 'document',
+                    'document': {'id': media_id, 'filename': filename, 'caption': caption},
+                },
+                timeout=20,
             )
             r.raise_for_status()
+            sent.append('+' + number)
         except Exception as _me:
-            logger.error(f"send_whatsapp_deliver message error to {number}: {_me}")
-            errors.append(f"{number}: {_me}")
+            api_err = ''
+            try: api_err = r.json().get('error', {}).get('message', '')
+            except Exception: pass
+            msg = api_err or str(_me)
+            logger.error(f"send_whatsapp_deliver message error to +{number}: {msg}")
+            errors.append(f"+{number}: {msg}")
 
-    if errors:
-        return jsonify({'ok': False,
-                        'error': 'Sent to some recipients but failed for: ' + '; '.join(errors)}), 207
-
+    recipients_str = ', '.join(wa_numbers)
     log_action('WHATSAPP', 'sales', None,
-               f"Deliver Tomorrow '{label_txt}' sent via WhatsApp to {wa_numbers_raw} "
-               f"by {sender} ({len(outbound_tickets)} outbound + {len(return_tickets)} return)")
+               f"Deliver Tomorrow '{label_txt}' sent via WhatsApp to [{recipients_str}] "
+               f"by {sender} ({len(outbound_tickets)} outbound + {len(return_tickets)} return)"
+               + (f" — ERRORS: {'; '.join(errors)}" if errors else ''))
+
+    if errors and not sent:
+        return jsonify({'ok': False,
+                        'error': 'Failed to send to all numbers: ' + '; '.join(errors)}), 500
+    if errors:
+        return jsonify({'ok': True,
+                        'message': f'Sent to {len(sent)} number(s). Failed: {"; ".join(errors)}',
+                        'partial': True}), 207
+
     return jsonify({'ok': True,
-                    'message': f'Report sent to {len(wa_numbers)} WhatsApp number(s).',
+                    'message': f'Report sent to {len(sent)} WhatsApp number(s). '
+                               f'{len(outbound_tickets)} outbound + {len(return_tickets)} return.',
                     'total': total})
 
 
