@@ -385,8 +385,8 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
   });
 })();
 
-/* ── WhatsApp modal — all wiring done after DOM is ready ────── */
-document.addEventListener('DOMContentLoaded', function () {
+/* ── WhatsApp modal — script is at page bottom, DOM already ready ── */
+(function () {
 
   var E164 = /^\+\d{7,15}$/;
 
