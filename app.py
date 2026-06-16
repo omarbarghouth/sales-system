@@ -6505,7 +6505,8 @@ def travel_ticket_save():
 @app.route('/travel-ticket/<int:ticket_id>/view')
 @login_required
 def travel_ticket_view(ticket_id):
-    """Printable single-page travel document (Print / Download PDF via browser print)."""
+    """Printable single-page travel document. ?autoprint=1 triggers the browser
+    print dialog on load — used by the Print / Download PDF action."""
     ticket = query_db("SELECT * FROM travel_tickets WHERE id=%s AND deleted=FALSE", [ticket_id], one=True)
     if not ticket:
         flash('Travel ticket not found.', 'danger')
@@ -6513,7 +6514,8 @@ def travel_ticket_view(ticket_id):
     sale = None
     if ticket.get('sale_id'):
         sale = query_db("SELECT company, customer FROM sales WHERE id=%s", [ticket['sale_id']], one=True)
-    return render_template('travel_ticket_view.html', ticket=ticket, sale=sale)
+    autoprint = request.args.get('autoprint') == '1'
+    return render_template('travel_ticket_view.html', ticket=ticket, sale=sale, autoprint=autoprint)
 
 
 @app.route('/travel-ticket/<int:ticket_id>/sync', methods=['POST'])
