@@ -1734,12 +1734,13 @@ def sales_report():
         # fallback kicks in instead of showing an empty name.
         agent_rows = query_db("""
             SELECT DISTINCT u.id, u.username,
-                   NULLIF(TRIM(COALESCE(u.full_name, '')), '') AS full_name
+                   NULLIF(TRIM(COALESCE(u.full_name, '')), '') AS full_name,
+                   LOWER(COALESCE(NULLIF(TRIM(u.full_name), ''), u.username)) AS sort_key
             FROM users u
             LEFT JOIN sales s ON s.created_by_user_id = u.id
             WHERE COALESCE(u.is_active, TRUE) = TRUE
               AND TRIM(COALESCE(u.username, '')) != ''
-            ORDER BY LOWER(COALESCE(NULLIF(TRIM(u.full_name), ''), u.username)) ASC
+            ORDER BY sort_key ASC
         """) or []
         agents = []
         seen_ids = set()
