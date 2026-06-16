@@ -566,6 +566,21 @@ def finance_required(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.before_request
+def _enforce_force_password_change():
+    """
+    Gate page navigation (GET only) when an admin has flagged this account
+    with "force password change on next login". Scoped to GET requests only
+    so it never interferes with existing POST/AJAX actions across the app.
+    """
+    if not session.get('must_change_password'):
+        return None
+    if request.endpoint in ('force_change_password', 'logout', 'login', 'static', None):
+        return None
+    if request.method != 'GET':
+        return None
+    return redirect(url_for('force_change_password'))
+
 @app.context_processor
 def inject_user():
     try:
@@ -649,8 +664,13 @@ def login():
             session['user_id']   = user['id']
             session['username']  = user['username']
             session['user_role'] = user['role']
+            session['must_change_password'] = bool(user.get('must_change_password'))
             session.permanent    = True   # uses app.permanent_session_lifetime = 8h
+            execute_db("UPDATE users SET last_login=%s WHERE id=%s",
+                      (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), user['id']))
             log_action('LOGIN', 'users', user['id'], f"User {username} logged in")
+            if session['must_change_password']:
+                return redirect(url_for('force_change_password'))
             # SEC-06: validate next= is a safe relative URL (prevent open redirect)
             _next = request.form.get('next', '').strip()
             if _next and _next.startswith('/') and not _next.startswith('//'):
@@ -670,19 +690,54 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-# ── User Management ───────────────────────────────────────────────────────────
+# ── Employee Management (extends the existing Users module — NOT a separate
+#    HR system; `users` remains the single source of truth for login) ────────
+_EMP_STATUSES    = ['Active', 'On Leave', 'Suspended', 'Resigned']
+_EMP_POSITIONS   = ['General Manager', 'Operation Manager', 'Sales Executive',
+                    'Accountant', 'Operations Officer', 'Administrator']
+_EMP_DEPARTMENTS = ['Management', 'Operations', 'Sales', 'Finance', 'Administration']
+
+
 @app.route('/users')
 @admin_required
 def manage_users():
-    users = query_db("""
+    q_search = request.args.get('q', '').strip()
+    q_role   = request.args.get('role', '').strip()
+    q_dept   = request.args.get('department', '').strip()
+    q_pos    = request.args.get('position', '').strip()
+    q_status = request.args.get('status', '').strip()
+
+    where, params = ['1=1'], []
+    if q_search:
+        where.append("(LOWER(u.username) LIKE %s OR LOWER(COALESCE(u.full_name,'')) LIKE %s)")
+        params.extend([f'%{q_search.lower()}%', f'%{q_search.lower()}%'])
+    if q_role:
+        where.append("u.role=%s"); params.append(q_role)
+    if q_dept:
+        where.append("u.department=%s"); params.append(q_dept)
+    if q_pos:
+        where.append("u.position=%s"); params.append(q_pos)
+    if q_status:
+        where.append("COALESCE(u.employment_status,'Active')=%s"); params.append(q_status)
+
+    users = query_db(f"""
         SELECT u.id, u.username, u.role, u.created_at,
                COALESCE(u.full_name,'') as full_name,
                COALESCE(u.is_active, TRUE) as is_active,
                COALESCE(u.commission_rate, 20.0) as commission_rate,
+               COALESCE(u.position,'') as position,
+               COALESCE(u.department,'') as department,
+               COALESCE(u.employment_status,'Active') as employment_status,
+               COALESCE(u.join_date,'') as join_date,
+               COALESCE(u.last_login,'') as last_login,
+               COALESCE(u.must_change_password, FALSE) as must_change_password,
+               m.username as manager_username,
+               COALESCE(m.full_name, m.username) as manager_name,
                COALESCE(s.txn_count, 0)     as txn_count,
                COALESCE(s.total_sell, 0)    as total_sell,
                COALESCE(s.total_profit, 0)  as total_profit
         FROM users u
+        LEFT JOIN users m ON m.id = u.manager_id
         LEFT JOIN (
             SELECT created_by_user_id,
                    COUNT(*) as txn_count,
@@ -691,13 +746,21 @@ def manage_users():
             FROM sales WHERE deleted=FALSE
             GROUP BY created_by_user_id
         ) s ON u.id = s.created_by_user_id
+        WHERE {' AND '.join(where)}
         ORDER BY u.id
-    """)
+    """, params)
     users = [dict(u) for u in users]
     for u in users:
         r = float(u.get('commission_rate') or 20)
         u['commission'] = round(float(u.get('total_profit') or 0) * r / 100, 2)
-    return render_template('users.html', users=users)
+
+    return render_template('users.html',
+        users=users, statuses=_EMP_STATUSES,
+        positions=_EMP_POSITIONS, departments=_EMP_DEPARTMENTS,
+        filters=dict(q=q_search, role=q_role, department=q_dept,
+                     position=q_pos, status=q_status),
+    )
+
 
 @app.route('/users/add', methods=['POST'])
 @admin_required
@@ -714,12 +777,139 @@ def add_user():
     if query_db('SELECT id FROM users WHERE username=%s', [username], one=True):
         flash(f'Username "{username}" already exists.', 'danger')
         return redirect(url_for('manage_users'))
+
+    full_name  = request.form.get('full_name', '').strip()
+    position   = request.form.get('position', '').strip()
+    department = request.form.get('department', '').strip()
+    manager_id = request.form.get('manager_id') or None
+
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    uid = execute_db('INSERT INTO users (username, password_hash, role) VALUES (%s,%s,%s)',
-                     (username, pw_hash, role))
+    uid = execute_db("""
+        INSERT INTO users (username, password_hash, role, full_name, position, department,
+                            manager_id, join_date, employment_status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Active')
+    """, (username, pw_hash, role, full_name, position, department, manager_id, str(date.today())))
     log_action('CREATE', 'users', uid, f"Created user {username} with role {role}")
     flash(f'User "{username}" created successfully.', 'success')
     return redirect(url_for('manage_users'))
+
+
+@app.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    u = query_db('SELECT * FROM users WHERE id=%s', [user_id], one=True)
+    if not u:
+        flash('User not found.', 'danger')
+        return redirect(url_for('manage_users'))
+
+    if request.method == 'POST':
+        f = request.form
+        new_username = f.get('username', '').strip().lower()
+        new_role     = f.get('role', u['role'])
+        manager_id   = f.get('manager_id') or None
+
+        if not new_username:
+            flash('Username is required.', 'danger')
+            return redirect(url_for('edit_user', user_id=user_id))
+        if manager_id and int(manager_id) == user_id:
+            flash('A user cannot report to themselves.', 'danger')
+            return redirect(url_for('edit_user', user_id=user_id))
+        if new_username != u['username']:
+            dup = query_db('SELECT id FROM users WHERE username=%s AND id!=%s', [new_username, user_id], one=True)
+            if dup:
+                flash(f'Username "{new_username}" is already taken.', 'danger')
+                return redirect(url_for('edit_user', user_id=user_id))
+
+        execute_db("""
+            UPDATE users SET
+              username=%s, full_name=%s, email=%s, phone=%s,
+              position=%s, department=%s, manager_id=%s, join_date=%s,
+              employment_status=%s, notes=%s, role=%s, commission_rate=%s
+            WHERE id=%s
+        """, (
+            new_username,
+            f.get('full_name', '').strip(),
+            f.get('email', '').strip(),
+            f.get('phone', '').strip(),
+            f.get('position', '').strip(),
+            f.get('department', '').strip(),
+            manager_id,
+            f.get('join_date', '').strip(),
+            f.get('employment_status', 'Active'),
+            f.get('notes', '').strip(),
+            new_role,
+            float(f.get('commission_rate', 20) or 20),
+            user_id,
+        ))
+
+        # Distinct audit entries for sensitive changes (per spec: track role changes,
+        # username changes — separate from the general "profile updated" entry).
+        if new_username != u['username']:
+            log_action('UPDATE', 'users', user_id, f"Username changed: {u['username']} → {new_username}")
+        if new_role != u['role']:
+            log_action('ROLE_CHANGE', 'users', user_id, f"Role changed for {new_username}: {u['role']} → {new_role}")
+        log_action('UPDATE', 'users', user_id, f"Profile updated for {new_username}")
+
+        flash('User updated successfully.', 'success')
+        return redirect(url_for('user_profile', user_id=user_id))
+
+    managers = query_db(
+        "SELECT id, username, COALESCE(full_name, username) as full_name FROM users WHERE id!=%s ORDER BY full_name",
+        [user_id]
+    )
+    return render_template('user_edit.html',
+        u=u, managers=managers, statuses=_EMP_STATUSES,
+        positions=_EMP_POSITIONS, departments=_EMP_DEPARTMENTS,
+    )
+
+
+@app.route('/users/<int:user_id>/profile')
+@admin_required
+def user_profile(user_id):
+    u = query_db("""
+        SELECT us.*, m.username as manager_username,
+               COALESCE(m.full_name, m.username) as manager_name
+        FROM users us
+        LEFT JOIN users m ON m.id = us.manager_id
+        WHERE us.id=%s
+    """, [user_id], one=True)
+    if not u:
+        flash('User not found.', 'danger')
+        return redirect(url_for('manage_users'))
+
+    stats = query_db("""
+        SELECT COUNT(*) as txn_count,
+               COALESCE(SUM(sell),0) as total_sell,
+               COALESCE(SUM(profit),0) as total_profit
+        FROM sales WHERE deleted=FALSE AND created_by_user_id=%s
+    """, [user_id], one=True) or {}
+    rate = float(u.get('commission_rate') or 20)
+    commission = round(float(stats.get('total_profit') or 0) * rate / 100, 2)
+
+    direct_reports = query_db(
+        "SELECT id, username, COALESCE(full_name, username) as full_name, role "
+        "FROM users WHERE manager_id=%s ORDER BY full_name",
+        [user_id]
+    )
+
+    login_history = query_db("""
+        SELECT action, detail, created_at FROM audit_logs
+        WHERE user_id=%s AND action IN ('LOGIN','LOGIN_DENIED','LOGOUT')
+        ORDER BY created_at DESC LIMIT 25
+    """, [user_id])
+
+    activity_log = query_db("""
+        SELECT action, table_name, detail, created_at FROM audit_logs
+        WHERE user_id=%s
+        ORDER BY created_at DESC LIMIT 25
+    """, [user_id])
+
+    return render_template('user_profile.html',
+        u=u, stats=stats, commission=commission,
+        direct_reports=direct_reports,
+        login_history=login_history, activity_log=activity_log,
+    )
+
 
 @app.route('/users/delete/<int:user_id>', methods=['POST'])
 @admin_required
@@ -737,7 +927,7 @@ def delete_user(user_id):
         flash('User not found.', 'danger')
         return redirect(url_for('manage_users'))
     # Soft-delete: disable the account permanently (same as toggle but labelled as delete)
-    execute_db('UPDATE users SET is_active=FALSE WHERE id=%s', [user_id])
+    execute_db("UPDATE users SET is_active=FALSE, employment_status='Resigned' WHERE id=%s", [user_id])
     log_action('DELETE', 'users', user_id,
                f"User {u['username']} deactivated (soft-delete). "
                f"Audit history and transactions preserved.")
@@ -759,24 +949,68 @@ def change_password():
         flash('Password must be at least 6 characters.', 'danger')
     else:
         pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
-        execute_db('UPDATE users SET password_hash=%s WHERE id=%s', (pw_hash, session['user_id']))
+        execute_db("UPDATE users SET password_hash=%s, must_change_password=FALSE WHERE id=%s",
+                   (pw_hash, session['user_id']))
+        session['must_change_password'] = False
         log_action('UPDATE', 'users', session['user_id'], "Password changed")
         flash('Password changed successfully.', 'success')
     return redirect(url_for('manage_users'))
+
+
+@app.route('/users/force-change-password', methods=['GET', 'POST'])
+@login_required
+def force_change_password():
+    """Standalone forced password-change flow for accounts flagged by an admin."""
+    if not session.get('must_change_password'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        new_pw  = request.form.get('new_password', '')
+        confirm = request.form.get('confirm_password', '')
+        if new_pw != confirm:
+            flash('Passwords do not match.', 'danger')
+        elif len(new_pw) < 8 or not any(c.isdigit() for c in new_pw):
+            flash('Password must be at least 8 characters and contain at least one number.', 'danger')
+        else:
+            pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
+            execute_db("UPDATE users SET password_hash=%s, must_change_password=FALSE WHERE id=%s",
+                       (pw_hash, session['user_id']))
+            session['must_change_password'] = False
+            log_action('UPDATE', 'users', session['user_id'], "Password changed (forced)")
+            flash('Password updated. You can now continue.', 'success')
+            return redirect(url_for('index'))
+    return render_template('force_change_password.html')
+
 
 @app.route('/users/reset-pw/<int:uid>', methods=['POST'])
 @admin_required
 def admin_reset_pw(uid):
     new_pw = request.form.get('new_password','')
+    force_change = request.form.get('force_change') == '1'
     if len(new_pw) < 8 or not any(c.isdigit() for c in new_pw):
         flash('Password must be at least 8 characters and contain at least one number.', 'danger')
         return redirect(url_for('manage_users'))
     pw_hash = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
-    execute_db('UPDATE users SET password_hash=%s WHERE id=%s', (pw_hash, uid))
+    execute_db("UPDATE users SET password_hash=%s, must_change_password=%s WHERE id=%s",
+              (pw_hash, force_change, uid))
     u = query_db('SELECT username FROM users WHERE id=%s', [uid], one=True)
-    log_action('UPDATE', 'users', uid, f"Password reset for {u['username'] if u else uid}")
+    suffix = ' (must change on next login)' if force_change else ''
+    log_action('UPDATE', 'users', uid, f"Password reset for {u['username'] if u else uid}{suffix}")
     flash(f'Password reset successfully.', 'success')
     return redirect(url_for('manage_users'))
+
+
+@app.route('/users/<int:uid>/force-change-toggle', methods=['POST'])
+@admin_required
+def toggle_force_password(uid):
+    """Flag/unflag an account to require a password change on its next login."""
+    flag = request.form.get('flag') == '1'
+    execute_db("UPDATE users SET must_change_password=%s WHERE id=%s", (flag, uid))
+    u = query_db('SELECT username FROM users WHERE id=%s', [uid], one=True)
+    msg = 'will be required to change their password on next login' if flag else 'no longer required to change their password'
+    log_action('UPDATE', 'users', uid, f"{u['username'] if u else uid} {msg}")
+    flash('Updated.', 'success')
+    return redirect(request.referrer or url_for('manage_users'))
+
 
 @app.route('/users/toggle/<int:uid>', methods=['POST'])
 @admin_required
@@ -3276,6 +3510,16 @@ def init_extension_db():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS commission_rate REAL DEFAULT 20.0",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        # Employee Management upgrade — extends the existing users table only,
+        # no separate employees/HR table. Single source of truth stays `users`.
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS position TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS join_date TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'Active'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
     ]
     for c in extra_user_cols:
         cur.execute(f"DO $$ BEGIN {c}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
