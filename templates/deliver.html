@@ -320,12 +320,16 @@ tr.row-done td.no-strike { text-decoration:none !important; opacity:1 !important
             {% if t.travel_ticket_id %}
             <div style="display:flex;gap:4px">
               <a href="{{ url_for('travel_ticket_view', ticket_id=t.travel_ticket_id) }}" target="_blank"
-                 class="btn" style="padding:4px 9px;font-size:11px;background:#eef4ff;color:#1B3A6B;border:none" title="View / Print">
-                <i class="fas fa-file-alt"></i>
+                 class="btn" style="padding:4px 8px;font-size:11px;background:#eef4ff;color:#1B3A6B;border:none" title="Preview">
+                <i class="fas fa-eye"></i>
+              </a>
+              <a href="{{ url_for('travel_ticket_view', ticket_id=t.travel_ticket_id, autoprint=1) }}" target="_blank"
+                 class="btn" style="padding:4px 8px;font-size:11px;background:#f0fdf4;color:#1E7B34;border:none" title="Print / Download PDF">
+                <i class="fas fa-print"></i>
               </a>
               <button type="button" onclick="ttOpenModal({{ t.id }})"
-                      class="btn" style="padding:4px 9px;font-size:11px;background:#f1f5f9;color:#475569;border:none" title="Edit">
-                <i class="fas fa-pen"></i>
+                      class="btn" style="padding:4px 8px;font-size:11px;background:#f1f5f9;color:#475569;border:none" title="Regenerate">
+                <i class="fas fa-sync-alt"></i>
               </button>
             </div>
             {% else %}
