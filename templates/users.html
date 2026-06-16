@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}User Management — ALSONDOS Admin{% endblock %}
+{% block title %}Employee Management — ALSONDOS Admin{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1><i class="fas fa-users-cog" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:7px"></i>User Management</h1>
-    <p>Create and manage employee accounts, roles, and access permissions</p>
+    <h1><i class="fas fa-users-cog" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:7px"></i>Employee Management</h1>
+    <p>Manage employee profiles, roles, and account access — built on the existing Users system</p>
   </div>
 </div>
 
@@ -41,6 +41,20 @@
           <div class="form-group">
             <label>Full Name</label>
             <input type="text" name="full_name" placeholder="Omar Al-Ahmad">
+          </div>
+          <div class="form-group">
+            <label>Position</label>
+            <input type="text" name="position" list="positions-list" placeholder="e.g. Sales Executive">
+            <datalist id="positions-list">
+              {% for p in positions %}<option value="{{ p }}">{% endfor %}
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>Department</label>
+            <select name="department">
+              <option value="">— Select —</option>
+              {% for d in departments %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
           </div>
         </div>
         <button type="submit" class="btn btn-red" style="width:100%">
@@ -79,11 +93,61 @@
 
 </div>
 
+{# ── Filters ──────────────────────────────────────────────── #}
+<div class="card mb-4">
+  <div class="card-body" style="padding:14px 20px">
+    <form method="get" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="form-group" style="flex:1;min-width:180px;margin:0">
+        <label style="font-size:11px">Search</label>
+        <input type="text" name="q" value="{{ filters.q }}" placeholder="Username or full name…" style="margin-top:4px">
+      </div>
+      <div class="form-group" style="min-width:140px;margin:0">
+        <label style="font-size:11px">Role</label>
+        <select name="role" style="margin-top:4px">
+          <option value="">All Roles</option>
+          {% for r in ['admin','manager','user'] %}
+          <option value="{{ r }}" {% if filters.role==r %}selected{% endif %}>{{ r|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="min-width:150px;margin:0">
+        <label style="font-size:11px">Department</label>
+        <select name="department" style="margin-top:4px">
+          <option value="">All Departments</option>
+          {% for d in departments %}
+          <option value="{{ d }}" {% if filters.department==d %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="min-width:160px;margin:0">
+        <label style="font-size:11px">Position</label>
+        <select name="position" style="margin-top:4px">
+          <option value="">All Positions</option>
+          {% for p in positions %}
+          <option value="{{ p }}" {% if filters.position==p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="min-width:140px;margin:0">
+        <label style="font-size:11px">Status</label>
+        <select name="status" style="margin-top:4px">
+          <option value="">All Statuses</option>
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if filters.status==s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+      <a href="{{ url_for('manage_users') }}" class="btn btn-outline">Clear</a>
+    </form>
+  </div>
+</div>
+
 {# ── Staff Table ────────────────────────────────────────────── #}
 <div class="card">
   <div class="card-header">
     <i class="fas fa-table"></i> All Accounts
-    <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ users|length }} total accounts</span>
+    <span style="margin-left:auto;font-size:12px;font-weight:400;opacity:.7">{{ users|length }} account{{ 's' if users|length != 1 }}</span>
   </div>
   <div style="overflow-x:auto">
     <table>
@@ -91,12 +155,16 @@
         <tr>
           <th>#</th>
           <th>User</th>
+          <th>Position</th>
+          <th>Department</th>
           <th>Role</th>
+          <th>Status</th>
           <th>Transactions</th>
           <th class="text-right">Revenue</th>
           <th class="text-right">Profit</th>
           <th class="text-right">Commission</th>
-          <th>Created</th>
+          <th>Last Login</th>
+          <th>Join Date</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -106,7 +174,7 @@
         <tr>
           <td style="color:var(--muted-lt);font-size:11px">{{ loop.index }}</td>
           <td>
-            <div style="display:flex;align-items:center;gap:10px">
+            <a href="{{ url_for('user_profile', user_id=u.id) }}" style="text-decoration:none;display:flex;align-items:center;gap:10px;color:inherit">
               <div class="staff-avatar {% if u.role=='admin' %}admin-av{% endif %}">
                 {{ first_letter }}
               </div>
@@ -114,12 +182,34 @@
                 <div style="font-weight:700;color:var(--navy-dk)">{{ u.full_name or u.username }}</div>
                 <div style="font-size:11px;color:var(--muted-lt)">@{{ u.username }}</div>
               </div>
-            </div>
+            </a>
+          </td>
+          <td style="font-size:12px">{{ u.position or '—' }}</td>
+          <td>
+            {% if u.department %}
+            <span style="background:#eef4ff;color:#1B3A6B;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">{{ u.department }}</span>
+            {% else %}<span style="color:var(--muted-lt)">—</span>{% endif %}
           </td>
           <td>
             <span class="badge badge-{% if u.role=='admin' %}pending{% elif u.role=='manager' %}gold{% else %}navy{% endif %}">
               {% if u.role == 'admin' %}👑 Admin{% elif u.role == 'manager' %}📊 Manager{% else %}👤 Agent{% endif %}
             </span>
+          </td>
+          <td>
+            {% set st = u.employment_status or 'Active' %}
+            <span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;
+              {% if st=='Active' %}background:#d1fae5;color:#065f46
+              {% elif st=='On Leave' %}background:#fef3c7;color:#92400e
+              {% elif st=='Suspended' %}background:#fee2e2;color:#991b1b
+              {% else %}background:#f1f5f9;color:#64748b{% endif %}">
+              {{ st }}
+            </span>
+            {% if u.is_active == False %}
+            <div style="font-size:10px;color:#dc2626;margin-top:3px"><i class="fas fa-ban"></i> Login disabled</div>
+            {% endif %}
+            {% if u.must_change_password %}
+            <div style="font-size:10px;color:#92400e;margin-top:2px"><i class="fas fa-key"></i> Must change password</div>
+            {% endif %}
           </td>
           <td class="text-center">
             <span style="font-weight:700;color:var(--navy)">{{ u.txn_count or 0 }}</span>
@@ -127,13 +217,18 @@
           <td class="text-right text-gold">{{ "%.2f"|format((u.total_sell or 0)|float) }}</td>
           <td class="text-right text-green">{{ "%.2f"|format((u.total_profit or 0)|float) }}</td>
           <td class="text-right text-purple">{{ "%.2f"|format((u.commission or 0)|float) }}</td>
-          <td style="font-size:11.5px;color:var(--muted-lt)">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+          <td style="font-size:11px;color:var(--muted-lt);white-space:nowrap">{{ u.last_login[:16] if u.last_login else 'Never' }}</td>
+          <td style="font-size:11.5px;color:var(--muted-lt);white-space:nowrap">{{ u.join_date or (u.created_at[:10] if u.created_at else '—') }}</td>
           <td>
             <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-              {# View sales #}
-              <a href="{{ url_for('admin_employee_sales', uid=u.id) }}"
-                 class="btn btn-edit btn-xs" title="View Sales">
-                <i class="fas fa-chart-bar"></i>
+              {# Profile #}
+              <a href="{{ url_for('user_profile', user_id=u.id) }}" class="btn btn-edit btn-xs" title="View Profile">
+                <i class="fas fa-id-card"></i>
+              </a>
+
+              {# Edit #}
+              <a href="{{ url_for('edit_user', user_id=u.id) }}" class="btn btn-edit btn-xs" title="Edit">
+                <i class="fas fa-pen"></i>
               </a>
 
               {# Reset password modal trigger #}
@@ -176,7 +271,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="text-center text-muted" style="padding:28px">No users found.</td></tr>
+        <tr><td colspan="13" class="text-center text-muted" style="padding:28px">No users found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -192,10 +287,14 @@
     <div style="font-size:13px;color:var(--muted);margin-bottom:22px" id="resetPwDesc">Set a new password for this user.</div>
     <form method="POST" id="resetPwForm" action="">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="form-group" style="margin-bottom:16px">
+      <div class="form-group" style="margin-bottom:14px">
         <label>New Password <span class="req">*</span></label>
         <input type="password" name="new_password" id="newPwInput" required minlength="8" placeholder="Min 8 chars + 1 number" autocomplete="new-password">
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:18px;cursor:pointer">
+        <input type="checkbox" name="force_change" value="1" style="width:15px;height:15px">
+        Require password change on next login
+      </label>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button type="button" onclick="closeResetPw()" class="btn btn-outline">Cancel</button>
         <button type="submit" class="btn btn-warning"><i class="fas fa-save"></i> Set Password</button>

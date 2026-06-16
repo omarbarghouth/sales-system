@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}{{ u.full_name or u.username }} — Profile — ALSONDOS Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-id-card" style="color:var(--navy)"></i> {{ u.full_name or u.username }}</h1>
+    <p>@{{ u.username }} {% if u.position %}· {{ u.position }}{% endif %}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('edit_user', user_id=u.id) }}" class="btn btn-edit"><i class="fas fa-pen"></i> Edit</a>
+    <a href="{{ url_for('manage_users') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start">
+
+  {# ── LEFT: Profile card + info ── #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <div class="card" style="padding:0;overflow:hidden;text-align:center">
+      <div style="height:5px;background:{% if (u.employment_status or 'Active')=='Active' %}linear-gradient(90deg,#1E7B34,#27ae60){% else %}#94a3b8{% endif %}"></div>
+      <div style="padding:28px 20px 20px">
+        <div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#1B3A6B,#2d5fa6);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:34px;font-weight:800;color:#fff">
+          {{ u.username[0]|upper }}
+        </div>
+        <div style="font-size:18px;font-weight:800;color:var(--navy)">{{ u.full_name or u.username }}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px">{{ u.position or '—' }}</div>
+        <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+          <span class="badge badge-{% if u.role=='admin' %}pending{% elif u.role=='manager' %}gold{% else %}navy{% endif %}">
+            {% if u.role == 'admin' %}👑 Admin{% elif u.role == 'manager' %}📊 Manager{% else %}👤 Agent{% endif %}
+          </span>
+          {% set st = u.employment_status or 'Active' %}
+          <span style="padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;
+            {% if st=='Active' %}background:#d1fae5;color:#065f46
+            {% elif st=='On Leave' %}background:#fef3c7;color:#92400e
+            {% elif st=='Suspended' %}background:#fee2e2;color:#991b1b
+            {% else %}background:#f1f5f9;color:#64748b{% endif %}">
+            {{ st }}
+          </span>
+        </div>
+        {% if u.is_active == False %}
+        <div style="margin-top:8px;font-size:11px;color:#dc2626;font-weight:700"><i class="fas fa-ban"></i> Login Disabled</div>
+        {% endif %}
+        {% if u.must_change_password %}
+        <div style="margin-top:6px;font-size:11px;color:#92400e;font-weight:700"><i class="fas fa-key"></i> Must change password</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Details</div>
+      {% macro info_row(icon, label, val) %}
+        {% if val %}
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f1f5f9">
+          <i class="fas fa-{{ icon }}" style="color:#94a3b8;width:14px;margin-top:2px;font-size:12px"></i>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">{{ label }}</div>
+            <div style="font-size:12.5px;font-weight:600;color:var(--text)">{{ val }}</div>
+          </div>
+        </div>
+        {% endif %}
+      {% endmacro %}
+      {{ info_row('envelope', 'Email', u.email) }}
+      {{ info_row('phone', 'Phone', u.phone) }}
+      {{ info_row('building', 'Department', u.department) }}
+      {{ info_row('calendar-plus', 'Join Date', u.join_date) }}
+      {{ info_row('user-tie', 'Reports To', u.manager_name) }}
+      {{ info_row('clock', 'Last Login', u.last_login[:16] if u.last_login else None) }}
+      {{ info_row('calendar', 'Account Created', u.created_at[:10] if u.created_at else None) }}
+      {% if u.notes %}
+      <div style="margin-top:10px;padding:8px 10px;background:#f8fafc;border-left:3px solid var(--navy);border-radius:0 6px 6px 0;font-size:12px;color:var(--muted)">
+        <strong>Notes:</strong> {{ u.notes }}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if direct_reports %}
+    <div class="card" style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Direct Reports ({{ direct_reports|length }})</div>
+      {% for dr in direct_reports %}
+      <a href="{{ url_for('user_profile', user_id=dr.id) }}" style="display:flex;align-items:center;gap:8px;padding:6px 0;text-decoration:none;color:inherit;border-bottom:1px solid #f1f5f9">
+        <div style="width:26px;height:26px;border-radius:50%;background:#eef4ff;color:#1B3A6B;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">{{ dr.username[0]|upper }}</div>
+        <div style="font-size:12.5px;font-weight:600">{{ dr.full_name }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── RIGHT: Performance + Activity ── #}
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    {# Performance Stats #}
+    <div class="card" style="padding:16px 20px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:14px">Performance Statistics (All Time)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div style="background:#eef4ff;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--navy)">{{ stats.txn_count or 0 }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Transactions</div>
+        </div>
+        <div style="background:#fef9c3;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:18px;font-weight:800;color:#854d0e">{{ "%.0f"|format((stats.total_sell or 0)|float) }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Revenue JOD</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:18px;font-weight:800;color:#1E7B34">{{ "%.0f"|format((stats.total_profit or 0)|float) }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Profit JOD</div>
+        </div>
+        <div style="background:#f5f3ff;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:18px;font-weight:800;color:#6D28D9">{{ "%.0f"|format((commission or 0)|float) }}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Commission JOD</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--muted);text-align:right">Commission rate: {{ u.commission_rate or 20 }}%</div>
+    </div>
+
+    {# Tabs: Login History / Activity Log #}
+    <div>
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+        <a href="#" onclick="upSwitchTab('login');return false" id="up-tab-login"
+           style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;border-bottom:2px solid var(--navy);margin-bottom:-2px;color:var(--navy)">
+          <i class="fas fa-sign-in-alt" style="margin-right:5px"></i>Login History
+        </a>
+        <a href="#" onclick="upSwitchTab('activity');return false" id="up-tab-activity"
+           style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted)">
+          <i class="fas fa-history" style="margin-right:5px"></i>Activity Log
+        </a>
+      </div>
+
+      <div id="up-pane-login">
+        {% if login_history %}
+        <div class="card" style="padding:0;overflow:hidden">
+          {% for e in login_history %}
+          {% set color = {'LOGIN':'#1E7B34','LOGOUT':'#64748b','LOGIN_DENIED':'#dc2626'}.get(e.action, '#64748b') %}
+          {% set bg    = {'LOGIN':'#f0fdf4','LOGOUT':'#f8fafc','LOGIN_DENIED':'#fef2f2'}.get(e.action, '#f8fafc') %}
+          <div style="display:flex;gap:12px;align-items:center;padding:10px 18px;border-bottom:1px solid #f1f5f9">
+            <div style="width:8px;height:8px;border-radius:50%;background:{{ color }};flex-shrink:0"></div>
+            <span style="background:{{ bg }};color:{{ color }};padding:1px 9px;border-radius:20px;font-size:10.5px;font-weight:800;text-transform:uppercase">{{ e.action }}</span>
+            <span style="font-size:12px;color:var(--muted);flex:1">{{ e.detail }}</span>
+            <span style="font-size:11px;color:var(--muted-lt);white-space:nowrap">{{ e.created_at }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No login history recorded yet.</div>
+        {% endif %}
+      </div>
+
+      <div id="up-pane-activity" style="display:none">
+        {% if activity_log %}
+        <div class="card" style="padding:0;overflow:hidden">
+          {% for e in activity_log %}
+          {% set color = {'CREATE':'#1E7B34','UPDATE':'#1B3A6B','DELETE':'#dc2626','ROLE_CHANGE':'#D97706'}.get(e.action, '#64748b') %}
+          {% set bg    = {'CREATE':'#f0fdf4','UPDATE':'#eef4ff','DELETE':'#fef2f2','ROLE_CHANGE':'#fffbeb'}.get(e.action, '#f8fafc') %}
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 18px;border-bottom:1px solid #f1f5f9">
+            <span style="background:{{ bg }};color:{{ color }};padding:1px 9px;border-radius:20px;font-size:10.5px;font-weight:800;text-transform:uppercase;margin-top:2px;white-space:nowrap">{{ e.action }}</span>
+            <div style="flex:1">
+              <div style="font-size:12px;color:var(--text)">{{ e.detail }}</div>
+              <div style="font-size:10.5px;color:var(--muted-lt);margin-top:2px">{{ e.table_name }}</div>
+            </div>
+            <span style="font-size:11px;color:var(--muted-lt);white-space:nowrap">{{ e.created_at }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No activity recorded yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function upSwitchTab(name) {
+  ['login','activity'].forEach(function(t) {
+    document.getElementById('up-pane-' + t).style.display = (t === name) ? 'block' : 'none';
+    var el = document.getElementById('up-tab-' + t);
+    el.style.color = (t === name) ? 'var(--navy)' : 'var(--muted)';
+    el.style.borderBottomColor = (t === name) ? 'var(--navy)' : 'transparent';
+  });
+}
+</script>
+{% endblock %}

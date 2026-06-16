@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ u.username }} — ALSONDOS Admin{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1><i class="fas fa-user-edit" style="color:var(--navy)"></i> Edit Employee</h1>
+    <p>@{{ u.username }} {% if u.full_name %}— {{ u.full_name }}{% endif %}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('user_profile', user_id=u.id) }}" class="btn btn-outline"><i class="fas fa-id-card"></i> View Profile</a>
+    <a href="{{ url_for('manage_users') }}" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('edit_user', user_id=u.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+    {# ── Personal Information ── #}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="card-header"><i class="fas fa-id-card"></i> Personal Information</div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Full Name</label>
+          <input type="text" name="full_name" value="{{ u.full_name or '' }}" placeholder="e.g. Ahmad Al-Rashidi">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" value="{{ u.email or '' }}" placeholder="work@alsondostravel.com">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" name="phone" value="{{ u.phone or '' }}" placeholder="+962 7X XXX XXXX">
+        </div>
+      </div>
+    </div>
+
+    {# ── Employment Information ── #}
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="card-header"><i class="fas fa-briefcase"></i> Employment Information</div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group">
+          <label>Position</label>
+          <input type="text" name="position" value="{{ u.position or '' }}" list="positions-list" placeholder="e.g. Sales Executive">
+          <datalist id="positions-list">
+            {% for p in positions %}<option value="{{ p }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label>Department</label>
+          <select name="department">
+            <option value="">— Select —</option>
+            {% for d in departments %}
+            <option value="{{ d }}" {% if u.department==d %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Reports To (Manager)</label>
+          <select name="manager_id">
+            <option value="">— None —</option>
+            {% for m in managers %}
+            <option value="{{ m.id }}" {% if u.manager_id==m.id %}selected{% endif %}>{{ m.full_name }} (@{{ m.username }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Join Date</label>
+          <input type="date" name="join_date" value="{{ u.join_date or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Employment Status</label>
+          <select name="employment_status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if (u.employment_status or 'Active')==s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Commission Rate (%)</label>
+          <input type="number" name="commission_rate" value="{{ u.commission_rate or 20 }}" min="0" max="100" step="0.5">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Notes</label>
+          <textarea name="notes" rows="3" placeholder="Additional notes…">{{ u.notes or '' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Account Settings ── #}
+  <div class="card" style="margin-top:20px;padding:0;overflow:hidden">
+    <div class="card-header"><i class="fas fa-user-shield"></i> Account Settings</div>
+    <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="form-group">
+        <label>Username <span class="req">*</span></label>
+        <input type="text" name="username" value="{{ u.username }}" required style="text-transform:lowercase">
+        <small>Changing this changes the employee's login name.</small>
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select name="role" {% if u.id == session.user_id %}disabled{% endif %}>
+          <option value="user" {% if u.role=='user' %}selected{% endif %}>👤 Sales Agent</option>
+          <option value="manager" {% if u.role=='manager' %}selected{% endif %}>📊 Manager</option>
+          <option value="admin" {% if u.role=='admin' %}selected{% endif %}>👑 Admin</option>
+        </select>
+        {% if u.id == session.user_id %}
+        <small style="color:#dc2626">You cannot change your own role.</small>
+        <input type="hidden" name="role" value="{{ u.role }}">
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:20px">
+    <button type="submit" class="btn btn-primary" style="padding:10px 28px">
+      <i class="fas fa-save"></i> Save Changes
+    </button>
+    <a href="{{ url_for('manage_users') }}" class="btn btn-outline" style="padding:10px 20px">Cancel</a>
+  </div>
+</form>
+
+{# ── Security Actions (outside the main form — independent POSTs) ── #}
+<div class="card" style="margin-top:24px;padding:0;overflow:hidden;border:1px solid #fde68a">
+  <div class="card-header" style="background:#fffbeb"><i class="fas fa-shield-alt" style="color:#92400e"></i> Security Actions</div>
+  <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap">
+    <form method="POST" action="{{ url_for('toggle_force_password', uid=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="flag" value="{{ '0' if u.must_change_password else '1' }}">
+      <button type="submit" class="btn btn-outline">
+        <i class="fas fa-key"></i>
+        {% if u.must_change_password %}Cancel Forced Password Change{% else %}Force Password Change on Next Login{% endif %}
+      </button>
+    </form>
+
+    {% if u.id != session.user_id %}
+    <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="{{ 'disable' if u.is_active != False else 'enable' }}">
+      <button type="submit" class="btn {% if u.is_active != False %}btn-warning{% else %}btn-success{% endif %}">
+        <i class="fas fa-{{ 'ban' if u.is_active != False else 'check' }}"></i>
+        {{ 'Disable Account' if u.is_active != False else 'Enable Account' }}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
