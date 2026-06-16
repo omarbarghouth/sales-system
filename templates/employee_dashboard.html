@@ -24,6 +24,9 @@
   </div>
 </div>
 
+{% set dash_action_endpoint = 'employee_dashboard' %}
+{% include '_dashboard_date_filter.html' %}
+
 {# ── KPI Cards ────────────────────────────────────────────── #}
 <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
   <div class="kpi-box gold">
@@ -75,12 +78,15 @@
 {# ── Charts ───────────────────────────────────────────────── #}
 <div class="chart-grid" style="margin-bottom:20px">
   <div class="chart-card">
-    <div class="chart-card-header"><i class="fas fa-chart-bar" style="color:var(--navy)"></i> My Monthly Sales</div>
+    <div class="chart-card-header">
+      <span><i class="fas fa-chart-bar" style="color:var(--navy)"></i> My Monthly Sales</span>
+      <span style="font-size:11.5px;color:var(--muted);font-weight:400">{{ date_from }} → {{ date_to }}</span>
+    </div>
     <div class="chart-card-body">
       {% if has_chart %}
       <canvas id="myChart" style="max-height:200px"></canvas>
       {% else %}
-      <div class="chart-empty"><i class="fas fa-chart-bar" style="font-size:26px;opacity:.2;display:block;margin-bottom:8px"></i>No sales data yet this year</div>
+      <div class="chart-empty"><i class="fas fa-chart-bar" style="font-size:26px;opacity:.2;display:block;margin-bottom:8px"></i>No sales data for the selected period</div>
       {% endif %}
     </div>
   </div>

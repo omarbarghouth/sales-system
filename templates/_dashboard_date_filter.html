@@ -1,0 +1,51 @@
+{# ══════════════════════════════════════════════════════════════════════════
+   Dashboard date-range filter — shared partial for index.html (admin/manager)
+   and employee_dashboard.html (sales agent).
+   Expects in context: date_from, date_to, quick, and `dash_action_endpoint`
+   (the url_for endpoint name to submit to, e.g. 'index' or 'employee_dashboard').
+   ══════════════════════════════════════════════════════════════════════════ #}
+<div class="card no-print" style="padding:14px 20px;margin-bottom:18px">
+  <form method="get" action="{{ url_for(dash_action_endpoint) }}" id="dashFilterForm"
+        style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="quick" id="dashQuickInput" value="{{ quick }}">
+
+    <div class="form-group" style="min-width:150px;margin:0">
+      <label style="font-size:11px"><i class="fas fa-calendar-day" style="margin-right:3px;color:var(--navy)"></i>Date From</label>
+      <input type="date" name="date_from" value="{{ date_from }}" style="margin-top:4px"
+             onchange="document.getElementById('dashQuickInput').value='custom'">
+    </div>
+    <div class="form-group" style="min-width:150px;margin:0">
+      <label style="font-size:11px"><i class="fas fa-calendar-day" style="margin-right:3px;color:var(--navy)"></i>Date To</label>
+      <input type="date" name="date_to" value="{{ date_to }}" style="margin-top:4px"
+             onchange="document.getElementById('dashQuickInput').value='custom'">
+    </div>
+
+    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Apply</button>
+    <a href="{{ url_for(dash_action_endpoint) }}" class="btn btn-outline"><i class="fas fa-undo"></i> Reset Filters</a>
+
+    <div style="flex:1;min-width:220px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      {% for qk, label in [
+        ('today','Today'), ('yesterday','Yesterday'), ('this_week','This Week'),
+        ('this_month','This Month'), ('last_month','Last Month'), ('this_year','This Year')
+      ] %}
+      <button type="button" onclick="dashQuickFilter('{{ qk }}')"
+              style="padding:6px 13px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid {% if quick==qk %}var(--navy){% else %}var(--border){% endif %};
+                     background:{% if quick==qk %}var(--navy){% else %}#fff{% endif %};color:{% if quick==qk %}#fff{% else %}var(--muted){% endif %};white-space:nowrap">
+        {{ label }}
+      </button>
+      {% endfor %}
+    </div>
+  </form>
+  <div style="margin-top:8px;font-size:11.5px;color:var(--muted)">
+    <i class="fas fa-info-circle"></i> Showing data from <strong>{{ date_from }}</strong> to <strong>{{ date_to }}</strong>
+    {% if quick and quick != 'custom' %}&nbsp;({{ quick.replace('_',' ')|title }}){% endif %}
+  </div>
+</div>
+
+<script>
+function dashQuickFilter(qk) {
+  var form = document.getElementById('dashFilterForm');
+  document.getElementById('dashQuickInput').value = qk;
+  form.submit();
+}
+</script>
