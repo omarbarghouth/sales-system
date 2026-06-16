@@ -1727,7 +1727,32 @@ def sales_report():
     companies = get_companies_list()
     agents = []
     if session.get('user_role') == 'admin':
-        agents = query_db('SELECT id, username, COALESCE(full_name,username) AS display FROM users ORDER BY username') or []
+        # Agent filter dropdown — one entry per active user, regardless of
+        # whether they have any transactions yet (LEFT JOIN, not JOIN).
+        # DISTINCT + grouping by id guards against any row fan-out from the
+        # join; NULLIF/TRIM strips blank full_name values so the username
+        # fallback kicks in instead of showing an empty name.
+        agent_rows = query_db("""
+            SELECT DISTINCT u.id, u.username,
+                   NULLIF(TRIM(COALESCE(u.full_name, '')), '') AS full_name
+            FROM users u
+            LEFT JOIN sales s ON s.created_by_user_id = u.id
+            WHERE COALESCE(u.is_active, TRUE) = TRUE
+              AND TRIM(COALESCE(u.username, '')) != ''
+            ORDER BY LOWER(COALESCE(NULLIF(TRIM(u.full_name), ''), u.username)) ASC
+        """) or []
+        agents = []
+        seen_ids = set()
+        for a in agent_rows:
+            if a['id'] in seen_ids:
+                continue
+            seen_ids.add(a['id'])
+            name = (a['full_name'] or '').strip()
+            agents.append({
+                'id': a['id'],
+                'username': a['username'],
+                'display': f"{name} (@{a['username']})" if name else f"@{a['username']}",
+            })
 
     return render_template('report.html',
         sales=sales, totals=totals, companies=companies, svc_filter=svc_type, agents=agents,
