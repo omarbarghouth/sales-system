@@ -11,6 +11,7 @@ from functools import wraps
 from flask import (Flask, render_template, request, redirect,
                    url_for, jsonify, g, Response, session, flash)
 import bcrypt
+import requests
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -2148,8 +2149,15 @@ def _dt_query_tickets(p):
     es, ep       = p['extra_str'], p['extra_params']
     sd, ed       = p['start_date'], p['end_date']
 
+    # Scalar subquery exposing the latest travel ticket id for a sale, if any.
+    # Purely additive — existing callers (export/email/whatsapp) read only the
+    # keys they already use via .get(), so this extra key is harmless to them.
+    tt_select = ("(SELECT id FROM travel_tickets t "
+                 "WHERE t.sale_id = s.id AND t.deleted = FALSE "
+                 "ORDER BY t.id DESC LIMIT 1) AS travel_ticket_id")
+
     outbound = query_db(f'''
-        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type
+        SELECT s.*, {agent_select}, 'OUTBOUND' AS delivery_type, {tt_select}
         FROM sales s {agent_join}
         WHERE s.deleted=FALSE
           AND (
@@ -2163,7 +2171,7 @@ def _dt_query_tickets(p):
     ''', [sd, ed, sd, ed] + ep) or []
 
     returns = query_db(f'''
-        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type
+        SELECT s.*, {agent_select}, 'RETURN' AS delivery_type, {tt_select}
         FROM sales s {agent_join}
         WHERE s.deleted=FALSE
           AND (
@@ -3829,6 +3837,65 @@ try:
 except Exception as _dc_err:
     logger.error(f"Direct-customer column migration error: {_dc_err}")
 
+
+# ── Travel Ticket Generator — DB init ─────────────────────────────────────────
+def init_travel_ticket_db():
+    """
+    Create the travel_tickets table if missing. Completely independent of
+    accounting/invoices/vouchers — only a soft FK back to sales(id) for
+    auto-fill convenience. Safe to call on every startup.
+    """
+    db = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    cur = db.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS travel_tickets (
+            id               SERIAL PRIMARY KEY,
+            sale_id          INTEGER REFERENCES sales(id) ON DELETE SET NULL,
+            passenger_name   TEXT NOT NULL DEFAULT '',
+            formatted_name   TEXT NOT NULL DEFAULT '',
+            gender           TEXT NOT NULL DEFAULT 'Male',
+            extra_passengers TEXT NOT NULL DEFAULT '',
+            trip_type        TEXT NOT NULL DEFAULT 'One Way',
+            airline          TEXT NOT NULL DEFAULT '',
+            pnr              TEXT NOT NULL DEFAULT '',
+            baggage          TEXT NOT NULL DEFAULT '',
+            notes            TEXT NOT NULL DEFAULT '',
+            out_flight_no    TEXT NOT NULL DEFAULT '',
+            out_from         TEXT NOT NULL DEFAULT '',
+            out_to           TEXT NOT NULL DEFAULT '',
+            out_date         TEXT NOT NULL DEFAULT '',
+            out_dep_time     TEXT NOT NULL DEFAULT '',
+            out_arr_time     TEXT NOT NULL DEFAULT '',
+            out_terminal     TEXT NOT NULL DEFAULT '',
+            out_gate         TEXT NOT NULL DEFAULT '',
+            out_status       TEXT NOT NULL DEFAULT '',
+            ret_flight_no    TEXT NOT NULL DEFAULT '',
+            ret_from         TEXT NOT NULL DEFAULT '',
+            ret_to           TEXT NOT NULL DEFAULT '',
+            ret_date         TEXT NOT NULL DEFAULT '',
+            ret_dep_time     TEXT NOT NULL DEFAULT '',
+            ret_arr_time     TEXT NOT NULL DEFAULT '',
+            ret_terminal     TEXT NOT NULL DEFAULT '',
+            ret_gate         TEXT NOT NULL DEFAULT '',
+            ret_status       TEXT NOT NULL DEFAULT '',
+            last_synced_at   TEXT NOT NULL DEFAULT '',
+            created_by       TEXT NOT NULL DEFAULT '',
+            created_at       TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+            updated_at       TEXT NOT NULL DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+            deleted          BOOLEAN NOT NULL DEFAULT FALSE
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_travel_tickets_sale ON travel_tickets(sale_id)")
+    db.commit()
+    cur.close()
+    db.close()
+
+
+try:
+    init_travel_ticket_db()
+    logger.info("Travel Ticket Generator DB initialised OK")
+except Exception as _tt_init_err:
+    logger.error(f"Travel Ticket Generator DB init error: {_tt_init_err}")
 
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
@@ -6185,6 +6252,382 @@ def view_contract(sale_id):
     return render_template('contract_view.html', sale=sale, passengers=passengers, tours=tours,
                            today=str(date.today()))
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TRAVEL TICKET GENERATOR  (independent travel-document module — integrates
+# with Deliver Tomorrow + Transactions only; does not touch invoices, vouchers,
+# or accounting)
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TT_GENDERS     = ['Male', 'Female']
+_TT_TRIP_TYPES  = ['One Way', 'Round Trip']
+_TT_NAME_PREFIXES = ('MR ', 'MRS ', 'MS ', 'MISS ', 'DR ')
+
+
+def _tt_format_name(raw_name, gender):
+    """UPPERCASE the passenger name and prefix with MR/MRS based on gender."""
+    name = (raw_name or '').strip().upper()
+    if not name:
+        return ''
+    if name.startswith(_TT_NAME_PREFIXES):
+        return name
+    prefix = 'MRS' if (gender or '').strip().lower() == 'female' else 'MR'
+    return f"{prefix} {name}"
+
+
+def _tt_fetch_flight_data(flight_no, flight_date):
+    """
+    Fetch live flight schedule data from AviationStack.
+    Returns a dict with dep_time / arr_time / status / terminal / gate, or
+    None if no API key is configured or the lookup failed — callers must
+    fall back to manual entry in that case (per spec).
+    """
+    api_key = os.environ.get('AVIATIONSTACK_API_KEY', '').strip()
+    if not api_key or not (flight_no or '').strip():
+        return None
+    try:
+        clean_no = flight_no.replace(' ', '').upper()
+        resp = requests.get(
+            'http://api.aviationstack.com/v1/flights',
+            params={'access_key': api_key, 'flight_iata': clean_no},
+            timeout=8,
+        )
+        if resp.status_code != 200:
+            return None
+        rows = (resp.json() or {}).get('data', []) or []
+        if not rows:
+            return None
+        match = rows[0]
+        for r in rows:
+            if flight_date and (r.get('flight_date') or '') == flight_date:
+                match = r
+                break
+        departure = match.get('departure') or {}
+        arrival   = match.get('arrival') or {}
+        return {
+            'dep_time': (departure.get('scheduled') or '')[11:16],
+            'arr_time': (arrival.get('scheduled') or '')[11:16],
+            'status':   (match.get('flight_status') or '').upper(),
+            'terminal': departure.get('terminal') or '',
+            'gate':     departure.get('gate') or '',
+        }
+    except Exception as ex:
+        logger.warning(f"Travel ticket flight API lookup failed for {flight_no}: {ex}")
+        return None
+
+
+def _tt_send_email(ticket, recipient):
+    """Email a travel document link/summary using the same SMTP config as Deliver Tomorrow."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    smtp_host     = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port     = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user     = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    if not smtp_user or not smtp_password:
+        return False, 'Email not configured. Set SMTP_USER, SMTP_PASSWORD in environment variables.'
+    if not recipient:
+        return False, 'No recipient email address provided.'
+
+    name     = ticket.get('formatted_name') or ticket.get('passenger_name') or 'Passenger'
+    view_url = url_for('travel_ticket_view', ticket_id=ticket['id'], _external=True)
+
+    html_body = f"""<html><body style="font-family:Arial,sans-serif;background:#f4f7fc;padding:24px">
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">
+      <div style="background:#1B3A6B;padding:22px 26px">
+        <h2 style="color:#C8A84B;margin:0;font-size:18px">&#9992; ALSONDOS TRAVEL</h2>
+        <p style="color:#fff;margin:6px 0 0;font-size:14px">Your Travel Document</p>
+      </div>
+      <div style="padding:22px 26px">
+        <p style="font-size:13px;color:#374151">Dear {name},</p>
+        <p style="font-size:13px;color:#374151">Please find your travel document details below. This is a
+        confirmation issued by our agency while the airline finalizes your official ticket — it is
+        <strong>not</strong> an official airline ticket.</p>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;margin-top:12px">
+          <tr><td style="padding:6px 0;color:#6B7A99">PNR</td><td style="padding:6px 0;font-weight:700">{ticket.get('pnr') or '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:#6B7A99">Route</td><td style="padding:6px 0;font-weight:700">{ticket.get('out_from','')} → {ticket.get('out_to','')}</td></tr>
+          <tr><td style="padding:6px 0;color:#6B7A99">Flight</td><td style="padding:6px 0;font-weight:700">{ticket.get('out_flight_no','')} · {ticket.get('out_date','')}</td></tr>
+          <tr><td style="padding:6px 0;color:#6B7A99">Departure</td><td style="padding:6px 0;font-weight:700">{ticket.get('out_dep_time') or 'TBC'}</td></tr>
+        </table>
+        <p style="margin-top:18px">
+          <a href="{view_url}" style="background:#1B3A6B;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700">
+            View Full Travel Document
+          </a>
+        </p>
+        <p style="font-size:11px;color:#9aa5b8;margin-top:18px">Generated by ALSONDOS TRAVEL ERP.</p>
+      </div>
+    </div>
+    </body></html>"""
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = f"Your Travel Document — {name}"
+    msg['From']    = smtp_user
+    msg['To']      = recipient
+    msg.attach(MIMEText(html_body, 'html'))
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=25) as srv:
+            srv.ehlo(); srv.starttls(); srv.ehlo()
+            srv.login(smtp_user, smtp_password)
+            srv.sendmail(smtp_user, [recipient], msg.as_string())
+        return True, f'Ticket emailed to {recipient}.'
+    except Exception as ex:
+        logger.error(f"Travel ticket email failed: {ex}")
+        return False, f'Email failed: {ex}'
+
+
+_TT_FIELD_DEFS = [
+    'sale_id', 'passenger_name', 'formatted_name', 'gender', 'extra_passengers',
+    'trip_type', 'airline', 'pnr', 'baggage', 'notes',
+    'out_flight_no', 'out_from', 'out_to', 'out_date', 'out_dep_time', 'out_arr_time',
+    'out_terminal', 'out_gate', 'out_status',
+    'ret_flight_no', 'ret_from', 'ret_to', 'ret_date', 'ret_dep_time', 'ret_arr_time',
+    'ret_terminal', 'ret_gate', 'ret_status',
+]
+
+
+@app.route('/travel-ticket/autofill/<int:sale_id>')
+@login_required
+def travel_ticket_autofill(sale_id):
+    """Return transaction data pre-formatted for the Generate Travel Ticket modal."""
+    sale = query_db("SELECT * FROM sales WHERE id=%s AND deleted=FALSE", [sale_id], one=True)
+    if not sale:
+        return jsonify(ok=False, error='Transaction not found.'), 404
+
+    existing = query_db(
+        "SELECT * FROM travel_tickets WHERE sale_id=%s AND deleted=FALSE ORDER BY id DESC LIMIT 1",
+        [sale_id], one=True
+    )
+
+    is_round_trip = bool((sale.get('return_date') or '').strip()) or \
+                    'round' in (sale.get('trip_type') or '').lower()
+
+    sale_data = dict(
+        id=sale['id'],
+        customer=sale.get('customer') or '',
+        company=sale.get('company') or '',
+        tickets=sale.get('tickets') or 1,
+        trip_type='Round Trip' if is_round_trip else 'One Way',
+        from_loc=(sale.get('from_loc') or '').upper(),
+        to_loc=(sale.get('to_loc') or '').upper(),
+        travel_date=sale.get('travel_date') or '',
+        return_date=sale.get('return_date') or '',
+        buy_from=sale.get('buy_from') or '',
+        return_supplier=sale.get('return_supplier') or '',
+    )
+    return jsonify(ok=True, sale=sale_data, existing_ticket=existing)
+
+
+@app.route('/travel-ticket/save', methods=['POST'])
+@login_required
+def travel_ticket_save():
+    """Create or update a travel document. Independent table — never touches sales/invoices."""
+    f = request.form
+    ticket_id = (f.get('ticket_id') or '').strip() or None
+    sale_id   = (f.get('sale_id') or '').strip() or None
+
+    passenger_name = f.get('passenger_name', '').strip()
+    gender         = f.get('gender', 'Male').strip()
+    if gender not in _TT_GENDERS:
+        gender = 'Male'
+    name_override  = f.get('formatted_name_override', '').strip()
+    formatted_name = name_override.upper() if name_override else _tt_format_name(passenger_name, gender)
+
+    trip_type = f.get('trip_type', 'One Way').strip()
+    if trip_type not in _TT_TRIP_TYPES:
+        trip_type = 'One Way'
+
+    if not passenger_name:
+        return jsonify(ok=False, error='Passenger name is required.'), 400
+
+    out_from = f.get('out_from', '').strip().upper()
+    out_to   = f.get('out_to', '').strip().upper()
+    if not out_from or not out_to:
+        return jsonify(ok=False, error='Outbound route (From/To) is required.'), 400
+
+    fields = dict(
+        sale_id=int(sale_id) if sale_id and sale_id.isdigit() else None,
+        passenger_name=passenger_name,
+        formatted_name=formatted_name,
+        gender=gender,
+        extra_passengers=f.get('extra_passengers', '').strip(),
+        trip_type=trip_type,
+        airline=f.get('airline', '').strip(),
+        pnr=f.get('pnr', '').strip().upper(),
+        baggage=f.get('baggage', '').strip(),
+        notes=f.get('notes', '').strip(),
+        out_flight_no=f.get('out_flight_no', '').strip().upper(),
+        out_from=out_from,
+        out_to=out_to,
+        out_date=f.get('out_date', '').strip(),
+        out_dep_time=f.get('out_dep_time', '').strip(),
+        out_arr_time=f.get('out_arr_time', '').strip(),
+        out_terminal=f.get('out_terminal', '').strip(),
+        out_gate=f.get('out_gate', '').strip(),
+        out_status=f.get('out_status', '').strip(),
+        ret_flight_no=f.get('ret_flight_no', '').strip().upper(),
+        ret_from=f.get('ret_from', '').strip().upper(),
+        ret_to=f.get('ret_to', '').strip().upper(),
+        ret_date=f.get('ret_date', '').strip(),
+        ret_dep_time=f.get('ret_dep_time', '').strip(),
+        ret_arr_time=f.get('ret_arr_time', '').strip(),
+        ret_terminal=f.get('ret_terminal', '').strip(),
+        ret_gate=f.get('ret_gate', '').strip(),
+        ret_status=f.get('ret_status', '').strip(),
+    )
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    if ticket_id and ticket_id.isdigit():
+        existing = query_db("SELECT id FROM travel_tickets WHERE id=%s AND deleted=FALSE", [ticket_id], one=True)
+        if not existing:
+            return jsonify(ok=False, error='Ticket not found.'), 404
+        set_clause = ', '.join(f"{k}=%s" for k in fields)
+        execute_db(f"UPDATE travel_tickets SET {set_clause}, updated_at=%s WHERE id=%s",
+                   list(fields.values()) + [now, ticket_id])
+        new_id = int(ticket_id)
+        log_action('UPDATE', 'travel_tickets', new_id, f"Updated travel ticket for {formatted_name}")
+    else:
+        cols = list(fields.keys()) + ['created_by']
+        placeholders = ', '.join(['%s'] * len(cols))
+        new_id = execute_db(
+            f"INSERT INTO travel_tickets ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",
+            list(fields.values()) + [session.get('username', '')]
+        )
+        log_action('CREATE', 'travel_tickets', new_id, f"Generated travel ticket for {formatted_name}")
+
+    return jsonify(ok=True, ticket_id=new_id, view_url=url_for('travel_ticket_view', ticket_id=new_id))
+
+
+@app.route('/travel-ticket/<int:ticket_id>/view')
+@login_required
+def travel_ticket_view(ticket_id):
+    """Printable single-page travel document (Print / Download PDF via browser print)."""
+    ticket = query_db("SELECT * FROM travel_tickets WHERE id=%s AND deleted=FALSE", [ticket_id], one=True)
+    if not ticket:
+        flash('Travel ticket not found.', 'danger')
+        return redirect(url_for('deliver_tomorrow'))
+    sale = None
+    if ticket.get('sale_id'):
+        sale = query_db("SELECT company, customer FROM sales WHERE id=%s", [ticket['sale_id']], one=True)
+    return render_template('travel_ticket_view.html', ticket=ticket, sale=sale)
+
+
+@app.route('/travel-ticket/<int:ticket_id>/sync', methods=['POST'])
+@login_required
+def travel_ticket_sync(ticket_id):
+    """[Sync Flight Data] — fetch live schedule from the flight API; falls back to manual entry."""
+    ticket = query_db("SELECT * FROM travel_tickets WHERE id=%s AND deleted=FALSE", [ticket_id], one=True)
+    if not ticket:
+        return jsonify(ok=False, error='Ticket not found.'), 404
+
+    updates, notes = {}, []
+
+    if ticket['out_flight_no']:
+        data = _tt_fetch_flight_data(ticket['out_flight_no'], ticket['out_date'])
+        if data:
+            for src, dst in [('dep_time', 'out_dep_time'), ('arr_time', 'out_arr_time'),
+                             ('status', 'out_status'), ('terminal', 'out_terminal'), ('gate', 'out_gate')]:
+                if data.get(src):
+                    updates[dst] = data[src]
+        else:
+            notes.append('Outbound flight data unavailable — please edit manually.')
+
+    if ticket['trip_type'] == 'Round Trip' and ticket['ret_flight_no']:
+        data = _tt_fetch_flight_data(ticket['ret_flight_no'], ticket['ret_date'])
+        if data:
+            for src, dst in [('dep_time', 'ret_dep_time'), ('arr_time', 'ret_arr_time'),
+                             ('status', 'ret_status'), ('terminal', 'ret_terminal'), ('gate', 'ret_gate')]:
+                if data.get(src):
+                    updates[dst] = data[src]
+        else:
+            notes.append('Return flight data unavailable — please edit manually.')
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if updates:
+        set_clause = ', '.join(f"{k}=%s" for k in updates)
+        execute_db(f"UPDATE travel_tickets SET {set_clause}, last_synced_at=%s, updated_at=%s WHERE id=%s",
+                   list(updates.values()) + [now, now, ticket_id])
+        log_action('SYNC', 'travel_tickets', ticket_id, f"Flight data synced: {list(updates.keys())}")
+
+    if not os.environ.get('AVIATIONSTACK_API_KEY', '').strip():
+        notes.append('No flight API key configured — set AVIATIONSTACK_API_KEY to enable live sync.')
+
+    updated_ticket = query_db("SELECT * FROM travel_tickets WHERE id=%s", [ticket_id], one=True)
+    return jsonify(ok=True, ticket=updated_ticket, synced_fields=list(updates.keys()), notes=notes)
+
+
+@app.route('/travel-ticket/<int:ticket_id>/email', methods=['POST'])
+@login_required
+def travel_ticket_email(ticket_id):
+    """[Email Ticket] — send the travel document link to a recipient address."""
+    ticket = query_db("SELECT * FROM travel_tickets WHERE id=%s AND deleted=FALSE", [ticket_id], one=True)
+    if not ticket:
+        return jsonify(ok=False, error='Ticket not found.'), 404
+    recipient = request.form.get('recipient_email', '').strip()
+    ok, message = _tt_send_email(ticket, recipient)
+    if ok:
+        log_action('EMAIL', 'travel_tickets', ticket_id, f"Emailed to {recipient}")
+    return jsonify(ok=ok, message=message if ok else None, error=None if ok else message)
+
+
+@app.route('/travel-ticket/cron-sync', methods=['POST'])
+@csrf.exempt
+def travel_ticket_cron_sync():
+    """
+    Periodic flight-data refresh — call from OS cron every 6 hours, not from
+    the browser. Mirrors the existing /deliver-tomorrow/daily-email cron
+    auth pattern (X-Cron-Key header checked against CRON_KEY env var).
+    """
+    cron_key = os.environ.get('CRON_KEY', '')
+    if cron_key and request.headers.get('X-Cron-Key', '') != cron_key:
+        return jsonify(ok=False, error='Unauthorized'), 403
+
+    today = str(date.today())
+    tickets = query_db("""
+        SELECT * FROM travel_tickets
+        WHERE deleted=FALSE
+          AND ((out_date >= %s AND out_flight_no != '')
+               OR (ret_date >= %s AND ret_flight_no != ''))
+    """, [today, today]) or []
+
+    synced = 0
+    for t in tickets:
+        try:
+            updates = {}
+            if t['out_flight_no']:
+                data = _tt_fetch_flight_data(t['out_flight_no'], t['out_date'])
+                if data:
+                    updates.update({
+                        'out_dep_time': data.get('dep_time') or t['out_dep_time'],
+                        'out_arr_time': data.get('arr_time') or t['out_arr_time'],
+                        'out_status':   data.get('status')   or t['out_status'],
+                        'out_terminal': data.get('terminal') or t['out_terminal'],
+                        'out_gate':     data.get('gate')     or t['out_gate'],
+                    })
+            if t['trip_type'] == 'Round Trip' and t['ret_flight_no']:
+                data = _tt_fetch_flight_data(t['ret_flight_no'], t['ret_date'])
+                if data:
+                    updates.update({
+                        'ret_dep_time': data.get('dep_time') or t['ret_dep_time'],
+                        'ret_arr_time': data.get('arr_time') or t['ret_arr_time'],
+                        'ret_status':   data.get('status')   or t['ret_status'],
+                        'ret_terminal': data.get('terminal') or t['ret_terminal'],
+                        'ret_gate':     data.get('gate')     or t['ret_gate'],
+                    })
+            if updates:
+                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                set_clause = ', '.join(f"{k}=%s" for k in updates)
+                execute_db(f"UPDATE travel_tickets SET {set_clause}, last_synced_at=%s, updated_at=%s WHERE id=%s",
+                           list(updates.values()) + [now, now, t['id']])
+                synced += 1
+        except Exception as ex:
+            logger.warning(f"travel_ticket_cron_sync failed for ticket {t['id']}: {ex}")
+
+    return jsonify(ok=True, checked=len(tickets), synced=synced)
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
