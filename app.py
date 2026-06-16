@@ -154,6 +154,61 @@ def paginate(query, params, page, per_page=PER_PAGE):
     rows = query_db(paginated_q, params)
     return rows, total, total_pages
 
+# ── Dashboard date-range filter helper ────────────────────────────────────────
+_DASH_QUICK_FILTERS = ['today', 'yesterday', 'this_week', 'this_month',
+                       'last_month', 'this_year', 'custom']
+
+def _month_bounds(d):
+    """Return (first_day, last_day) of the calendar month containing d."""
+    start = d.replace(day=1)
+    if d.month == 12:
+        end = d.replace(month=12, day=31)
+    else:
+        end = (d.replace(month=d.month + 1, day=1)) - timedelta(days=1)
+    return start, end
+
+def resolve_dashboard_dates(args):
+    """
+    Resolve the dashboard's date_from/date_to/quick filter from request args.
+    Precedence: explicit quick=... shortcut > explicit date_from/date_to >
+    default (current month). Returns (date_from, date_to, quick) as strings.
+    """
+    today = date.today()
+    quick     = (args.get('quick', '') or '').strip().lower()
+    raw_from  = (args.get('date_from', '') or '').strip()
+    raw_to    = (args.get('date_to', '') or '').strip()
+
+    if quick and quick in _DASH_QUICK_FILTERS and quick != 'custom':
+        if quick == 'today':
+            start = end = today
+        elif quick == 'yesterday':
+            start = end = today - timedelta(days=1)
+        elif quick == 'this_week':
+            start = today - timedelta(days=today.weekday())  # Monday start
+            end = today
+        elif quick == 'this_month':
+            start, end = _month_bounds(today)
+        elif quick == 'last_month':
+            last_month_day = today.replace(day=1) - timedelta(days=1)
+            start, end = _month_bounds(last_month_day)
+        elif quick == 'this_year':
+            start, end = today.replace(month=1, day=1), today.replace(month=12, day=31)
+        else:
+            start, end = _month_bounds(today)
+        return str(start), str(end), quick
+
+    if raw_from or raw_to:
+        # Custom range — fill any missing side with a sane bound rather than
+        # leaving it open-ended, so every query gets two concrete dates.
+        start = raw_from or str(today.replace(day=1))
+        end   = raw_to or str(today)
+        return start, end, 'custom'
+
+    # Default view: current month
+    start, end = _month_bounds(today)
+    return str(start), str(end), 'this_month'
+
+
 def init_db():
     db = psycopg2.connect(os.environ.get("DATABASE_URL"))
     db.autocommit = True
@@ -1031,15 +1086,27 @@ def toggle_user(uid):
 @app.route('/')
 @login_required
 def index():
+    # Sales agents get their own scoped dashboard — only admins/managers see
+    # the company-wide view rendered below.
+    if session.get('user_role') not in ('admin', 'manager'):
+        return redirect(url_for('employee_dashboard'))
+
+    date_from, date_to, quick = resolve_dashboard_dates(request.args)
+    drange = [date_from, date_to]
+
     stats = query_db('''
         SELECT COUNT(*) as total_transactions,
                COALESCE(SUM(sell),0) as total_sell,
                COALESCE(SUM(net),0) as total_net,
                COALESCE(SUM(profit),0) as total_profit
-        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
-    ''', one=True)
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND sale_date BETWEEN %s AND %s
+    ''', drange, one=True)
     total_paid = query_db(
-        'SELECT COALESCE(SUM(amount),0) as paid FROM payments WHERE deleted=FALSE AND is_archived=FALSE', one=True
+        'SELECT COALESCE(SUM(amount),0) as paid FROM payments '
+        'WHERE deleted=FALSE AND is_archived=FALSE AND pay_date BETWEEN %s AND %s',
+        drange, one=True
     )['paid']
     balance = (stats['total_sell'] or 0) - total_paid
 
@@ -1050,15 +1117,17 @@ def index():
                COUNT(*) as count
         FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
-          AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY') = to_char(NOW(),'YYYY')
+          AND sale_date BETWEEN %s AND %s
         GROUP BY month ORDER BY month
-    ''')
+    ''', drange)
 
     top_companies = query_db('''
         SELECT company, COALESCE(SUM(sell),0) as total, COUNT(*) as cnt
-        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND sale_date BETWEEN %s AND %s
         GROUP BY company ORDER BY total DESC LIMIT 10
-    ''')
+    ''', drange)
 
     tomorrow_date = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
     # Outbound tickets: travel_date or outbound_delivery = tomorrow
@@ -1103,8 +1172,10 @@ def index():
             SUM(CASE WHEN status='DONE'   THEN 1 ELSE 0 END) as done_count,
             SUM(CASE WHEN status='STILL'  THEN 1 ELSE 0 END) as still_count,
             SUM(CASE WHEN status NOT IN ('DONE','STILL') THEN 1 ELSE 0 END) as other_count
-        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
-    """, one=True)
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND sale_date BETWEEN %s AND %s
+    """, drange, one=True)
     if status_counts:
         stats = dict(stats)
         stats['done_count']  = status_counts['done_count']  or 0
@@ -1117,9 +1188,11 @@ def index():
                COUNT(*) as cnt,
                COALESCE(SUM(sell),0) as total_sell,
                COALESCE(SUM(profit),0) as total_profit
-        FROM sales WHERE deleted=FALSE AND is_archived=FALSE
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE
+          AND sale_date BETWEEN %s AND %s
         GROUP BY svc ORDER BY total_sell DESC
-    """) or []
+    """, drange) or []
     svc_labels  = [r['svc']            for r in svc_breakdown]
     svc_counts  = [int(r['cnt'])        for r in svc_breakdown]
     svc_sells   = [float(r['total_sell'])   for r in svc_breakdown]
@@ -1162,11 +1235,12 @@ def index():
                COALESCE(SUM(sell),0)    AS total_sell
         FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
+          AND sale_date BETWEEN %s AND %s
           AND TRIM(COALESCE(company,'')) <> ''
         GROUP BY company
         ORDER BY total_tickets DESC
         LIMIT 10
-    """) or []
+    """, drange) or []
 
     # Top 10 suppliers by purchase volume
     top_suppliers = query_db("""
@@ -1179,6 +1253,7 @@ def index():
                    COUNT(*) AS txn_count
             FROM sales
             WHERE deleted=FALSE AND is_archived=FALSE
+              AND sale_date BETWEEN %s AND %s
               AND TRIM(COALESCE(buy_from,'')) <> ''
             GROUP BY UPPER(TRIM(buy_from))
             UNION ALL
@@ -1187,13 +1262,14 @@ def index():
                    COUNT(*)
             FROM sales
             WHERE deleted=FALSE AND is_archived=FALSE
+              AND sale_date BETWEEN %s AND %s
               AND TRIM(COALESCE(hotel_supplier,'')) <> ''
             GROUP BY UPPER(TRIM(hotel_supplier))
         ) t
         GROUP BY supplier
         ORDER BY SUM(total_cost) DESC
         LIMIT 10
-    """) or []
+    """, drange + drange) or []
 
     # Recent transactions with agent names
     recent_txns = query_db("""
@@ -1203,9 +1279,10 @@ def index():
         FROM sales s
         LEFT JOIN users u ON s.created_by_user_id = u.id
         WHERE s.deleted=FALSE AND s.is_archived=FALSE
+          AND s.sale_date BETWEEN %s AND %s
         ORDER BY s.created_at DESC, s.id DESC
         LIMIT 12
-    """) or []
+    """, drange) or []
 
     return render_template('index.html',
         stats=stats, total_paid=total_paid, balance=balance,
@@ -1226,7 +1303,8 @@ def index():
         svc_profits=svc_profits,
         top_debtors=top_debtors,
         top_suppliers=top_suppliers,
-        today=date.today().strftime('%d %B %Y')
+        today=date.today().strftime('%d %B %Y'),
+        date_from=date_from, date_to=date_to, quick=quick,
     )
 
 # ── Sales ─────────────────────────────────────────────────────────────────────
@@ -4338,6 +4416,9 @@ def employee_dashboard():
     uid = session['user_id']
     today_str = date.today().strftime('%d %B %Y')
 
+    date_from, date_to, quick = resolve_dashboard_dates(request.args)
+    drange_u = [uid, date_from, date_to]
+
     # ── My stats ──────────────────────────────────────────────────────────────
     my_stats = query_db("""
         SELECT COUNT(*) as total_txns,
@@ -4346,7 +4427,8 @@ def employee_dashboard():
         FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
           AND created_by_user_id=%s
-    """, [uid], one=True)
+          AND sale_date BETWEEN %s AND %s
+    """, drange_u, one=True)
     my_stats = dict(my_stats)
     commission_rate = 20.0
     user_row = query_db('SELECT commission_rate FROM users WHERE id=%s', [uid], one=True)
@@ -4364,9 +4446,9 @@ def employee_dashboard():
         FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
           AND created_by_user_id=%s
-          AND to_char(to_date(sale_date,'YYYY-MM-DD'),'YYYY') = to_char(NOW(),'YYYY')
+          AND sale_date BETWEEN %s AND %s
         GROUP BY month ORDER BY month
-    """, [uid])
+    """, drange_u)
 
     # ── Status counts ─────────────────────────────────────────────────────────
     sc = query_db("""
@@ -4374,8 +4456,10 @@ def employee_dashboard():
           SUM(CASE WHEN status='DONE'  THEN 1 ELSE 0 END) as done_count,
           SUM(CASE WHEN status='STILL' THEN 1 ELSE 0 END) as still_count,
           SUM(CASE WHEN status NOT IN ('DONE','STILL') THEN 1 ELSE 0 END) as other_count
-        FROM sales WHERE deleted=FALSE AND is_archived=FALSE AND created_by_user_id=%s
-    """, [uid], one=True)
+        FROM sales
+        WHERE deleted=FALSE AND is_archived=FALSE AND created_by_user_id=%s
+          AND sale_date BETWEEN %s AND %s
+    """, drange_u, one=True)
     if sc:
         my_stats['done_count']  = int(sc['done_count']  or 0)
         my_stats['still_count'] = int(sc['still_count'] or 0)
@@ -4385,10 +4469,13 @@ def employee_dashboard():
     recent = query_db("""
         SELECT * FROM sales
         WHERE deleted=FALSE AND created_by_user_id=%s
+          AND sale_date BETWEEN %s AND %s
         ORDER BY created_at DESC LIMIT 10
-    """, [uid])
+    """, drange_u)
 
-    # ── Upcoming departures ───────────────────────────────────────────────────
+    # ── Upcoming departures — forward-looking operational list, intentionally
+    #    NOT scoped to the historical report date filter (filtering it by a
+    #    past range would always empty it out and defeat its purpose). ──────
     upcoming = query_db("""
         SELECT * FROM sales
         WHERE deleted=FALSE AND is_archived=FALSE
@@ -4420,9 +4507,11 @@ def employee_dashboard():
         SELECT COALESCE(service_type,'FLIGHT') as svc,
                COUNT(*) as cnt,
                COALESCE(SUM(sell),0) as total_sell
-        FROM sales WHERE deleted=FALSE AND created_by_user_id=%s
+        FROM sales
+        WHERE deleted=FALSE AND created_by_user_id=%s
+          AND sale_date BETWEEN %s AND %s
         GROUP BY svc ORDER BY cnt DESC
-    """, [uid]) or []
+    """, drange_u) or []
 
     return render_template('employee_dashboard.html',
         my_stats=my_stats, my_monthly=my_monthly, recent=recent,
@@ -4431,6 +4520,7 @@ def employee_dashboard():
         chart_profits=chart_profits, has_chart=has_chart,
         today=today_str, commission_rate=commission_rate,
         emp_svc=emp_svc,
+        date_from=date_from, date_to=date_to, quick=quick,
     )
 
 
