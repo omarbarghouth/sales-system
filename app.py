@@ -5976,6 +5976,43 @@ def api_supplier_email_data(sale_id):
     })
 
 
+@app.route('/api/supplier-email-data-by-name')
+@login_required
+def api_supplier_email_data_by_name():
+    """Return pre-filled email fields for a supplier looked up by name."""
+    from flask import jsonify
+    name = request.args.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'name required'}), 400
+
+    sup = query_db(
+        'SELECT * FROM master_suppliers WHERE UPPER(TRIM(name))=UPPER(TRIM(%s)) LIMIT 1',
+        [name], one=True
+    )
+
+    contact = (sup['contact_person'] if sup and sup.get('contact_person') else 'Team')
+
+    custom_tpl = (sup.get('email_template') or '').strip() if sup else ''
+    if custom_tpl:
+        body = custom_tpl
+        body = body.replace('{contact}', contact)
+        body = body.replace('{supplier}', name)
+        body = body.replace('{agent}', session.get('username') or '')
+    else:
+        body = (
+            'Dear %s,\r\n\r\n'
+            'Please process the following booking request.\r\n\r\n'
+            'Regards,\r\nAlsondos Travel'
+        ) % contact
+
+    return jsonify({
+        'email':   (sup['email']         if sup and sup.get('email')    else ''),
+        'cc':      (sup['cc_email']       if sup and sup.get('cc_email') else ''),
+        'subject': 'Booking Request',
+        'body':    body,
+    })
+
+
 # ── Master Data Management Pages ─────────────────────────────────────────────
 
 
