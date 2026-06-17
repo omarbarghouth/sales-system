@@ -525,7 +525,14 @@
   </div>
 </div>
 
-<div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px;flex-wrap:wrap">
+<div style="display:flex;gap:12px;justify-content:flex-end;padding-top:4px;flex-wrap:wrap;align-items:center">
+  {% if not edit %}
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--navy-dk);cursor:pointer;margin-right:auto;padding:10px 14px;background:var(--navy-lt);border-radius:var(--radius-sm);border:1.5px solid rgba(13,32,64,.12)">
+    <input type="checkbox" name="send_supplier_email" value="1" id="sendSupplierEmail" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+    <i class="fas fa-envelope" style="color:var(--navy);font-size:12px"></i>
+    Send booking to supplier via email
+  </label>
+  {% endif %}
   <a href="{{ url_for('my_sales') if not is_admin else url_for('sales_report') }}" class="btn btn-outline"><i class="fas fa-times"></i> Cancel</a>
   <button type="submit" class="btn btn-red btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if edit else 'Add Transaction' }}</button>
   {% if edit and sale and ((sale.service_type|default('FLIGHT')) == 'PACKAGE') %}
