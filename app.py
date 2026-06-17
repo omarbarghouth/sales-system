@@ -4149,6 +4149,17 @@ def init_extension_db():
     ]:
         cur.execute(f"DO $$ BEGIN {_dc_sql}; EXCEPTION WHEN duplicate_column THEN NULL; END $$;")
 
+    # ── Supplier email contact columns ────────────────────────────────────────
+    for _se_sql in [
+        "ALTER TABLE master_suppliers ADD COLUMN IF NOT EXISTS cc_email       TEXT DEFAULT ''",
+        "ALTER TABLE master_suppliers ADD COLUMN IF NOT EXISTS contact_person TEXT DEFAULT ''",
+        "ALTER TABLE master_suppliers ADD COLUMN IF NOT EXISTS email_template TEXT DEFAULT ''",
+    ]:
+        try:
+            cur.execute(_se_sql)
+        except Exception:
+            pass
+
     db.commit()
     cur.close()
     db.close()
@@ -5897,6 +5908,74 @@ def api_suppliers():
     return jsonify({'suppliers': data[:60]})
 
 
+@app.route('/api/supplier-email-data/<int:sale_id>')
+@login_required
+def api_supplier_email_data(sale_id):
+    """Return pre-filled mailto data for emailing a supplier about a sale."""
+    from flask import jsonify
+    sale = query_db('SELECT * FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True)
+    if not sale:
+        return jsonify({'error': 'Not found'}), 404
+
+    supplier_name = (sale.get('buy_from') or '').strip()
+    if not supplier_name and sale.get('hotel_supplier'):
+        supplier_name = sale['hotel_supplier'].strip()
+
+    sup = None
+    if supplier_name:
+        sup = query_db(
+            'SELECT * FROM master_suppliers WHERE UPPER(TRIM(name))=UPPER(TRIM(%s)) LIMIT 1',
+            [supplier_name], one=True
+        )
+
+    txn_number = sale.get('txn_number') or ('T-%04d' % sale_id)
+    route = ''
+    if sale.get('from_loc') and sale.get('to_loc'):
+        route = '%s to %s' % (sale['from_loc'], sale['to_loc'])
+    elif sale.get('hotel_name'):
+        route = sale['hotel_name']
+
+    contact = (sup['contact_person'] if sup and sup.get('contact_person') else 'Team') if sup else 'Team'
+
+    custom_tpl = (sup.get('email_template') or '').strip() if sup else ''
+    if custom_tpl:
+        body = custom_tpl
+        body = body.replace('{txn_number}', txn_number)
+        body = body.replace('{customer}', sale.get('customer') or '')
+        body = body.replace('{route}', route)
+        body = body.replace('{travel_date}', sale.get('travel_date') or '')
+        body = body.replace('{supplier}', supplier_name)
+        body = body.replace('{contact}', contact)
+        body = body.replace('{agent}', session.get('username') or '')
+    else:
+        body = (
+            'Dear %s,\r\n\r\n'
+            'Please process the following booking:\r\n\r\n'
+            'Transaction: %s\r\n'
+            'Passenger(s): %s\r\n'
+            'Route: %s\r\n'
+            'Travel Date: %s\r\n'
+            'Supplier: %s\r\n\r\n'
+            'Regards,\r\n%s'
+        ) % (
+            contact,
+            txn_number,
+            sale.get('customer') or '',
+            route,
+            sale.get('travel_date') or '',
+            supplier_name,
+            session.get('username') or ''
+        )
+
+    return jsonify({
+        'to':       (sup['email']         if sup and sup.get('email')         else ''),
+        'cc':       (sup['cc_email']       if sup and sup.get('cc_email')       else ''),
+        'subject':  'Booking Request - %s - %s' % (txn_number, route),
+        'body':     body,
+        'supplier': supplier_name,
+    })
+
+
 # ── Master Data Management Pages ─────────────────────────────────────────────
 
 
@@ -5987,13 +6066,33 @@ def master_suppliers():
             if name:
                 try:
                     execute_db(
-                        "INSERT INTO master_suppliers (name,service_type,phone,email,notes) VALUES (%s,%s,%s,%s,%s)",
+                        "INSERT INTO master_suppliers (name,service_type,phone,email,cc_email,contact_person,notes) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                         (name, svc,
                          request.form.get('phone','').strip(),
                          request.form.get('email','').strip(),
+                         request.form.get('cc_email','').strip(),
+                         request.form.get('contact_person','').strip(),
                          request.form.get('notes','').strip())
                     )
                     flash(f'Supplier {name} added.', 'success')
+                except Exception as ex:
+                    flash(f'Error: {ex}', 'danger')
+        elif action == 'edit':
+            sid = request.form.get('id')
+            if sid:
+                try:
+                    execute_db(
+                        """UPDATE master_suppliers SET phone=%s, email=%s, cc_email=%s,
+                           contact_person=%s, email_template=%s, notes=%s WHERE id=%s""",
+                        (request.form.get('phone','').strip(),
+                         request.form.get('email','').strip(),
+                         request.form.get('cc_email','').strip(),
+                         request.form.get('contact_person','').strip(),
+                         request.form.get('email_template','').strip(),
+                         request.form.get('notes','').strip(),
+                         sid)
+                    )
+                    flash('Supplier updated.', 'success')
                 except Exception as ex:
                     flash(f'Error: {ex}', 'danger')
         elif action == 'toggle':
