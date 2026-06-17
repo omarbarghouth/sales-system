@@ -1489,8 +1489,87 @@ def add_sale():
             except Exception:
                 pass
         flash('Transaction saved successfully.', 'success')
-        return redirect(url_for('sales_report'))  # POST→REDIRECT→GET
+        return redirect(url_for('sale_saved', sale_id=new_id))
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
+
+
+@app.route('/sale-saved/<int:sale_id>')
+@login_required
+def sale_saved(sale_id):
+    """Post-save landing page: shows success + supplier email prompt."""
+    sale = query_db('SELECT * FROM sales WHERE id=%s AND deleted=FALSE', [sale_id], one=True)
+    if not sale:
+        return redirect(url_for('sales_report'))
+
+    supplier_name = (sale.get('buy_from') or '').strip()
+    # Fall back to other supplier fields if buy_from is empty
+    if not supplier_name:
+        for col in ('hotel_supplier', 'transfer_supplier', 'visa_supplier', 'insurance_supplier'):
+            v = (sale.get(col) or '').strip()
+            if v:
+                supplier_name = v
+                break
+
+    sup = None
+    if supplier_name:
+        sup = query_db(
+            'SELECT * FROM master_suppliers WHERE UPPER(TRIM(name))=UPPER(TRIM(%s)) LIMIT 1',
+            [supplier_name], one=True
+        )
+
+    txn_number = sale.get('txn_number') or ('T-%04d' % sale_id)
+    route = ''
+    if sale.get('from_loc') and sale.get('to_loc'):
+        route = '%s to %s' % (sale['from_loc'], sale['to_loc'])
+    elif sale.get('hotel_name'):
+        route = sale.get('hotel_name', '')
+
+    contact = (sup.get('contact_person') or 'Team') if sup else 'Team'
+
+    custom_tpl = (sup.get('email_template') or '').strip() if sup else ''
+    if custom_tpl:
+        body = custom_tpl
+        body = body.replace('{txn_number}', txn_number)
+        body = body.replace('{customer}',   sale.get('customer') or '')
+        body = body.replace('{route}',      route)
+        body = body.replace('{travel_date}', sale.get('travel_date') or '')
+        body = body.replace('{supplier}',   supplier_name)
+        body = body.replace('{contact}',    contact)
+        body = body.replace('{agent}',      session.get('username') or '')
+    else:
+        body = (
+            'Dear %s,\r\n\r\n'
+            'Please process the following booking:\r\n\r\n'
+            'Transaction: %s\r\n'
+            'Passenger(s): %s\r\n'
+            'Route: %s\r\n'
+            'Travel Date: %s\r\n'
+            'Supplier: %s\r\n\r\n'
+            'Regards,\r\n%s'
+        ) % (
+            contact,
+            txn_number,
+            sale.get('customer') or '',
+            route,
+            sale.get('travel_date') or '',
+            supplier_name,
+            session.get('username') or ''
+        )
+
+    email_data = {
+        'to':      (sup['email']    if sup and sup.get('email')    else ''),
+        'cc':      (sup['cc_email'] if sup and sup.get('cc_email') else ''),
+        'subject': 'Booking Request - %s - %s' % (txn_number, route),
+        'body':    body,
+    }
+
+    return render_template('sale_saved.html',
+        sale=sale,
+        txn_number=txn_number,
+        supplier_name=supplier_name,
+        sup=sup,
+        email_data=email_data,
+    )
 
 
 def safe_sale(sale):
