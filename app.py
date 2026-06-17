@@ -3352,9 +3352,8 @@ def reset_data():
             try: cur.execute('ALTER SEQUENCE ' + _seq + ' RESTART WITH 1')
             except Exception: pass
 
-        # Reset txn_seq so T-numbers restart from T-0001
-        try: cur.execute('ALTER SEQUENCE txn_seq RESTART WITH 1')
-        except Exception: pass
+        # NOTE: txn_seq is intentionally NOT reset — T-numbers must stay globally
+        # unique forever and must never be reused even after a data reset.
 
         # Reset document number sequences
         try: cur.execute("UPDATE doc_sequences SET last_num = 0")
@@ -4061,6 +4060,8 @@ def init_extension_db():
     # Create sequence if it doesn't exist, then sync its value to the current
     # highest T-number so the next generated number is always one higher.
     cur.execute("CREATE SEQUENCE IF NOT EXISTS txn_seq START 1")
+    # Always sync sequence to MAX existing T-number so restarts never go backwards.
+    # Avoid currval() — it throws if nextval() hasn't been called this session.
     cur.execute("""
         SELECT setval(
             'txn_seq',
@@ -4070,10 +4071,9 @@ def init_extension_db():
                 ) FROM sales
                 WHERE deleted=FALSE
                   AND txn_number ~ '^T-[0-9]+$'),
-                currval('txn_seq')
+                1
             )
         )
-        WHERE EXISTS (SELECT 1 FROM sales WHERE deleted=FALSE AND txn_number ~ '^T-[0-9]+$')
     """)
     # Unique index: prevents duplicate T-numbers at the DB level even if app logic fails
     cur.execute("""
