@@ -1489,9 +1489,7 @@ def add_sale():
             except Exception:
                 pass
         flash('Transaction saved successfully.', 'success')
-        if request.form.get('send_supplier_email') == '1':
-            return redirect(url_for('sale_saved', sale_id=new_id))
-        return redirect(url_for('sales_report'))
+        return redirect(url_for('sale_saved', sale_id=new_id))
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
 
 
@@ -1558,12 +1556,22 @@ def sale_saved(sale_id):
             session.get('username') or ''
         )
 
-    email_data = {
-        'to':      (sup['email']    if sup and sup.get('email')    else ''),
-        'cc':      (sup['cc_email'] if sup and sup.get('cc_email') else ''),
-        'subject': 'Booking Request - %s - %s' % (txn_number, route),
-        'body':    body,
-    }
+    from urllib.parse import quote
+    to      = (sup['email']    if sup and sup.get('email')    else '')
+    cc      = (sup['cc_email'] if sup and sup.get('cc_email') else '')
+    subject = 'Booking Request - %s - %s' % (txn_number, route)
+
+    email_data = {'to': to, 'cc': cc, 'subject': subject, 'body': body}
+
+    # Pre-build the mailto URL server-side so the template just fires it
+    mailto_url = ''
+    if to:
+        mailto_url = 'mailto:' + quote(to)
+        params = []
+        if cc:      params.append('cc='      + quote(cc))
+        if subject: params.append('subject=' + quote(subject))
+        if body:    params.append('body='    + quote(body))
+        if params:  mailto_url += '?' + '&'.join(params)
 
     return render_template('sale_saved.html',
         sale=sale,
@@ -1571,6 +1579,7 @@ def sale_saved(sale_id):
         supplier_name=supplier_name,
         sup=sup,
         email_data=email_data,
+        mailto_url=mailto_url,
     )
 
 
