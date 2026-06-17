@@ -34,8 +34,16 @@
             <input type="text" name="phone" placeholder="+962 x xxxx xxxx">
           </div>
           <div class="form-group">
-            <label>Email</label>
-            <input type="email" name="email">
+            <label>Email (To)</label>
+            <input type="email" name="email" placeholder="reservations@supplier.com">
+          </div>
+          <div class="form-group">
+            <label>CC Email <span style="font-size:10px;color:var(--muted)">(optional)</span></label>
+            <input type="email" name="cc_email" placeholder="manager@supplier.com">
+          </div>
+          <div class="form-group">
+            <label>Contact Person <span style="font-size:10px;color:var(--muted)">(optional)</span></label>
+            <input type="text" name="contact_person" placeholder="e.g. Sara">
           </div>
           <div class="form-group">
             <label>Notes</label>
@@ -76,7 +84,7 @@
     <table>
       <thead><tr>
         <th>#</th><th>Supplier</th><th>Service Type</th>
-        <th>Phone</th><th>Notes</th><th>Status</th><th>Actions</th>
+        <th>Phone</th><th>Email (To)</th><th>CC Email</th><th>Contact</th><th>Notes</th><th>Status</th><th>Actions</th>
       </tr></thead>
       <tbody>
         {% for s in suppliers %}
@@ -85,6 +93,15 @@
           <td style="font-weight:700;color:var(--navy-dk);font-size:14px">{{ s.name }}</td>
           <td><span class="svc-badge svc-{{ s.service_type }}"><i class="fas {{ s.service_type|svc_icon }}"></i>{{ s.service_type }}</span></td>
           <td style="font-size:12.5px">{{ s.phone or '—' }}</td>
+          <td style="font-size:12px">
+            {% if s.email %}
+            <a href="mailto:{{ s.email }}" style="color:var(--navy);text-decoration:none">
+              <i class="fas fa-envelope" style="font-size:9px;color:var(--muted)"></i> {{ s.email }}
+            </a>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:11.5px;color:var(--muted)">{{ s.cc_email or '—' }}</td>
+          <td style="font-size:12px">{{ s.contact_person or '—' }}</td>
           <td style="font-size:12px;color:var(--muted)">{{ s.notes or '—' }}</td>
           <td><span class="badge {% if s.is_active %}badge-done{% else %}badge-inactive{% endif %}">{{ 'Active' if s.is_active else 'Inactive' }}</span></td>
           <td>
@@ -92,14 +109,18 @@
               <a href="{{ url_for('supplier_statement', supplier=s.name) }}" class="btn btn-edit btn-xs" title="View Statement">
                 <i class="fas fa-file-invoice-dollar"></i>
               </a>
+              <button type="button" class="btn btn-outline btn-xs" title="Edit Email Settings"
+                onclick="supEdit({{ s.id }}, {{ s.name|tojson }}, {{ (s.phone or '')|tojson }}, {{ (s.email or '')|tojson }}, {{ (s.cc_email or '')|tojson }}, {{ (s.contact_person or '')|tojson }}, {{ (s.email_template or '')|tojson }}, {{ (s.notes or '')|tojson }})">
+                <i class="fas fa-pencil-alt"></i>
+              </button>
               <form method="POST" style="display:inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="toggle">
                 <input type="hidden" name="id" value="{{ s.id }}">
                 <button type="submit" class="btn btn-warning btn-xs"><i class="fas fa-{{ 'pause' if s.is_active else 'play' }}"></i></button>
               </form>
               <form method="POST" style="display:inline" onsubmit="return confirm('Delete {{ s.name }}?')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="{{ s.id }}">
                 <button type="submit" class="btn btn-danger btn-xs"><i class="fas fa-trash"></i></button>
@@ -108,10 +129,76 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="text-center text-muted" style="padding:28px">No suppliers yet. Add your first supplier above.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted" style="padding:28px">No suppliers yet. Add your first supplier above.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{# ── Edit Supplier Modal ──────────────────────────────────────────────────── #}
+<div id="supEditModal" style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;width:540px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.22)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <strong style="font-size:15px;color:var(--navy-dk)"><i class="fas fa-envelope" style="color:var(--red);margin-right:6px"></i>Edit Supplier: <span id="supEditName"></span></strong>
+      <button type="button" onclick="document.getElementById('supEditModal').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <form method="POST" style="padding:20px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="id" id="supEditId">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" name="phone" id="supEditPhone">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" name="notes" id="supEditNotes">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-envelope" style="font-size:10px;color:var(--navy)"></i> Email (To) <span class="req">*</span></label>
+          <input type="email" name="email" id="supEditEmail" placeholder="reservations@supplier.com">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-envelope" style="font-size:10px;color:var(--muted)"></i> CC Email <span style="font-size:10px;color:var(--muted)">(optional)</span></label>
+          <input type="email" name="cc_email" id="supEditCc" placeholder="manager@supplier.com">
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>Contact Person <span style="font-size:10px;color:var(--muted)">(used in email greeting)</span></label>
+          <input type="text" name="contact_person" id="supEditContact" placeholder="e.g. Sara / Reservations Team">
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>Custom Email Template <span style="font-size:10px;color:var(--muted)">(leave blank for default)</span></label>
+          <textarea name="email_template" id="supEditTemplate" rows="7" style="width:100%;font-family:monospace;font-size:12px;resize:vertical"
+            placeholder="Use {txn_number}, {customer}, {route}, {travel_date}, {supplier}, {contact}, {agent}"></textarea>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:4px">Available variables: <code>{txn_number}</code> <code>{customer}</code> <code>{route}</code> <code>{travel_date}</code> <code>{supplier}</code> <code>{contact}</code> <code>{agent}</code></div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-red" style="width:100%;margin-top:8px">
+        <i class="fas fa-save"></i> Save Changes
+      </button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function supEdit(id, name, phone, email, cc, contact, template, notes) {
+  document.getElementById('supEditId').value       = id;
+  document.getElementById('supEditName').textContent = name;
+  document.getElementById('supEditPhone').value    = phone;
+  document.getElementById('supEditEmail').value    = email;
+  document.getElementById('supEditCc').value       = cc;
+  document.getElementById('supEditContact').value  = contact;
+  document.getElementById('supEditTemplate').value = template;
+  document.getElementById('supEditNotes').value    = notes;
+  document.getElementById('supEditModal').style.display = 'flex';
+}
+document.getElementById('supEditModal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
 {% endblock %}

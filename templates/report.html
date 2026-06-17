@@ -467,6 +467,11 @@
               <i class="fas fa-magic"></i>
             </a>
             {% endif %}
+            <button type="button" class="btn btn-xs" title="Email Supplier"
+              style="background:var(--navy-lt);color:var(--navy);border:1px solid rgba(13,32,64,.15)"
+              onclick="emailSupplier({{ s.id }})">
+              <i class="fas fa-envelope"></i>
+            </button>
             <form method="POST" action="{{ url_for('delete_sale', sale_id=s.id) }}"
                   onsubmit="return confirm('Delete T#{{ s.id }}?')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -520,4 +525,24 @@
 {% from 'pagination_macro.html' import render_pagination %}
 {{ render_pagination(page, total_pages, total_rows, 'sales_report', filters) }}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function emailSupplier(saleId) {
+  fetch('/api/supplier-email-data/' + saleId)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { alert('Could not load supplier data.'); return; }
+      var mailto = 'mailto:' + encodeURIComponent(d.to || '');
+      var params = [];
+      if (d.cc)      params.push('cc='      + encodeURIComponent(d.cc));
+      if (d.subject) params.push('subject=' + encodeURIComponent(d.subject));
+      if (d.body)    params.push('body='    + encodeURIComponent(d.body));
+      if (params.length) mailto += '?' + params.join('&');
+      window.location.href = mailto;
+    })
+    .catch(function() { alert('Error loading supplier email data.'); });
+}
+</script>
 {% endblock %}
