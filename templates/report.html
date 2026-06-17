@@ -523,10 +523,6 @@
 {% from 'pagination_macro.html' import render_pagination %}
 {{ render_pagination(page, total_pages, total_rows, 'sales_report', filters) }}
 
-{% endblock %}
-
-{% endblock %}
-
 {# ── Supplier Email Modal ─────────────────────────────────────────────────── #}
 <div id="supEmailModal" style="display:none;position:fixed;inset:0;z-index:1060;background:rgba(0,0,0,.48);align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:10px;width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.25)">
@@ -578,6 +574,8 @@
     </div>
   </div>
 </div>
+
+{% endblock %}
 
 {% block extra_js %}
 <script>
