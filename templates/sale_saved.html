@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Transaction Saved — ALSONDOS{% endblock %}
+
+{% block content %}
+<div style="max-width:600px;margin:48px auto">
+
+  {# ── Success banner ─────────────────────────────────────────────────────── #}
+  <div style="background:linear-gradient(135deg,var(--navy-dk) 0%,#1a3a6b 100%);border-radius:12px;padding:28px 32px;color:#fff;margin-bottom:24px;text-align:center">
+    <div style="font-size:40px;margin-bottom:10px">✓</div>
+    <h2 style="margin:0 0 6px;font-size:20px;font-weight:800;letter-spacing:-.3px">Transaction Saved</h2>
+    <div style="font-size:22px;font-family:monospace;font-weight:700;color:var(--gold);margin-bottom:8px">{{ txn_number }}</div>
+    <div style="font-size:13px;opacity:.75">
+      {{ sale.customer }}
+      {% if sale.from_loc and sale.to_loc %} &nbsp;·&nbsp; {{ sale.from_loc }} → {{ sale.to_loc }}{% endif %}
+      {% if sale.travel_date %} &nbsp;·&nbsp; {{ sale.travel_date }}{% endif %}
+    </div>
+  </div>
+
+  {# ── Email Prompt Card ──────────────────────────────────────────────────── #}
+  <div class="card" style="border:2px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.08)">
+    <div class="card-header" style="display:flex;align-items:center;gap:10px">
+      <i class="fas fa-envelope" style="color:var(--red);font-size:16px"></i>
+      <span>Send Booking to Supplier</span>
+    </div>
+    <div class="card-body">
+
+      {% if supplier_name %}
+      <p style="color:var(--navy-dk);font-size:14px;margin-bottom:18px">
+        Do you want to send this booking request to
+        <strong>{{ supplier_name }}</strong>?
+      </p>
+      {% else %}
+      <p style="color:var(--muted);font-size:13px;margin-bottom:18px">
+        No supplier is linked to this transaction. You can still compose a custom email.
+      </p>
+      {% endif %}
+
+      {# ── Email fields ─────────────────────────────────────────────────── #}
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">To</label>
+        <input type="email" id="ssTo" value="{{ email_data.to }}" placeholder="supplier@example.com"
+               style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">CC <span style="font-weight:400;text-transform:none">(optional)</span></label>
+        <input type="email" id="ssCc" value="{{ email_data.cc }}" placeholder="cc@example.com"
+               style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">Subject</label>
+        <input type="text" id="ssSubject" value="{{ email_data.subject }}"
+               style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">Message</label>
+        <textarea id="ssBody" rows="9"
+                  style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);resize:vertical">{{ email_data.body }}</textarea>
+      </div>
+
+      {# ── Actions ──────────────────────────────────────────────────────── #}
+      <div style="display:flex;gap:10px">
+        <button type="button" class="btn btn-red" style="flex:1;font-size:14px;padding:11px" onclick="ssSend()">
+          <i class="fas fa-paper-plane"></i> Open in Outlook
+        </button>
+        <a href="{{ url_for('sales_report') }}" class="btn btn-outline" style="padding:11px 20px">
+          Skip
+        </a>
+      </div>
+
+      {% if not email_data.to %}
+      <div style="margin-top:12px;padding:10px 14px;background:var(--orange-lt,#fff4e6);border-radius:var(--radius-sm);font-size:12px;color:var(--orange,#e67e22)">
+        <i class="fas fa-info-circle"></i>
+        No email address found for <strong>{{ supplier_name or 'this supplier' }}</strong>.
+        <a href="{{ url_for('master_suppliers') }}" style="color:var(--orange);font-weight:700">Set it up in Suppliers →</a>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:16px">
+    <a href="{{ url_for('sales_report') }}" style="color:var(--muted);font-size:12px;text-decoration:none">
+      <i class="fas fa-arrow-left" style="font-size:10px"></i> Back to Transactions
+    </a>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function ssSend() {
+  var to      = document.getElementById('ssTo').value.trim();
+  var cc      = document.getElementById('ssCc').value.trim();
+  var subject = document.getElementById('ssSubject').value.trim();
+  var body    = document.getElementById('ssBody').value;
+  var mailto  = 'mailto:' + encodeURIComponent(to);
+  var params  = [];
+  if (cc)      params.push('cc='      + encodeURIComponent(cc));
+  if (subject) params.push('subject=' + encodeURIComponent(subject));
+  if (body)    params.push('body='    + encodeURIComponent(body));
+  if (params.length) mailto += '?' + params.join('&');
+  window.location.href = mailto;
+  setTimeout(function() {
+    window.location.href = {{ url_for('sales_report')|tojson }};
+  }, 1500);
+}
+</script>
+{% endblock %}
