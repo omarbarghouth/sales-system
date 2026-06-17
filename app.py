@@ -1489,7 +1489,9 @@ def add_sale():
             except Exception:
                 pass
         flash('Transaction saved successfully.', 'success')
-        return redirect(url_for('sale_saved', sale_id=new_id))
+        if request.form.get('send_supplier_email') == '1':
+            return redirect(url_for('sale_saved', sale_id=new_id))
+        return redirect(url_for('sales_report'))
     return render_template('add.html', companies=companies, today=str(date.today()), form={})
 
 
