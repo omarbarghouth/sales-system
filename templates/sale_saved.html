@@ -1,98 +1,164 @@
 {% extends "base.html" %}
-{% block title %}Sending to Supplier — ALSONDOS{% endblock %}
+{% block title %}Transaction Saved — ALSONDOS{% endblock %}
+
+{% block extra_css %}
+<style>
+.ss-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 15, 35, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  backdrop-filter: blur(2px);
+}
+.ss-popup {
+  background: #fff;
+  border-radius: 14px;
+  width: 460px;
+  max-width: 94vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.28);
+  overflow: hidden;
+  animation: ssIn .22s ease;
+}
+@keyframes ssIn {
+  from { opacity:0; transform: translateY(-18px) scale(.97); }
+  to   { opacity:1; transform: translateY(0)    scale(1);    }
+}
+.ss-header {
+  background: linear-gradient(135deg, var(--navy-dk) 0%, #1a3a6b 100%);
+  padding: 24px 28px 20px;
+  text-align: center;
+  color: #fff;
+}
+.ss-check {
+  width: 52px; height: 52px;
+  background: rgba(255,255,255,.12);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+  font-size: 22px;
+}
+.ss-txn {
+  font-family: ui-monospace, monospace;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.ss-meta {
+  font-size: 12.5px;
+  opacity: .72;
+  line-height: 1.6;
+}
+.ss-body {
+  padding: 24px 28px 28px;
+  text-align: center;
+}
+.ss-question {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy-dk);
+  margin-bottom: 6px;
+}
+.ss-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 22px;
+  line-height: 1.5;
+}
+.ss-supplier {
+  display: inline-block;
+  background: var(--navy-lt);
+  color: var(--navy-dk);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(13,32,64,.12);
+}
+.ss-actions {
+  display: flex;
+  gap: 10px;
+}
+.ss-actions .btn {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ss-no-email {
+  background: var(--orange-lt, #fff4e6);
+  border: 1px solid rgba(230,126,34,.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--orange, #e67e22);
+  margin-bottom: 18px;
+  text-align: left;
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="max-width:580px;margin:52px auto">
-
-  {# ── Success banner ─────────────────────────────────────────────────────── #}
-  <div style="background:linear-gradient(135deg,var(--navy-dk) 0%,#1a3a6b 100%);border-radius:12px;padding:28px 32px;color:#fff;margin-bottom:24px;text-align:center">
-    <div style="font-size:38px;margin-bottom:10px">✓</div>
-    <h2 style="margin:0 0 6px;font-size:20px;font-weight:800">Transaction Saved</h2>
-    <div style="font-size:22px;font-family:monospace;font-weight:700;color:var(--gold);margin-bottom:8px">{{ txn_number }}</div>
-    <div style="font-size:13px;opacity:.75">
-      {{ sale.customer }}
-      {% if sale.from_loc and sale.to_loc %} &nbsp;·&nbsp; {{ sale.from_loc }} → {{ sale.to_loc }}{% endif %}
-      {% if sale.travel_date %} &nbsp;·&nbsp; {{ sale.travel_date }}{% endif %}
-    </div>
-  </div>
-
-  {# ── Email card ─────────────────────────────────────────────────────────── #}
-  <div class="card" style="border:2px solid var(--border)">
-    <div class="card-header" style="display:flex;align-items:center;gap:8px">
-      <i class="fas fa-envelope" style="color:var(--red)"></i> Supplier Email
-    </div>
-    <div class="card-body">
-
-      {% if not email_data.to %}
-      <div style="padding:12px 16px;background:var(--orange-lt,#fff4e6);border-radius:var(--radius-sm);font-size:13px;color:var(--orange,#e67e22);margin-bottom:16px">
-        <i class="fas fa-exclamation-circle"></i>
-        No email address found for <strong>{{ supplier_name or 'this supplier' }}</strong>.
-        <a href="{{ url_for('master_suppliers') }}" style="color:var(--orange);font-weight:700">Add it in Suppliers →</a>
-      </div>
-      {% endif %}
-
-      <div class="form-group" style="margin-bottom:11px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">To</label>
-        <input type="email" id="ssTo" value="{{ email_data.to }}" placeholder="supplier@example.com"
-               style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
-      </div>
-      <div class="form-group" style="margin-bottom:11px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">CC <span style="font-weight:400;text-transform:none">(optional)</span></label>
-        <input type="email" id="ssCc" value="{{ email_data.cc }}" placeholder="cc@example.com"
-               style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
-      </div>
-      <div class="form-group" style="margin-bottom:11px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">Subject</label>
-        <input type="text" id="ssSubject" value="{{ email_data.subject }}"
-               style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px">
-      </div>
-      <div class="form-group" style="margin-bottom:18px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy-dk)">Message</label>
-        <textarea id="ssBody" rows="9"
-                  style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);resize:vertical">{{ email_data.body }}</textarea>
-      </div>
-
-      <div style="display:flex;gap:10px">
-        <button type="button" class="btn btn-red" style="flex:1;padding:11px" onclick="ssSend()">
-          <i class="fas fa-paper-plane"></i> Open in Outlook
-        </button>
-        <a href="{{ url_for('sales_report') }}" class="btn btn-outline" style="padding:11px 20px">Skip</a>
-      </div>
-
-    </div>
-  </div>
-
-  <div style="text-align:center;margin-top:14px">
-    <a href="{{ url_for('sales_report') }}" style="color:var(--muted);font-size:12px;text-decoration:none">
-      <i class="fas fa-arrow-left" style="font-size:10px"></i> Back to Transactions
-    </a>
-  </div>
-
-</div>
+{# Empty page — the popup is the only UI #}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+var _mailtoUrl = {{ mailto_url|tojson }};
+var _skipUrl   = {{ url_for('sales_report')|tojson }};
+
 function ssSend() {
-  var to      = document.getElementById('ssTo').value.trim();
-  var cc      = document.getElementById('ssCc').value.trim();
-  var subject = document.getElementById('ssSubject').value.trim();
-  var body    = document.getElementById('ssBody').value;
-  var mailto  = 'mailto:' + encodeURIComponent(to);
-  var params  = [];
-  if (cc)      params.push('cc='      + encodeURIComponent(cc));
-  if (subject) params.push('subject=' + encodeURIComponent(subject));
-  if (body)    params.push('body='    + encodeURIComponent(body));
-  if (params.length) mailto += '?' + params.join('&');
-  window.location.href = mailto;
-  setTimeout(function() {
-    window.location.href = {{ url_for('sales_report')|tojson }};
-  }, 1500);
+  if (_mailtoUrl) {
+    window.location.href = _mailtoUrl;
+    setTimeout(function(){ window.location.href = _skipUrl; }, 1500);
+  } else {
+    window.location.href = _skipUrl;
+  }
 }
 
-// Auto-fire if supplier has an email address
-{% if email_data.to %}
-window.addEventListener('load', function() { ssSend(); });
-{% endif %}
+function ssSkip() {
+  window.location.href = _skipUrl;
+}
+
+// Render popup after base layout loads
+document.addEventListener('DOMContentLoaded', function() {
+  var overlay = document.createElement('div');
+  overlay.className = 'ss-overlay';
+  overlay.innerHTML = `
+    <div class="ss-popup">
+      <div class="ss-header">
+        <div class="ss-check"><i class="fas fa-check"></i></div>
+        <div class="ss-txn">{{ txn_number }}</div>
+        <div class="ss-meta">
+          {{ sale.customer }}{% if sale.from_loc and sale.to_loc %} &nbsp;·&nbsp; {{ sale.from_loc }} → {{ sale.to_loc }}{% endif %}{% if sale.travel_date %}<br>{{ sale.travel_date }}{% endif %}
+        </div>
+      </div>
+      <div class="ss-body">
+        <div class="ss-question">Transaction saved successfully.</div>
+        <div class="ss-sub">Would you like to send a booking email to the supplier?</div>
+        {% if supplier_name %}
+        <div class="ss-supplier"><i class="fas fa-handshake" style="font-size:10px;margin-right:5px"></i>{{ supplier_name }}</div>
+        {% endif %}
+        {% if not email_data.to %}
+        <div class="ss-no-email">
+          <i class="fas fa-info-circle"></i>
+          No email address configured for <strong>{{ supplier_name or 'this supplier' }}</strong>.
+          <a href="{{ url_for('master_suppliers') }}" style="color:var(--orange);font-weight:700">Set it up →</a>
+        </div>
+        {% endif %}
+        <div class="ss-actions">
+          <button class="btn btn-red" onclick="ssSend()" {% if not email_data.to %}disabled title="No supplier email configured"{% endif %}>
+            <i class="fas fa-paper-plane"></i> Send Email
+          </button>
+          <button class="btn btn-outline" onclick="ssSkip()">Skip</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+});
 </script>
 {% endblock %}
