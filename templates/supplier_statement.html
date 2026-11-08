@@ -125,6 +125,19 @@
     </div>
     {% if supplier %}<a href="{{ url_for('supplier_statement') }}" class="btn btn-outline btn-sm" style="align-self:flex-end" title="Clear"><i class="fas fa-times"></i></a>{% endif %}
   </form>
+  {% if supplier %}
+  {# ── Quick year buttons — earlier years appear as "Balance brought forward" ── #}
+  <div class="no-print" style="display:flex;gap:6px;align-items:center;margin-top:10px;width:100%">
+    <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Year:</span>
+    {% for y in year_buttons %}
+    {% set _on = filters.date_from == y ~ '-01-01' and filters.date_to == y ~ '-12-31' %}
+    <a href="{{ url_for('supplier_statement', supplier=supplier, svc_type=filters.svc_type, date_from=y ~ '-01-01', date_to=y ~ '-12-31') }}"
+       class="btn btn-sm {% if _on %}btn-primary{% else %}btn-outline{% endif %}">{{ y }}</a>
+    {% endfor %}
+    <a href="{{ url_for('supplier_statement', supplier=supplier, svc_type=filters.svc_type) }}"
+       class="btn btn-sm {% if not filters.date_from and not filters.date_to %}btn-primary{% else %}btn-outline{% endif %}">All years</a>
+  </div>
+  {% endif %}
 </div>
 
 {% if supplier and summary %}
@@ -251,6 +264,24 @@
         </tr>
       </thead>
       <tbody>
+        {% set _ob = summary.get('opening_balance') %}
+        {% if _ob is not none %}
+        {# Balance brought forward — everything before the "From" date #}
+        <tr style="border-bottom:2px solid #e2e8f0;background:#fffbeb;border-left:3px solid #C8A84B">
+          <td style="padding:7px 9px;color:#64748b;font-size:11px;white-space:nowrap;font-family:monospace">{{ filters.date_from }}</td>
+          <td style="padding:7px 6px;text-align:center;font-size:10px;font-weight:700;color:#92400e">B/F</td>
+          <td colspan="6" style="padding:7px 6px;color:#1e293b;font-size:12px;font-weight:700">
+            Balance brought forward
+            <span style="font-weight:400;color:#64748b;font-size:10.5px">(all transactions before {{ filters.date_from }})</span>
+          </td>
+          <td style="padding:7px 9px;text-align:right;font-weight:800;font-size:12.5px;
+            color:{% if _ob > 0.005 %}#14532d{% elif _ob < -0.005 %}#991b1b{% else %}#64748b{% endif %}">
+            {{ "%.3f"|format(_ob) }}
+            {% if _ob > 0.005 %}<span style="font-size:7.5px;opacity:.6;font-weight:400"> DR</span>
+            {% elif _ob < -0.005 %}<span style="font-size:7.5px;opacity:.6;font-weight:400"> CR</span>{% endif %}
+          </td>
+        </tr>
+        {% endif %}
         {% for e in ledger %}
         {# Row background by type #}
         {% if e.type == 'adjustment' %}

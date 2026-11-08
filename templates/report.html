@@ -94,6 +94,17 @@
       {% endif %}
     </div>
   </form>
+  {# ── Quick year buttons (keep the other filters) ──────────────── #}
+  <div class="no-print" style="display:flex;gap:6px;align-items:center;margin-top:10px;width:100%">
+    <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Year:</span>
+    {% for y in year_buttons %}
+    {% set _on = filters.date_from == y ~ '-01-01' and filters.date_to == y ~ '-12-31' %}
+    <a href="{{ url_for('sales_report', **dict(filters, date_from=y ~ '-01-01', date_to=y ~ '-12-31')) }}"
+       class="btn btn-sm {% if _on %}btn-primary{% else %}btn-outline{% endif %}">{{ y }}</a>
+    {% endfor %}
+    <a href="{{ url_for('sales_report', **dict(filters, date_from='', date_to='')) }}"
+       class="btn btn-sm {% if not filters.date_from and not filters.date_to %}btn-primary{% else %}btn-outline{% endif %}">All years</a>
+  </div>
 </div>
 
 {# ── Active filter chips ──────────────────────────────────────── #}
