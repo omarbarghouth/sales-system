@@ -1745,6 +1745,45 @@ def delete_sale(sale_id):
     return redirect(url_for('sales_report'))
 
 # ── Sales Report (paginated) ──────────────────────────────────────────────────
+def _sales_report_where(args, p=''):
+    """
+    SQL filter fragment for the Transactions page filters.
+    Shared by sales_report() and export_excel() so the Excel file matches the screen.
+    p is the sales table alias prefix ('s.' or '').
+    """
+    company   = args.get('company', '')
+    status    = args.get('status', '')
+    date_from = args.get('date_from', '')
+    date_to   = args.get('date_to', '')
+    agent_id  = args.get('agent_id', '')
+    svc_type  = args.get('svc_type', '')
+    customer  = args.get('customer', '').strip()
+    supplier  = args.get('supplier', '').strip()
+
+    sql, params = '', []
+    if company:
+        sql += f' AND {p}company=%s'; params.append(company)
+    if status:
+        sql += f' AND {p}status=%s'; params.append(status)
+    if date_from:
+        sql += f' AND {p}sale_date>=%s'; params.append(date_from)
+    if date_to:
+        sql += f' AND {p}sale_date<=%s'; params.append(date_to)
+    if agent_id:
+        sql += f' AND {p}created_by_user_id=%s'; params.append(agent_id)
+    if svc_type:
+        sql += f" AND UPPER(COALESCE({p}service_type,'FLIGHT'))=%s"; params.append(svc_type.upper())
+    if customer:
+        sql += f' AND UPPER({p}customer) LIKE %s'; params.append('%' + customer.upper() + '%')
+    if supplier:
+        # Same supplier fields the statement page uses (outbound, return, hotel, transfer, visa, insurance)
+        _sup_cols = ('buy_from', 'return_supplier', 'hotel_supplier',
+                     'transfer_supplier', 'visa_supplier', 'insurance_supplier')
+        sql += ' AND UPPER(TRIM(%s)) IN (' + ', '.join(f"UPPER(TRIM(COALESCE({p}{c},'')))" for c in _sup_cols) + ')'
+        params.append(supplier)
+    return sql, params
+
+
 @app.route('/report')
 @login_required
 def sales_report():
@@ -1767,40 +1806,11 @@ def sales_report():
         WHERE s.deleted=FALSE AND s.is_archived=FALSE
     '''
     count_q = 'SELECT COALESCE(SUM(sell),0) as sell, COALESCE(SUM(net),0) as net, COALESCE(SUM(profit),0) as profit, COUNT(*) as cnt FROM sales WHERE deleted=FALSE AND is_archived=FALSE'
-    params  = []
-    cparams = []
 
-    if company:
-        base_q  += ' AND s.company=%s'; count_q += ' AND company=%s'
-        params.append(company); cparams.append(company)
-    if status:
-        base_q  += ' AND s.status=%s';  count_q += ' AND status=%s'
-        params.append(status); cparams.append(status)
-    if date_from:
-        base_q  += ' AND s.sale_date>=%s'; count_q += ' AND sale_date>=%s'
-        params.append(date_from); cparams.append(date_from)
-    if date_to:
-        base_q  += ' AND s.sale_date<=%s'; count_q += ' AND sale_date<=%s'
-        params.append(date_to); cparams.append(date_to)
-    if agent_id:
-        base_q  += ' AND s.created_by_user_id=%s'; count_q += ' AND created_by_user_id=%s'
-        params.append(agent_id); cparams.append(agent_id)
-    if svc_type:
-        base_q  += ' AND UPPER(COALESCE(s.service_type,\'FLIGHT\'))=%s'
-        count_q += ' AND UPPER(COALESCE(service_type,\'FLIGHT\'))=%s'
-        params.append(svc_type.upper()); cparams.append(svc_type.upper())
-    if customer:
-        base_q  += ' AND UPPER(s.customer) LIKE %s'
-        count_q += ' AND UPPER(customer) LIKE %s'
-        _c = '%' + customer.upper() + '%'
-        params.append(_c); cparams.append(_c)
-    if supplier:
-        # Same supplier fields the statement page uses (outbound, return, hotel, transfer, visa, insurance)
-        _sup_cols = ('buy_from', 'return_supplier', 'hotel_supplier',
-                     'transfer_supplier', 'visa_supplier', 'insurance_supplier')
-        base_q  += ' AND UPPER(TRIM(%s)) IN (' + ', '.join(f"UPPER(TRIM(COALESCE(s.{c},'')))" for c in _sup_cols) + ')'
-        count_q += ' AND UPPER(TRIM(%s)) IN (' + ', '.join(f"UPPER(TRIM(COALESCE({c},'')))" for c in _sup_cols) + ')'
-        params.append(supplier); cparams.append(supplier)
+    _where, params = _sales_report_where(request.args, 's.')
+    base_q += _where
+    _cwhere, cparams = _sales_report_where(request.args)
+    count_q += _cwhere
 
     base_q += ' ORDER BY s.sale_date DESC, s.id DESC'
 
@@ -3179,13 +3189,16 @@ def export_excel():
         c = ws1.cell(row=1, column=col)
         c.font = header_font; c.fill = header_fill; c.alignment = center
 
+    # Same filters as the Transactions page; with no filters this exports everything (as before)
+    _where, _wparams = _sales_report_where(request.args, 's.')
     sales = query_db('''
         SELECT s.*, COALESCE(u.full_name, s.created_by_username, '—') AS agent_display
         FROM sales s
         LEFT JOIN users u ON s.created_by_user_id = u.id
         WHERE s.deleted=FALSE AND s.is_archived=FALSE
+    ''' + _where + '''
         ORDER BY s.sale_date DESC, s.id DESC
-    ''')
+    ''', _wparams)
     for s in sales:
         ws1.append([s['id'],s['sale_date'],s['company'],s['customer'],
                     s['from_loc'],s['to_loc'],s['via'],s['trip_type'],
@@ -3210,7 +3223,14 @@ def export_excel():
         c = ws2.cell(row=1, column=col)
         c.font = header_font; c.fill = header_fill; c.alignment = center
 
-    pmts = query_db('SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE ORDER BY pay_date DESC')
+    _pq, _pparams = 'SELECT * FROM payments WHERE deleted=FALSE AND is_archived=FALSE', []
+    if request.args.get('company'):
+        _pq += ' AND company=%s'; _pparams.append(request.args['company'])
+    if request.args.get('date_from'):
+        _pq += ' AND pay_date>=%s'; _pparams.append(request.args['date_from'])
+    if request.args.get('date_to'):
+        _pq += ' AND pay_date<=%s'; _pparams.append(request.args['date_to'])
+    pmts = query_db(_pq + ' ORDER BY pay_date DESC', _pparams)
     for p in pmts:
         ws2.append([p['id'],p['pay_date'],p['company'],p['amount'],p['notes']])
     for row in ws2.iter_rows(min_row=2, min_col=4, max_col=4):
@@ -3223,10 +3243,12 @@ def export_excel():
     for i, w in enumerate([6,12,22,14,30], 1):
         ws2.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
-    log_action('EXPORT', 'sales', None, 'Excel export downloaded')
+    _active = {k: v for k, v in request.args.items() if v and k != 'page'}
+    log_action('EXPORT', 'sales', None,
+               'Excel export downloaded' + (f" (filters: {_active})" if _active else ''))
     output = io.BytesIO()
     wb.save(output); output.seek(0)
-    filename = f"alsondos_{date.today().strftime('%Y%m%d')}.xlsx"
+    filename = f"alsondos_{date.today().strftime('%Y%m%d')}{'_filtered' if _active else ''}.xlsx"
     return Response(output.getvalue(),
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={"Content-Disposition": f"attachment; filename={filename}"}
