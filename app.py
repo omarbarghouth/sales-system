@@ -1755,6 +1755,7 @@ def sales_report():
     agent_id  = request.args.get('agent_id', '')
     svc_type  = request.args.get('svc_type', '')
     customer  = request.args.get('customer', '').strip()
+    supplier  = request.args.get('supplier', '').strip()
     page      = max(1, int(request.args.get('page', 1)))
 
     base_q  = '''
@@ -1793,6 +1794,13 @@ def sales_report():
         count_q += ' AND UPPER(customer) LIKE %s'
         _c = '%' + customer.upper() + '%'
         params.append(_c); cparams.append(_c)
+    if supplier:
+        # Same supplier fields the statement page uses (outbound, return, hotel, transfer, visa, insurance)
+        _sup_cols = ('buy_from', 'return_supplier', 'hotel_supplier',
+                     'transfer_supplier', 'visa_supplier', 'insurance_supplier')
+        base_q  += ' AND UPPER(TRIM(%s)) IN (' + ', '.join(f"UPPER(TRIM(COALESCE(s.{c},'')))" for c in _sup_cols) + ')'
+        count_q += ' AND UPPER(TRIM(%s)) IN (' + ', '.join(f"UPPER(TRIM(COALESCE({c},'')))" for c in _sup_cols) + ')'
+        params.append(supplier); cparams.append(supplier)
 
     base_q += ' ORDER BY s.sale_date DESC, s.id DESC'
 
@@ -1803,6 +1811,7 @@ def sales_report():
     sales, total_rows, total_pages = paginate(base_q, params, page)
 
     companies = get_companies_list()
+    suppliers = sorted({r['name'] for r in get_suppliers_list() if r['name']})
     agents = []
     if session.get('user_role') == 'admin':
         # Agent filter dropdown — one entry per active user, regardless of
@@ -1834,10 +1843,11 @@ def sales_report():
             })
 
     return render_template('report.html',
-        sales=sales, totals=totals, companies=companies, svc_filter=svc_type, agents=agents,
+        sales=sales, totals=totals, companies=companies, suppliers=suppliers,
+        svc_filter=svc_type, agents=agents,
         filters={'company':company,'status':status,'date_from':date_from,
                  'date_to':date_to, 'agent_id':agent_id, 'svc_type':svc_type,
-                 'service_type':svc_type, 'customer':customer},
+                 'service_type':svc_type, 'customer':customer, 'supplier':supplier},
         page=page, total_pages=total_pages, total_rows=total_rows
     )
 
