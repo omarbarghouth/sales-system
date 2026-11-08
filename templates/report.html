@@ -33,6 +33,15 @@
         {% endfor %}
       </select>
     </div>
+    <div class="form-group" style="flex:2;min-width:140px">
+      <label><i class="fas fa-truck" style="color:var(--navy);margin-right:3px"></i>Supplier</label>
+      <select name="supplier" onchange="this.form.submit()">
+        <option value="">All Suppliers</option>
+        {% for sp in suppliers %}
+        <option value="{{ sp }}" {% if filters.get('supplier')==sp %}selected{% endif %}>{{ sp }}</option>
+        {% endfor %}
+      </select>
+    </div>
     {% if is_admin and agents %}
     <div class="form-group" style="flex:2;min-width:140px">
       <label><i class="fas fa-user-tie" style="color:var(--navy);margin-right:3px"></i>Agent</label>
@@ -79,7 +88,7 @@
     </div>
     <div style="display:flex;gap:6px;align-self:flex-end">
       <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
-      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') or filters.get('customer') %}
+      {% if filters.company or filters.status or filters.date_from or filters.date_to or filters.agent_id or filters.get('svc_type') or filters.get('customer') or filters.get('supplier') %}
       <a href="{{ url_for('sales_report') }}" class="btn btn-outline btn-sm" title="Clear"><i class="fas fa-times"></i></a>
       {% endif %}
     </div>
@@ -87,12 +96,17 @@
 </div>
 
 {# ── Active filter chips ──────────────────────────────────────── #}
-{% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to %}
+{% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to or filters.get('supplier') %}
 <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;align-items:center" class="no-print">
   <span style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Filters:</span>
   {% if filters.company %}
   <span class="txn-chip chip-navy"><i class="fas fa-building" style="font-size:9px"></i> {{ filters.company }}
     <a href="{{ url_for('sales_report', status=filters.status, date_from=filters.date_from, date_to=filters.date_to, agent_id=filters.agent_id) }}" style="color:var(--red);margin-left:4px;text-decoration:none;font-weight:900">×</a>
+  </span>
+  {% endif %}
+  {% if filters.get('supplier') %}
+  <span class="txn-chip chip-navy"><i class="fas fa-truck" style="font-size:9px"></i> Supplier: {{ filters.supplier }}
+    <a href="{{ url_for('sales_report', company=filters.company, status=filters.status, date_from=filters.date_from, date_to=filters.date_to, agent_id=filters.agent_id) }}" style="color:var(--red);margin-left:4px;text-decoration:none;font-weight:900">×</a>
   </span>
   {% endif %}
   {% if filters.agent_id %}
@@ -484,7 +498,7 @@
         <td colspan="{{ 14 if is_admin else 12 }}" class="text-center" style="padding:48px;color:var(--muted)">
           <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:12px;opacity:.25"></i>
           No transactions found.
-          {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to or filters.get('customer') %}
+          {% if filters.company or filters.agent_id or filters.status or filters.date_from or filters.date_to or filters.get('customer') or filters.get('supplier') %}
           <br><a href="{{ url_for('sales_report') }}" style="color:var(--navy);font-weight:700;margin-top:8px;display:inline-block">Clear filters →</a>
           {% elif is_admin %}
           <br><a href="{{ url_for('add_sale') }}" style="color:var(--red);font-weight:700;margin-top:8px;display:inline-block">Add the first transaction →</a>
