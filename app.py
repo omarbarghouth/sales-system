@@ -637,6 +637,12 @@ def _enforce_force_password_change():
     return redirect(url_for('force_change_password'))
 
 @app.context_processor
+def inject_year_buttons():
+    """Previous and current year for the quick year filter buttons."""
+    _y = date.today().year
+    return {'year_buttons': [_y - 1, _y]}
+
+@app.context_processor
 def inject_user():
     try:
         cur_user = get_current_user()
@@ -1905,8 +1911,10 @@ def statement():
             _svc_sql = " AND UPPER(TRIM(COALESCE(service_type,'FLIGHT')))=%s"
             _svc_param = [svc_type]
 
-        try:
-            raw_rows = query_db(f"""
+        # Ledger SQL for a given set of date clauses — used for the period rows
+        # and, with "before date_from" clauses, for the balance brought forward.
+        def _ledger_sql(_s_date_sql, _p_date_sql, _sp_date_sql, _adj_date_sql):
+            return f"""
             SELECT * FROM (
                 -- 1. Sales to this company (DEBIT)
                 SELECT
@@ -2093,7 +2101,10 @@ def statement():
                         ELSE 9
                     END ASC,
                     ref ASC
-            """, (
+            """
+
+        def _ledger_params(_s_params, _p_params, _sp_params, _adj_params):
+            return (
                 [_co] + _s_params + _svc_param    # sales to company
                 + [_co] + _s_params               # outbound purchases
                 + [_co] + _s_params               # return purchases
@@ -2104,15 +2115,37 @@ def statement():
                 + [_co] + _p_params               # payments received
                 + [_co] + _sp_params              # supplier payments
                 + [_co] + _adj_params             # adjustments
-            )) or []
+            )
+
+        try:
+            raw_rows = query_db(
+                _ledger_sql(_s_date_sql, _p_date_sql, _sp_date_sql, _adj_date_sql),
+                _ledger_params(_s_params, _p_params, _sp_params, _adj_params)) or []
         except Exception as _se:
             logger.error(f"statement UNION query error: {_se}")
             try: get_db().rollback()
             except: pass
             raw_rows = []
 
+        # Balance brought forward: everything before date_from, same rules as the rows below
+        opening = None
+        if date_from:
+            try:
+                _ob = query_db(
+                    "SELECT COALESCE(SUM(debit - credit), 0) AS bal FROM ("
+                    + _ledger_sql(' AND sale_date<%s', ' AND pay_date<%s',
+                                  ' AND pay_date<%s', ' AND adj_date<%s')
+                    + ") AS _ob",
+                    _ledger_params([date_from], [date_from], [date_from], [date_from]),
+                    one=True)
+                opening = round(float(_ob['bal'] or 0), 3) if _ob else 0.0
+            except Exception as _oe:
+                logger.error(f"statement opening balance error: {_oe}")
+                try: get_db().rollback()
+                except: pass
+
         # Build ledger entries and compute running balance in one pass
-        running = 0.0
+        running = opening or 0.0
         _pay_n  = 0
         for row in raw_rows:
             dr = float(row['debit']  or 0)
@@ -2152,6 +2185,7 @@ def statement():
             'net_receivable': round(sold   - received, 3),
             'net_payable':    round(bought - paid_out, 3),
             'net_balance':    net_bal,
+            'opening_balance': opening,
             'total_debit':    sum(e['debit']  for e in ledger_entries),
             'total_credit':   sum(e['credit'] for e in ledger_entries),
             'entry_count':    len(ledger_entries),
@@ -3388,7 +3422,8 @@ def reset_data():
         # unique forever and must never be reused even after a data reset.
 
         # Reset document number sequences
-        try: cur.execute("UPDATE doc_sequences SET last_num = 0")
+        # Yearly T-numbers (T-2027 ...) are never reset, same rule as txn_seq above
+        try: cur.execute("UPDATE doc_sequences SET last_num = 0 WHERE doc_type NOT LIKE 'T-%'")
         except Exception: pass
 
         db.commit()
@@ -4211,12 +4246,64 @@ except Exception as _dc_err:
 
 
 # ── Sequence helper ───────────────────────────────────────────────────────────
+# Numbers restart every year from this year on: T-2027-0001, INV-2027-0001, ...
+# Before it, the original continuous numbering (T-0001, INV-0001) is used unchanged.
+YEARLY_NUMBERING_FROM = 2027
+
+
+def _next_yearly_number(prefix: str, table: str, column: str) -> str:
+    """
+    Next per-year number, e.g. T-2027-0001.
+    The counter lives in doc_sequences under '<prefix>-<year>' and is locked
+    with SELECT FOR UPDATE, so concurrent saves never get the same number.
+    It never goes below the highest number already stored for that year.
+    """
+    key  = f"{prefix}-{date.today().year}"
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            os.environ.get("DATABASE_URL"),
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO doc_sequences (doc_type, last_num) VALUES (%s, 0) "
+            "ON CONFLICT (doc_type) DO NOTHING", [key])
+        cur.execute("SELECT last_num FROM doc_sequences WHERE doc_type=%s FOR UPDATE", [key])
+        row  = cur.fetchone()
+        last = int(row['last_num']) if row else 0
+        # table/column come from fixed internal maps, never from user input
+        cur.execute(
+            f"SELECT COALESCE(MAX(CAST(SUBSTRING({column} FROM %s) AS INTEGER)), 0) AS m FROM {table}",
+            ['^' + key + '-([0-9]+)$'])
+        row = cur.fetchone()
+        num = max(last, int(row['m']) if row else 0) + 1
+        cur.execute("UPDATE doc_sequences SET last_num=%s WHERE doc_type=%s", [num, key])
+        conn.commit()
+        return f"{key}-{num:04d}"
+    except Exception as _e:
+        if conn:
+            try: conn.rollback()
+            except: pass
+        logger.error(f"_next_yearly_number error ({key}): {_e}")
+        import uuid
+        return f"{key}-{uuid.uuid4().hex[:6].upper()}"
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
+
+
 def next_txn_number() -> str:
     """
     Generate the next sequential transaction number T-XXXX.
     Uses a PostgreSQL sequence (txn_seq) — atomic, race-condition-free.
     Two concurrent inserts will always get different numbers.
+    From YEARLY_NUMBERING_FROM on, numbers are per year: T-2027-0001.
     """
+    if date.today().year >= YEARLY_NUMBERING_FROM:
+        return _next_yearly_number('T', 'sales', 'txn_number')
     try:
         row = query_db("SELECT nextval('txn_seq') AS n", one=True)
         num = int(row['n']) if row else 1
@@ -4238,6 +4325,9 @@ def next_doc_number(doc_type: str) -> str:
     """
     table_map = {'INV': 'invoices', 'VCH': 'vouchers', 'PKG': 'packages'}
     table = table_map.get(doc_type)
+    if table and date.today().year >= YEARLY_NUMBERING_FROM:
+        _num_col = {'INV': 'invoice_number', 'VCH': 'voucher_number', 'PKG': 'package_number'}[doc_type]
+        return _next_yearly_number(doc_type, table, _num_col)
     conn = None
     try:
         conn = psycopg2.connect(
@@ -5456,6 +5546,7 @@ def supplier_statement():
     date_to   = request.args.get('date_to', '').strip()
 
     ledger_entries = []
+    opening        = None   # balance brought forward (only when date_from is set)
 
     if supplier:
         sup_upper = supplier.upper().strip()
@@ -5472,9 +5563,8 @@ def supplier_statement():
         ps = []   # params for sales queries
         pp = []   # params for payment queries
 
-        if date_from:
-            ds += ' AND s.sale_date>=%s';  ps.append(date_from)
-            dp += ' AND pay_date>=%s';     pp.append(date_from)
+        # date_from is NOT applied in SQL: earlier rows are loaded and folded into
+        # the balance brought forward after sorting (see below).
         if date_to:
             ds += ' AND s.sale_date<=%s';  ps.append(date_to)
             dp += ' AND pay_date<=%s';     pp.append(date_to)
@@ -5678,6 +5768,12 @@ def supplier_statement():
         _ORD = {'purchase':0, 'sale':1, 'payment_in':2, 'payment_out':3, 'adjustment':4}
         ledger_entries.sort(key=lambda x:(str(x['date']), _ORD.get(x['type'],9), x['ref']))
 
+        # Balance brought forward: fold everything before date_from into one opening figure
+        if date_from:
+            opening = round(sum(e['debit'] - e['credit'] for e in ledger_entries
+                                if str(e['date']) < date_from), 3)
+            ledger_entries = [e for e in ledger_entries if str(e['date']) >= date_from]
+
         # Renumber payment refs sequentially within this supplier's statement
         _spy_n = 0
         for e in ledger_entries:
@@ -5688,14 +5784,14 @@ def supplier_statement():
         # ── Running balance ───────────────────────────────────────────────────
         # Positive = they owe us (net receivable)
         # Negative = we owe them (net payable)
-        running = 0.0
+        running = opening or 0.0
         for e in ledger_entries:
             running      += e['debit'] - e['credit']
             e['balance']  = round(running, 3)
 
     # Summary
     summary = {}
-    if ledger_entries:
+    if ledger_entries or opening:
         purchased = sum(e['credit'] for e in ledger_entries if e['type']=='purchase')
         sold_to   = sum(e['debit']  for e in ledger_entries if e['type']=='sale')
         rcvd      = sum(e['credit'] for e in ledger_entries if e['type']=='payment_in')
@@ -5712,6 +5808,7 @@ def supplier_statement():
             'status': 'RECEIVABLE' if net_bal >  0.005
                  else ('PAYABLE'   if net_bal < -0.005 else 'SETTLED'),
             'entry_count': len(ledger_entries),
+            'opening_balance': opening,
         }
 
     all_suppliers = _get_supplier_list()
