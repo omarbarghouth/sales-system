@@ -16,7 +16,8 @@
     {% if is_admin %}
     <a href="{{ url_for('add_sale') }}" class="btn btn-red"><i class="fas fa-plus"></i> New Sale</a>
     {% endif %}
-    <a href="{{ url_for('export_excel') }}" class="btn btn-gold"><i class="fas fa-file-excel"></i> Export</a>
+    {# Export uses the same filters currently applied on this page #}
+    <a href="{{ url_for('export_excel', **filters) }}" class="btn btn-gold"><i class="fas fa-file-excel"></i> Export</a>
     <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print</button>
   </div>
 </div>
